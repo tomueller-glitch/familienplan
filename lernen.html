@@ -87,6 +87,9 @@ h2+.li,.sub+.li,.card>.li:first-child{border-top:0}
 .day.on{background:var(--tinte);color:var(--blatt);border-color:var(--tinte)}
 .day small{display:block;font-size:12px;font-weight:400;opacity:.8}
 .item{display:flex;gap:12px;align-items:flex-start;background:var(--blatt);border:1px solid var(--linie);border-left:5px solid var(--c,var(--linie));border-radius:12px;padding:12px;margin:8px 0}
+.li.stk{flex-wrap:wrap;row-gap:8px}
+.li.stk .grow{flex:1 1 calc(100% - 24px);min-width:0}
+.li.stk .acts{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:20px}
 .item.brk{background:transparent;border-style:dashed;border-left:5px solid var(--linie);padding:8px 12px}
 .item.brk .tt{font-size:15px}
 .item.appt{background:var(--leise);border-left-color:var(--tinte2)}
@@ -320,10 +323,10 @@ function aiError(e){
 }
 
 /* ===== Datenmodell ===== */
-const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result'};
+const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result',lessons:'lesson'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
 const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -451,8 +454,13 @@ function dayLimit(d){const c=Math.min(CAP_MAX,Math.max(CAP_MIN,+S.model.cap||60)
 function dayMax(d){return d.getDay()===6?60:freeWeekday(d)?90:75}
 function loadMap(){const m={};simulate().forEach(d=>{m[d.date]=d.used+d.over.reduce((a,o)=>a+o.P,0)});return m}
 function addExam(subject,type,date,topic,opt){
+  const id=uid();S.exams.push({id,subject,type,date,topic,notes:(opt&&opt.notes)||''});
+  planExam(S.exams[S.exams.length-1],opt);return id;
+}
+// Verteilt die Lerneinheiten einer Prüfung. Bei einer Änderung werden nur offene Einheiten neu geplant, erledigte bleiben.
+function planExam(ex,opt){
   opt=opt||{};
-  const id=uid(),t0=iso(today()),prep=Math.min(1.6,Math.max(.7,+(S.model.prep[subject]||1)));
+  const{id,subject,type,date,topic}=ex,t0=iso(today()),prep=Math.min(1.6,Math.max(.7,+(S.model.prep[subject]||1)));
   const plan=(EXAM[type]||EXAM['Ex / Test']).slice();
   if(prep>=1.25&&type!=='Referat')plan.unshift([type==='Schulaufgabe'?-10:-5,20]);
   const load=loadMap(),want=[],free=d=>isFree(d);
@@ -461,7 +469,6 @@ function addExam(subject,type,date,topic,opt){
     let di=iso(d);if(di<t0)di=t0;if(di>=date)return;
     want.push({di,min:r5(min*prep)});
   });
-  S.exams.push({id,subject,type,date,topic});
   const byDay={},ld=d=>load[iso(d)]||0;
   want.sort((a,b)=>b.di.localeCompare(a.di)).forEach(({di,min})=>{
     const all=[0,-1,-2,-3].map(k=>addDays(parse(di),k)).filter(d=>iso(d)>=t0&&iso(d)<date&&!free(d));
@@ -475,13 +482,23 @@ function addExam(subject,type,date,topic,opt){
   keys.forEach((di,i)=>S.tasks.push(Object.assign({id:uid(),kind:'lern',examId:id,subject,title:titles[i],date:di,est:Math.min(byDay[di],45),part:i+1,parts:keys.length,done:false},
     i===sheetAt?{sheet:true,title:'Übungsblatt bearbeiten'+(topic?': '+topic:''),link:opt.link||''}:{})));
   if(opt.sheet&&!keys.length)S.tasks.push({id:uid(),kind:'lern',examId:id,subject,title:'Übungsblatt bearbeiten',date:t0,est:30,part:1,parts:1,done:false,sheet:true,link:opt.link||''});
-  return id;
+}
+function replanExam(ex,opt){S.tasks=S.tasks.filter(t=>!(t.examId===ex.id&&!t.done));planExam(ex,opt)}
+// Eltern löschen einen Eintrag: zählt weder als erledigt noch als nicht geschafft.
+function removeTask(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const T=iso(today()),d0=simulate()[0],inToday=d0.items.concat(d0.over).find(x=>x.t.id===id);
+  if(inToday&&S.days[T]&&S.days[T].planned)S.days[T]=Object.assign({},S.days[T],{planned:Math.max(0,S.days[T].planned-inToday.P)});
+  if(t.kind==='daily')S.days[t.date]=Object.assign({},S.days[t.date]||{},{noLudus:true});
+  if(S.running&&S.running.id===id)S.running=null;
+  S.tasks=S.tasks.filter(x=>x.id!==id);
 }
 function ensureDaily(){
   const T=iso(today()),st=S.settings;let ch=false;
   const n0=S.tasks.length;S.tasks=S.tasks.filter(t=>!(t.kind==='daily'&&!t.done&&(!st.ludusOn||t.date<T)));if(S.tasks.length!==n0)ch=true;
   if(st.ludusOn)for(let i=0;i<14;i++){const d=addDays(today(),i);if(isFree(d))continue;const di=iso(d),id='ludus-'+di;
     const ex=S.tasks.find(t=>t.id===id);
+    if(!ex&&(S.days[di]||{}).noLudus)continue;
     if(ex){if(!ex.done&&ex.est!==(+st.ludusMin||15)){ex.est=+st.ludusMin||15;ch=true}continue}
     S.tasks.push({id,kind:'daily',subject:'Latein',title:'Ludus Latinus',date:di,est:+st.ludusMin||15,fixed:true,done:false});ch=true;
   }
@@ -700,6 +717,57 @@ function shrink(file){return new Promise(res=>{
     URL.revokeObjectURL(url);c.toBlob(b=>res(b||file),'image/jpeg',.85)};
   img.onerror=()=>{URL.revokeObjectURL(url);res(file)};img.src=url;
 })}
+async function runKB(){
+  const inp=document.getElementById('kbfile'),files=[...((inp&&inp.files)||[])];
+  if(!files.length){ui.kb={status:'idle',err:'Bitte zuerst einen Screenshot auswählen.'};render();return}
+  ui.kb={status:'reading'};render();
+  try{
+    const imgs=await Promise.all(files.slice(0,4).map(shrink)),t0=today(),T=iso(t0);
+    const prompt=`Du liest das Klassenbuch aus Screenshots von Schulmanager Online: für jede Unterrichtsstunde Datum, Fach und das Thema bzw. den Unterrichtsinhalt. Der Schüler geht in die ${+S.settings.grade||7}. Klasse eines bayerischen Gymnasiums.
+Heute ist ${WDL[t0.getDay()]}, der ${T}. Datumsangaben ohne Jahr gehören zum laufenden Schuljahr. Steht nur der Wochentag in einer Wochenansicht, leite das Datum aus der angezeigten Woche ab.
+Aufbau im Schulmanager: Eine farbige Kopfzeile nennt den Tag (z. B. "Montag, 16.11.2026"), darunter folgen die Stunden dieses Tages, jeweils fett das Fach und darunter der Inhalt. Die Tage stehen oft neuester zuerst. Jede Stunde gehört zu dem Tag, unter dessen Kopfzeile sie steht. Doppelstunden erscheinen zweimal mit verschiedenem Inhalt; nimm beide auf. Auch Einträge wie "Übung vor der Schulaufgabe" aufnehmen, sie zeigen, was geprüft wird.
+Ordne jede Stunde genau einem dieser Fächer zu: ${SUBJ.join(', ')}. Kürzel wie M, D, E, L, B, Ph, NuT, G, Geo, WR, Ev, K, Eth, Mu, Ku entsprechend zuordnen. Sport, Intensivierung und Stunden ohne Inhalt weglassen.
+Übernimm den Inhalt möglichst wörtlich und knapp (Thema, Lektion, Seiten, Grammatik). Hausaufgaben gehören nicht dazu.
+Antworte nur mit JSON: {"stunden":[{"datum":"YYYY-MM-DD","fach":"Physik","inhalt":"Dichte: Versuch mit Wasser und Öl"}]}
+Wenn du nichts erkennst: {"stunden":[]}`;
+    const res=await aiJSON(prompt,imgs);
+    const arr=Array.isArray(res)?res:((res&&res.stunden)||[]),isoRe=/^\d{4}-\d{2}-\d{2}$/;
+    const items=arr.filter(x=>x&&x.inhalt&&isoRe.test(x.datum||'')&&x.datum<=T).map(x=>{const subject=matchSubject(x.fach),content=String(x.inhalt).trim().slice(0,200);
+      const dup=S.lessons.some(l=>l.date===x.datum&&l.subject===subject&&l.content.toLowerCase()===content.toLowerCase());return{date:x.datum,subject,content,dup,on:!dup}})
+      .sort((a,b)=>a.date.localeCompare(b.date));
+    ui.kb=items.length?{status:'review',items}:{status:'idle',err:'Auf dem Screenshot habe ich keine Unterrichtsinhalte gefunden. Ist das Klassenbuch zu sehen?'};
+  }catch(e){ui.kb={status:'idle',err:aiError(e)}}
+  render();
+}
+function examEditForm(e,ts){
+  const sh=ts.find(t=>t.sheet);
+  return `<form data-form="exedit" data-id="${e.id}" style="padding:10px 0 4px;border-top:1px dashed var(--linie)">
+  <div class="g2"><label>Art<select name="type">${Object.keys(EXAM).map(k=>`<option ${k===e.type?'selected':''}>${k}</option>`).join('')}</select></label>
+  <label>Datum<input type="date" name="date" value="${e.date}" min="${iso(addDays(today(),1))}" required></label></div>
+  <label>Thema oder Seiten<input name="topic" value="${esc(e.topic||'')}"></label>
+  <label>Nähere Infos<textarea name="notes" rows="3" placeholder="z. B. was die Lehrkraft angekündigt hat, Schwerpunkte, Aufgabentypen">${esc(e.notes||'')}</textarea></label>
+  <label class="srow"><span>Übungsblatt einplanen</span><input type="checkbox" class="tg" name="sheet" ${sh?'checked':''}></label>
+  <label>Link zum Übungsblatt (optional)<input name="link" type="url" value="${esc((sh&&sh.link)||'')}" placeholder="https://claude.ai/…"></label>
+  <div class="sub" style="margin-top:6px">Ändert sich Datum oder Art, werden die offenen Lerneinheiten neu verteilt. Erledigte bleiben.${AI_OK()?' Nach dem Speichern passt Claude die Schritte an.':''}</div>
+  <div class="row" style="margin-top:10px"><button class="btn sm primary">Speichern</button><button type="button" class="btn sm" data-act="editx">Abbrechen</button></div></form>`;
+}
+function kbCard(){
+  const kb=ui.kb||{status:'idle'};
+  let h=`<div class="card"><h2>Klassenbuch</h2>`;
+  if(kb.status==='reading')return h+`<div class="muted">Screenshot wird gelesen, das dauert ein paar Sekunden.</div></div>`;
+  if(kb.status==='review')return `<form data-form="kbok" class="card"><h2>Gefundene Unterrichtsinhalte</h2><div class="sub">Nur angehakte werden gespeichert.</div>`+
+    kb.items.map((it,i)=>`<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><label style="color:var(--tx)"><input type="checkbox" name="on${i}" ${it.on?'checked':''}> ${it.dup?'Schon gespeichert: ':''}<b>${fmt(it.date)}, ${esc(it.subject)}</b></label>
+      <div class="g2"><label>Fach<select name="s${i}">${subjOpts(it.subject)}</select></label><label>Datum<input type="date" name="d${i}" value="${it.date}"></label></div>
+      <label>Inhalt<input name="c${i}" value="${esc(it.content)}"></label></div>`).join('')+
+    `<div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button><button type="button" class="btn" data-act="kbcancel">Verwerfen</button></div></form>`;
+  h+=`<div class="sub">Im Schulmanager das Klassenbuch öffnen (Tag oder Woche), Screenshot machen und hier auswählen. Claude nutzt die Inhalte, um die Lernschritte vor Prüfungen genauer zu planen.</div>`;
+  if(AI_OK())h+=`<input type="file" id="kbfile" accept="image/*" multiple style="margin-top:10px">${kb.err?`<div class="note err">${esc(kb.err)}</div>`:''}<div class="row" style="margin-top:10px"><button class="btn primary" data-act="kbrun">Auslesen</button></div>`;
+  const subs=[...new Set(S.lessons.map(l=>l.subject))].sort();
+  h+=subs.map(su=>{const ls=S.lessons.filter(l=>l.subject===su).sort((a,b)=>b.date.localeCompare(a.date));
+    return `<details style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><summary><span class="dot" style="background:${col(su)}"></span> <b>${esc(su)}</b> <span class="sub">${ls.length} Stunden, zuletzt ${fmt(ls[0].date)}</span></summary>`+
+      ls.slice(0,30).map(l=>`<div class="li"><span class="grow">${fmt(l.date)}: ${esc(l.content)}</span><button class="btn sm danger" data-act="dellesson" data-id="${l.id}" aria-label="Eintrag löschen">×</button></div>`).join('')+`</details>`}).join('');
+  return h+`</div>`;
+}
 async function runScan(){
   const inp=document.getElementById('scanfile'),files=[...((inp&&inp.files)||[])];
   if(!files.length){ui.scan={status:'idle',err:'Bitte zuerst einen Screenshot auswählen.'};render();return}
@@ -733,6 +801,15 @@ Wenn du keine Hausaufgaben erkennst: {"hausaufgaben":[]}`;
 function bookFor(subject){return S.books.find(b=>b.subject===subject)}
 function bookContext(subject){const b=bookFor(subject);if(!b)return'';
   return `\nLehrwerk: ${b.title}${b.isbn?' (ISBN '+b.isbn+')':''}. Die Klasse ist aktuell bei: ${b.chapter||'unbekannt'}.${b.toc?'\nInhaltsverzeichnis (Auszug):\n'+String(b.toc).slice(0,3000):''}`}
+// Unterrichtsinhalte seit der letzten Prüfung im selben Fach (höchstens 10 Wochen zurück).
+function lessonContext(ex){
+  const prev=S.exams.filter(e=>e.subject===ex.subject&&e.id!==ex.id&&e.date<ex.date).map(e=>e.date).sort().pop();
+  const from=prev||iso(addDays(parse(ex.date),-70));
+  const ls=S.lessons.filter(l=>l.subject===ex.subject&&l.date>from&&l.date<=ex.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!ls.length)return'';
+  return `\nUnterrichtsinhalte laut Klassenbuch${prev?' seit der letzten Prüfung am '+fmt(prev):''} (älteste zuerst):\n`+ls.map(l=>`${fmt(l.date)}: ${l.content}`).join('\n').slice(-3000)+
+    `\nNutze diese Inhalte, um genau festzulegen, was drankommt. Was zuletzt im Unterricht war, ist besonders wahrscheinlich.`;
+}
 async function refineExam(id){
   const ex=S.exams.find(e=>e.id===id);if(!ex||!AI_OK())return;
   const ts=S.tasks.filter(t=>t.examId===id&&!t.done).sort((a,b)=>a.date.localeCompare(b.date));if(!ts.length)return;
@@ -740,7 +817,7 @@ async function refineExam(id){
   const grade=+S.settings.grade||7;
   ui.busy=id;render();
   try{
-    const prompt=`Ein Schüler der ${grade}. Klasse an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${bookContext(ex.subject)}
+    const prompt=`Ein Schüler der ${grade}. Klasse an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${bookContext(ex.subject)}${lessonContext(ex)}
 
 Schritt 1, Lehrplan: Prüfe im LehrplanPLUS Gymnasium Bayern (lehrplanplus.bayern.de), Fach ${ex.subject}, Jahrgangsstufe ${grade}, zu welchem Lernbereich das Thema gehört und welche Kompetenzen und Inhalte dort verlangt werden. Gleiche das mit dem Lehrwerk ab: welche Lektionen oder Kapitel passen dazu. Wenn das Thema nur Seitenzahlen nennt, leite den Inhalt aus dem Inhaltsverzeichnis ab. Wenn du etwas nicht sicher weißt, sag das knapp und erfinde keine Seitenzahlen.
 Schritt 2, Schwerpunkte: Nenne die 2 bis 4 Inhalte, die für diese Prüfung am wichtigsten sind, also das, was typischerweise abgefragt wird und worauf der Rest aufbaut.
@@ -1076,12 +1153,15 @@ function renderEltern(plan){
   <div class="sub" style="margin-top:8px">Die Lernzeit wird auf die Tage davor verteilt, möglichst auf Tage mit wenig anderem. Jede Einheit bekommt einen konkreten Auftrag.${AI_OK()?' Gebt ihr ein Thema an, gleicht Claude es mit dem LehrplanPLUS fürs bayerische Gymnasium und eurem Lehrwerk ab und plant daraus die Schritte.':''}</div>
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
-  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span>${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm danger" data-act="delexam" data-id="${e.id}">Löschen</button></div>`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  const delBtn=(act,id)=>ui.ask===act+id?`<button class="btn sm danger" data-act="${act}" data-id="${id}">Wirklich löschen</button><button class="btn sm" data-act="askx">Nein</button>`:`<button class="btn sm danger" data-act="ask" data-v="${act}" data-id="${id}">Löschen</button>`;
+  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span><span class="acts">${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
   ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
-  const open=S.tasks.filter(t=>!t.done&&t.kind!=='daily').sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
+  const open=S.tasks.filter(t=>!t.done&&(t.kind!=='daily'||t.date===T)).sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
   sec.schule+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
     `<form data-form="edit" data-id="${t.id}" style="padding:8px 0;border-top:1px solid var(--bd)"><label>Auftrag<input name="title" value="${esc(t.title)}" required></label><div class="row" style="margin-top:8px"><button class="btn sm primary">Speichern</button><button type="button" class="btn sm" data-act="editx">Abbrechen</button></div></form>`:
-    `<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.subject)}: ${esc(t.title)}<br><span class="sub">${t.kind==='ha'?'bis '+fmt(t.due):'am '+fmt(t.date)} · geschätzt ${t.est} Min., geplant ${planMin(t)} Min.</span></span><button class="btn sm" data-act="edit" data-id="${t.id}">Ändern</button><button class="btn sm" data-act="est" data-v="-5" data-id="${t.id}" aria-label="5 Minuten weniger">−5</button><button class="btn sm" data-act="est" data-v="5" data-id="${t.id}" aria-label="5 Minuten mehr">+5</button>${t.kind==='ha'?`<button class="btn sm danger" data-act="del" data-id="${t.id}">Löschen</button>`:''}</div>`).join(''):'<div class="muted">Alles erledigt.</div>'}</div>`;
+    `<div class="li stk"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.subject)}: ${esc(t.title)}<br><span class="sub">${t.kind==='ha'?'bis '+fmt(t.due):t.kind==='daily'?'heute':'am '+fmt(t.date)} · geschätzt ${t.est} Min., geplant ${planMin(t)} Min.</span></span><span class="acts"><button class="btn sm" data-act="edit" data-id="${t.id}">Ändern</button><button class="btn sm" data-act="est" data-v="-5" data-id="${t.id}" aria-label="5 Minuten weniger">−5</button><button class="btn sm" data-act="est" data-v="5" data-id="${t.id}" aria-label="5 Minuten mehr">+5</button>${delBtn('pdel',t.id)}</span></div>`).join(''):'<div class="muted">Alles erledigt.</div>'}
+  <div class="sub" style="margin-top:8px">Gelöschte Einträge zählen weder als erledigt noch als nicht geschafft.</div></div>`;
+  sec.schule+=kbCard();
   sec.schule+=`<div class="card"><h2>Lehrwerke</h2><div class="sub">Mit Buch, aktueller Lektion und Inhaltsverzeichnis kann Claude die Lernschritte vor Prüfungen genau auf euer Buch abstimmen.</div>
   ${S.books.map(b=>`<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><div class="row"><span class="dot" style="background:${col(b.subject)}"></span><b class="grow">${esc(b.subject)}: ${esc(b.title)}</b><button class="btn sm danger" data-act="delbook" data-id="${b.id}">Löschen</button></div>
     <div class="sub">${b.isbn?'ISBN '+esc(b.isbn)+' · ':''}${b.toc?'Inhaltsverzeichnis gespeichert ('+String(b.toc).split('\n').length+' Zeilen)':'noch kein Inhaltsverzeichnis'}</div>
@@ -1187,7 +1267,14 @@ document.addEventListener('click',e=>{
     case'edit':ui.edit=id;break;
     case'editx':ui.edit=null;break;
     case'grade':ui.edit='g-'+id;break;
-    case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks=S.tasks.filter(x=>x.examId!==id);save();break;
+    case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks.filter(x=>x.examId===id&&!x.done).forEach(x=>removeTask(x.id));S.tasks=S.tasks.filter(x=>x.examId!==id||x.done);ui.ask=null;save();break;
+    case'ask':ui.ask=b.dataset.v+id;break;
+    case'askx':ui.ask=null;break;
+    case'pdel':removeTask(id);ui.ask=null;ui.msg='Eintrag gelöscht. Er zählt weder als erledigt noch als nicht geschafft.';ui.msgType='okn';save();break;
+    case'exedit':ui.edit=ui.edit==='x-'+id?null:'x-'+id;break;
+    case'kbrun':runKB();return;
+    case'kbcancel':ui.kb={status:'idle'};break;
+    case'dellesson':S.lessons=S.lessons.filter(x=>x.id!==id);save();break;
     case'refine':if(!ui.busy)refineExam(id);return;
     case'toc':if(!ui.busy)scanToc(id);return;
     case'report':if(!ui.busy)makeReport();return;
@@ -1229,6 +1316,20 @@ document.addEventListener('submit',e=>{
         const sub=v['s'+i]||it.subject,due=v['d'+i]||it.due;if(isDup(sub,title,due))return;addHA(sub,title,due,+v['m'+i]||it.est);n++});
       ui.scan={status:'idle'};ui.scanOpen=false;ui.msg=n?`${n} Hausaufgabe${n>1?'n':''} übernommen und eingeplant.`:'Keine neuen Hausaufgaben übernommen.';break}
     case'exam':{if(!v.date)return;const lk=(v.link||'').trim();const id=addExam(v.subject,v.type,v.date,v.topic.trim(),{sheet:!!v.sheet,link:/^https?:\/\//.test(lk)?lk:''});ui.msg=`${v.subject} ${v.type} gespeichert. Die Lerneinheiten sind verteilt.`;ui.msgType='okn';save();if(AI_OK()){refineExam(id);return}break}
+    case'exedit':{const e=S.exams.find(x=>x.id===f.dataset.id);if(!e||!v.date)break;
+      const lk=(v.link||'').trim(),link=/^https?:\/\//.test(lk)?lk:'',ts=S.tasks.filter(t=>t.examId===e.id),sh=ts.find(t=>t.sheet),wantSheet=!!v.sheet;
+      const topic=(v.topic||'').trim(),notes=String(v.notes||'').trim().slice(0,1500),moved=v.date!==e.date||v.type!==e.type||wantSheet!==!!sh;
+      const changed=moved||topic!==(e.topic||'')||notes!==(e.notes||'');
+      if(topic!==(e.topic||'')){e.lp='';e.focus=[]}
+      Object.assign(e,{date:v.date,type:v.type,topic,notes});
+      if(moved)replanExam(e,{sheet:wantSheet&&!(sh&&sh.done),link});else if(sh)sh.link=link;
+      ui.edit=null;ui.msg=moved?'Prüfung geändert, die offenen Lerneinheiten sind neu verteilt.':'Prüfung geändert.';ui.msgType='okn';save();
+      if(changed&&AI_OK()){refineExam(e.id);return}break}
+    case'kbok':{let n=0;(ui.kb.items||[]).forEach((it,i)=>{if(!v['on'+i])return;const content=(v['c'+i]||'').trim(),subject=v['s'+i]||it.subject,date=v['d'+i]||it.date;if(!content)return;
+        if(S.lessons.some(l=>l.date===date&&l.subject===subject&&l.content.toLowerCase()===content.toLowerCase()))return;S.lessons.push({id:uid(),date,subject,content});n++});
+      const subs=[...new Set((ui.kb.items||[]).map(x=>x.subject))],T=iso(today());
+      const ex=S.exams.filter(e=>e.date>=T&&subs.includes(e.subject));
+      ui.kb={status:'idle'};ui.msg=`${n} Unterrichtsstunde${n===1?'':'n'} gespeichert.`+(ex.length&&AI_OK()?` Tipp: Bei ${ex.map(e=>e.subject+' '+e.type).join(', ')} auf „Schritte von Claude“ tippen, damit die neuen Inhalte einfließen.`:'');ui.msgType='okn';break}
     case'edit':{const t=S.tasks.find(x=>x.id===f.dataset.id);if(t&&v.title.trim())t.title=v.title.trim();ui.edit=null;break}
     case'grade':{const r=S.results.find(x=>x.id===f.dataset.id);if(r)r.grade=String(v.grade).trim().slice(0,4);ui.edit=null;break}
     case'book':S.books=S.books.filter(b=>b.subject!==v.subject);S.books.push({id:uid(),subject:v.subject,title:v.title.trim(),isbn:(v.isbn||'').replace(/[^0-9Xx-]/g,''),chapter:(v.chapter||'').trim(),toc:''});ui.msg='Lehrwerk gespeichert.';ui.msgType='okn';break;
