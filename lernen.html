@@ -87,6 +87,8 @@ h2+.li,.sub+.li,.card>.li:first-child{border-top:0}
 .day.on{background:var(--tinte);color:var(--blatt);border-color:var(--tinte)}
 .day small{display:block;font-size:12px;font-weight:400;opacity:.8}
 .item{display:flex;gap:12px;align-items:flex-start;background:var(--blatt);border:1px solid var(--linie);border-left:5px solid var(--c,var(--linie));border-radius:12px;padding:12px;margin:8px 0}
+.item.brk{background:transparent;border-style:dashed;border-left:5px solid var(--linie);padding:8px 12px}
+.item.brk .tt{font-size:15px}
 .item.appt{background:var(--leise);border-left-color:var(--tinte2)}
 .tt{font-weight:600}
 .chk{width:30px;height:30px;border-radius:8px;border:2px solid var(--linie);background:var(--blatt);flex-shrink:0;cursor:pointer}
@@ -181,6 +183,8 @@ details.grp[open] summary{margin-bottom:6px}
 .badge .bprog{display:block;height:5px;border-radius:3px;background:var(--leise);margin-top:8px;overflow:hidden}
 .badge .bprog i{display:block;height:100%;background:var(--tinte)}
 .badge .bcnt{display:block;font-size:12px;margin-top:3px}
+.pausek{border:2px dashed var(--linie)}
+.pausek .pidea{font:700 22px/1.2 var(--anz);margin:4px 0 6px}
 .rules{margin:0 0 8px;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}
 .rules b{font-family:var(--anz);font-size:16px}
 .badge b{display:block;font:700 17px/1.2 var(--anz);color:var(--tinte)}
@@ -252,6 +256,11 @@ function kitSvg(th,i){
   <path d="M19 55 L45 55" stroke="${th.band||(th.shirt==='#ffffff'?th.trim:th.shirt)}" stroke-width="1.5" opacity=".9"/></svg>`;
 }
 // Jede Sache ist genau ein Tor. Der Tagessieg zählt im Wochenspiel, nicht als Tore.
+// Pausen ohne Bildschirm, mit Bewegung: aktive Pausen verbessern nachweislich die Aufmerksamkeit danach.
+const BREAK_SHORT=['3 Minuten aufs Trampolin','20 Hampelmänner, dann ein Glas Wasser','10 Würfe mit dem Ball gegen die Wand','Ans offene Fenster, tief durchatmen, Schultern kreisen','Auf einem Bein stehen, 30 Sekunden pro Seite','Einmal ums Haus gehen'];
+const BREAK_LONG=['10 Minuten aufs Trampolin','Raus in den Garten: Ball prellen und auf ein Ziel werfen','Obst oder Nüsse essen und Wasser trinken','Kurzer Gang an der frischen Luft'];
+function breakIdea(long,seed){const own=String(S.settings.breakIdeas||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  const list=(long?BREAK_LONG:BREAK_SHORT).concat(own);let h=0;String(seed).split('').forEach(c=>h=(h*31+c.charCodeAt(0))>>>0);return list[h%list.length]}
 const PTS={task:1,check:1,kick:1,review:1,meet:1};
 const CHECKS=[['latein','Latein'],['englisch','Englisch']];
 
@@ -285,11 +294,11 @@ if(!REMOTE){try{if(window.claude&&window.claude.use)window.claude.use('sample').
 const AI_OK=()=>(REMOTE&&authOk&&!!sb)||!!SAMPLE;
 function blobToB64(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({type:b.type||'image/jpeg',data:String(r.result).split(',')[1]});r.onerror=rej;r.readAsDataURL(b)})}
 function parseJSON(t){if(t&&typeof t==='object')return t;const s=String(t||''),a=s.indexOf('{'),b=s.lastIndexOf('}');if(a<0||b<a)throw{code:'parse'};return JSON.parse(s.slice(a,b+1))}
-async function aiText(prompt,images){
-  images=images||[];
+async function aiText(prompt,images,opt){
+  images=images||[];opt=opt||{};
   if(REMOTE){
     const imgs=await Promise.all(images.map(blobToB64));
-    const{data,error}=await sb.functions.invoke('lernplaner',{body:{prompt,images:imgs}});
+    const{data,error}=await sb.functions.invoke('lernplaner',{body:{prompt,images:imgs,web:!!opt.web}});
     if(error){const st=error.context&&error.context.status;throw{code:st===429?'rate_limited':'error'}}
     return(data&&data.text)||'';
   }
@@ -297,9 +306,9 @@ async function aiText(prompt,images){
   const res=await SAMPLE(prompt,images.length?{images,modelTier:'default'}:{modelTier:'default'});
   return res.text||'';
 }
-async function aiJSON(prompt,images){
+async function aiJSON(prompt,images,opt){
   if(!REMOTE&&SAMPLE&&SAMPLE.json)return SAMPLE.json(prompt,(images&&images.length)?{images,modelTier:'default'}:{modelTier:'default'});
-  return parseJSON(await aiText(prompt,images));
+  return parseJSON(await aiText(prompt,images,opt));
 }
 function aiError(e){
   const c=e&&e.code;
@@ -322,10 +331,13 @@ function migrate(x){
     x.goals.forEach(g=>{if(!g.id)g.id=uid()});
     delete x.v;delete x.sample;
   }
-  x.settings=Object.assign({pin:'1234',afterSchool:60,latest:'19:30',weekendStart:'10:00',buffer:30,blockMax:15,pause:5,sundayFree:true,ludusOn:true,ludusMin:15,ludusUrl:'',checksOn:true,winGoal:4,bedtimeMin:30,theme:0},x.settings);
+  x.settings=Object.assign({pin:'1234',afterSchool:60,latest:'19:30',weekendStart:'10:00',buffer:30,blockMax:20,pause:5,longAfter:40,longPause:15,breakIdeas:'',grade:7,sundayFree:true,ludusOn:true,ludusMin:15,ludusUrl:'',checksOn:true,winGoal:4,bedtimeMin:30,theme:0},x.settings);
   if(typeof x.settings.theme!=='number')x.settings.theme=0;
   x.schoolEnd=Object.assign({1:'13:00',2:'15:30',3:'13:00',4:'13:00',5:'12:15'},x.schoolEnd);
-  x.model=Object.assign({cap:75,prep:{}},x.model);
+  x.model=Object.assign({cap:60,prep:{}},x.model);
+  // Ab Version 2: Richtwert 60 Min. an Schultagen, höchstens 75 (Studienlage für 12- bis 14-Jährige).
+  if(!x.model.capV){x.model.cap=Math.min(+x.model.cap||60,60);x.model.capV=2}
+  if(x.settings.longAfter===undefined){x.settings.longAfter=40;x.settings.longPause=15}
   if(x.settings.holidaysFree===undefined)x.settings.holidaysFree=true;
   return x;
 }
@@ -423,14 +435,21 @@ const LANG=['Latein','Englisch','Deutsch'];
 function stepTitles(subject,type,n){
   if(type==='Referat'){const r=['Material sammeln: 3 gute Quellen finden und Stichpunkte machen','Gliederung schreiben: Einleitung, 3 Hauptpunkte, Schluss','Plakat oder Folien gestalten','Vortrag einmal laut für dich üben, Zeit stoppen','Generalprobe: Vortrag vor Mama oder Papa halten'];return Array.from({length:n},(_,i)=>r[Math.round(i*(r.length-1)/Math.max(1,n-1))])}
   const g=LANG.includes(subject)
-    ?['Überblick: Vokabeln und Grammatik im Buch markieren','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik: 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen']
-    :['Überblick: Hefteinträge lesen und die 5 wichtigsten Punkte aufschreiben','Üben: 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Lernkarten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Lernkarten durchgehen, Tasche packen'];
+    ?['Überblick: neue Vokabeln und Grammatik raussuchen, Lernkarten schreiben','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik: 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen']
+    :['Überblick: Hefteinträge lesen, dann ohne Heft die 5 wichtigsten Punkte aufschreiben','Üben: 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Lernkarten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Lernkarten durchgehen, Tasche packen'];
   if(n===1)return[g[5]];
   return Array.from({length:n},(_,i)=>i===n-1?g[5]:n<=3?g[[1,4][i]]:g[Math.round(i*4/(n-2))]);
 }
-function dayLimit(d){const c=+S.model.cap||75;return d.getDay()===6?Math.round(c*.7):c}
+// Lernzeit pro Tag (Hausaufgaben, Lernen, Ludus zusammen). Grundlage: NRW-Richtwert 60 Min. für Klasse 5 bis 7,
+// Cooper (10 Min. pro Klassenstufe), Fernández-Alonso u. a. 2015 (Optimum 60 bis 70 Min., über 90 Min. kein Gewinn).
+// dayLimit ist der Richtwert, bis zu dem auch Vorarbeit eingeplant wird; dayMax die harte Grenze, auch für Pflichtaufgaben.
+const CAP_MIN=45,CAP_MAX=75;
+function freeWeekday(d){return isWeekday(d)&&!!freeReason(d)&&!isFree(d)}
+function dayLimit(d){const c=Math.min(CAP_MAX,Math.max(CAP_MIN,+S.model.cap||60));return d.getDay()===6?45:freeWeekday(d)?75:c}
+function dayMax(d){return d.getDay()===6?60:freeWeekday(d)?90:75}
 function loadMap(){const m={};simulate().forEach(d=>{m[d.date]=d.used+d.over.reduce((a,o)=>a+o.P,0)});return m}
-function addExam(subject,type,date,topic){
+function addExam(subject,type,date,topic,opt){
+  opt=opt||{};
   const id=uid(),t0=iso(today()),prep=Math.min(1.6,Math.max(.7,+(S.model.prep[subject]||1)));
   const plan=(EXAM[type]||EXAM['Ex / Test']).slice();
   if(prep>=1.25&&type!=='Referat')plan.unshift([type==='Schulaufgabe'?-10:-5,20]);
@@ -449,7 +468,11 @@ function addExam(subject,type,date,topic){
     const pi=iso(pick);byDay[pi]=(byDay[pi]||0)+min;load[pi]=ld(pick)+min;
   });
   const keys=Object.keys(byDay).sort(),titles=stepTitles(subject,type,keys.length);
-  keys.forEach((di,i)=>S.tasks.push({id:uid(),kind:'lern',examId:id,subject,title:titles[i],date:di,est:Math.min(byDay[di],60),part:i+1,parts:keys.length,done:false}));
+  // Übungsblatt (von den Eltern mit Claude erstellt) in der Übungsphase: vorletzte Einheit, bei nur zwei Einheiten die erste.
+  const sheetAt=opt.sheet?(keys.length>=3?keys.length-2:0):-1;
+  keys.forEach((di,i)=>S.tasks.push(Object.assign({id:uid(),kind:'lern',examId:id,subject,title:titles[i],date:di,est:Math.min(byDay[di],45),part:i+1,parts:keys.length,done:false},
+    i===sheetAt?{sheet:true,title:'Übungsblatt bearbeiten'+(topic?': '+topic:''),link:opt.link||''}:{})));
+  if(opt.sheet&&!keys.length)S.tasks.push({id:uid(),kind:'lern',examId:id,subject,title:'Übungsblatt bearbeiten',date:t0,est:30,part:1,parts:1,done:false,sheet:true,link:opt.link||''});
   return id;
 }
 function ensureDaily(){
@@ -477,8 +500,8 @@ function evaluateDays(){
     const done=S.tasks.filter(t=>t.done&&t.doneAt===d).reduce((a,t)=>a+(t.planned||0),0),won=!!S.wins[d];
     r.done=done;r.won=won;
     if(r.planned>0){
-      if(won&&r.planned>=m.cap*.9){m.cap=Math.min(150,m.cap+5);r.capChange=5}
-      else if(!won&&r.planned>=m.cap*.8&&done<r.planned){m.cap=Math.max(40,m.cap-5);r.capChange=-5}
+      if(won&&r.planned>=m.cap*.9){m.cap=Math.min(CAP_MAX,m.cap+5);r.capChange=5}
+      else if(!won&&r.planned>=m.cap*.8&&done<r.planned){m.cap=Math.max(CAP_MIN,m.cap-5);r.capChange=-5}
     }
   });
   return ch;
@@ -527,10 +550,15 @@ function windowsFor(d,isToday){
     wins=wins.flatMap(([s,e])=>{const o=[];if(a0>s)o.push([s,Math.min(e,a0)]);if(a1<e)o.push([Math.max(s,a1),e]);return o}).filter(([s,e])=>e-s>=10)});
   return{wins,appts,free:false};
 }
-function alloc(cap,P){
-  const bm=+S.settings.blockMax,pz=+S.settings.pause,c=cap.map(w=>w.slice()),segs=[];let rem=P;
-  for(const w of c){while(rem>0&&w[1]-w[0]>=Math.min(rem,10)){const len=Math.min(rem,bm,w[1]-w[0]);segs.push([w[0],w[0]+len]);w[0]=Math.min(w[1],w[0]+len+pz);rem-=len}if(rem<=0)break}
-  if(rem>0)return null;cap.splice(0,cap.length,...c.filter(w=>w[1]-w[0]>0));return segs;
+// Nach jedem Block eine kurze Bewegungspause, nach longAfter Minuten Lernen eine große Pause.
+function alloc(cap,P,day){
+  const st=S.settings,bm=+st.blockMax||20,pz=+st.pause||0,la=+st.longAfter||40,lp=+st.longPause||15,c=cap.map(w=>w.slice()),segs=[],brk=[];
+  let rem=P,run=day?day.run:0;
+  for(const w of c){while(rem>0&&w[1]-w[0]>=Math.min(rem,10)){const len=Math.min(rem,bm,w[1]-w[0]);segs.push([w[0],w[0]+len]);run+=len;
+    const long=run>=la,pl=long?lp:pz;if(pl)brk.push({s:w[0]+len,e:Math.min(w[1],w[0]+len+pl),long});if(long)run=0;
+    w[0]=Math.min(w[1],w[0]+len+pl);rem-=len}if(rem<=0)break}
+  if(rem>0)return null;cap.splice(0,cap.length,...c.filter(w=>w[1]-w[0]>0));
+  if(day){day.run=run;day.breaks.push(...brk)}return segs;
 }
 function simulate(){
   const t0=today(),T=iso(t0),out=[],placed=new Set(),exD={};
@@ -542,7 +570,7 @@ function simulate(){
     const d=addDays(t0,i),di=iso(d);
     let nx=addDays(d,1);if(isFree(nx))nx=addDays(nx,1);const nextWork=iso(nx);
     const{wins,appts,free}=windowsFor(d,i===0),cap=wins.map(w=>w.slice()),lim=dayLimit(d),base=i===0?doneToday:0;
-    const day={date:di,appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim};
+    const day={date:di,appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim,max:dayMax(d),run:0,breaks:[]};
     const ha=open.filter(t=>t.kind==='ha'&&!placed.has(t.id));
     const urgent=ha.filter(t=>t.due<=nextWork).sort(byDue);
     const daily=open.filter(t=>t.kind==='daily'&&t.date===di);
@@ -550,14 +578,20 @@ function simulate(){
     const rest=ha.filter(t=>t.due>nextWork).sort(byDue);
     const place=(t,must)=>{const P=planMin(t);
       if(!must&&base+day.used+P>lim)return;
-      const segs=alloc(cap,P);
+      if(must&&base+day.used+P>day.max){day.over.push({t,P});placed.add(t.id);return}
+      const segs=alloc(cap,P,day);
       if(segs){day.items.push({t,segs,P});day.used+=P;placed.add(t.id)}
       else if(must){day.over.push({t,P});placed.add(t.id)}};
     urgent.forEach(t=>place(t,true));
     daily.forEach(t=>place(t,true));
-    lern.forEach(t=>place(t,exD[t.examId]<=nextWork||t.date<di));
+    // Zuerst, was heute sein muss (überfällig oder Prüfung morgen), dann der Rest bis zum Richtwert.
+    const mustL=t=>exD[t.examId]<=nextWork||t.date<di;
+    lern.filter(mustL).forEach(t=>place(t,true));
+    lern.filter(t=>!mustL(t)).forEach(t=>place(t,false));
     rest.forEach(t=>place(t,false));
     day.items.sort((a,b)=>a.segs[0][0]-b.segs[0][0]);
+    const lastEnd=Math.max(0,...day.items.map(it=>it.segs[it.segs.length-1][1]));
+    day.breaks=day.breaks.filter(b=>b.s<lastEnd&&b.e>b.s);
     out.push(day);
   }
   return out;
@@ -630,7 +664,12 @@ function finish(id){
     ui.msg='Danke für deine ehrliche Antwort. Mama oder Papa bekommen Bescheid und helfen dir beim nächsten Mal.';
   }
   if(ui.focus===id)ui.focus=null;
-  ui.fb=null;checkDayWin();save();
+  // Pause anbieten, wenn heute noch etwas offen ist
+  const T=iso(today());if(!S.run||S.run.date!==T)S.run={date:T,min:0};S.run.min+=actual;
+  const long=S.run.min>=(+S.settings.longAfter||40),len=long?(+S.settings.longPause||15):(+S.settings.pause||5);if(long)S.run.min=0;
+  ui.fb=null;checkDayWin();
+  if(len&&!S.wins[T]&&queueOf(simulate()[0]).length)ui.brk={until:Date.now()+len*60000,len,long,idea:breakIdea(long,T+id)};
+  save();
 }
 function answerCheck(k,ok){
   const T=iso(today()),c=Object.assign({},S.checks[T]||{});if(c[k])return;
@@ -696,17 +735,23 @@ async function refineExam(id){
   const ex=S.exams.find(e=>e.id===id);if(!ex||!AI_OK())return;
   const ts=S.tasks.filter(t=>t.examId===id&&!t.done).sort((a,b)=>a.date.localeCompare(b.date));if(!ts.length)return;
   const pastRes=S.results.filter(r=>r.subject===ex.subject).slice(-3).map(r=>`${r.type}: lief ${r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}`).join('; ');
+  const grade=+S.settings.grade||7;
   ui.busy=id;render();
   try{
-    const prompt=`Ein Schüler der 7. Klasse an einem bayerischen Gymnasium bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Was drankommt: ${ex.topic||'nicht angegeben'}.${bookContext(ex.subject)}
-Ihm fällt es schwer, sich zu motivieren, und Auswendiglernen fällt ihm schwer. Er lernt gut mit konkreten, kleinen Aufträgen und aktivem Abfragen statt bloßem Durchlesen.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
-Plane ${ts.length} Lerneinheiten, in dieser Reihenfolge und mit diesen Längen: ${ts.map((t,i)=>`${i+1}. ${fmt(t.date)}, ${planMin(t)} Minuten`).join('; ')}.
-Gib für jede Einheit einen konkreten Auftrag in einem kurzen Satz (höchstens 90 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Grammatikthema aus dem Lehrwerk. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung. Einfache Sprache, keine Gedankenstriche.
-Antworte nur mit JSON: {"schritte":["...","..."]}`;
-    const res=await aiJSON(prompt);
+    const prompt=`Ein Schüler der ${grade}. Klasse an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${bookContext(ex.subject)}
+
+Schritt 1, Lehrplan: Prüfe im LehrplanPLUS Gymnasium Bayern (lehrplanplus.bayern.de), Fach ${ex.subject}, Jahrgangsstufe ${grade}, zu welchem Lernbereich das Thema gehört und welche Kompetenzen und Inhalte dort verlangt werden. Gleiche das mit dem Lehrwerk ab: welche Lektionen oder Kapitel passen dazu. Wenn das Thema nur Seitenzahlen nennt, leite den Inhalt aus dem Inhaltsverzeichnis ab. Wenn du etwas nicht sicher weißt, sag das knapp und erfinde keine Seitenzahlen.
+Schritt 2, Schwerpunkte: Nenne die 2 bis 4 Inhalte, die für diese Prüfung am wichtigsten sind, also das, was typischerweise abgefragt wird und worauf der Rest aufbaut.
+Schritt 3, Lernschritte: Plane ${ts.length} Lerneinheiten in dieser Reihenfolge und mit diesen Längen: ${ts.map((t,i)=>`${i+1}. ${fmt(t.date)}, ${planMin(t)} Minuten${t.sheet?' (Übungsblatt der Eltern, Auftrag bleibt so)':''}`).join('; ')}.
+Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Aufgaben ohne Lösung lösen, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Jede Einheit beginnt mit 2 bis 3 Minuten Abfragen vom letzten Mal. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
+Jeder Auftrag ist ein kurzer Satz (höchstens 90 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Aufgabe aus dem Lehrwerk. Einfache Sprache, keine Gedankenstriche.
+Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem Satz","schwerpunkte":["..."],"schritte":["...","..."]}`;
+    const res=await aiJSON(prompt,null,{web:true});
     const steps=(res&&res.schritte)||(Array.isArray(res)?res:[]);
-    ts.forEach((t,i)=>{if(steps[i]&&String(steps[i]).trim())t.title=String(steps[i]).trim().slice(0,120)});
-    ui.msg='Die Lernschritte sind jetzt konkreter. Du kannst jeden Schritt unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
+    ts.forEach((t,i)=>{if(!t.sheet&&steps[i]&&String(steps[i]).trim())t.title=String(steps[i]).trim().slice(0,120)});
+    if(res&&res.lehrplan)ex.lp=String(res.lehrplan).slice(0,300);
+    if(res&&Array.isArray(res.schwerpunkte))ex.focus=res.schwerpunkte.map(x=>String(x).trim().slice(0,80)).filter(Boolean).slice(0,4);
+    ui.msg='Thema mit Lehrplan und Lehrwerk abgeglichen. Die Lernschritte sind jetzt konkreter und lassen sich unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
   }catch(e){ui.msg=aiError(e);ui.msgType='err'}
   ui.busy=null;render();
 }
@@ -773,7 +818,7 @@ function renderTaskCard(t,P,segs){
   let h=`<div class="item" style="--c:${col(t.subject)}">
     <button class="chk" data-act="check" data-id="${t.id}" aria-label="Abhaken"></button>
     <div class="grow"><div class="tt">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
-    <div class="time">${segs?timeLine(segs,P):P+' Min.'}</div>${t.together?'<span class="chip wa" style="margin-top:6px">Zusammen mit Mama oder Papa</span>':''}`;
+    <div class="time">${segs?timeLine(segs,P):P+' Min.'}</div>${t.sheet&&t.link?`<a class="btn sm" style="margin-top:6px" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:''}${t.together?'<span class="chip wa" style="margin-top:6px">Zusammen mit Mama oder Papa</span>':''}`;
   if(ui.fb===t.id)h+=fbPanel(t,P);
   return h+`</div></div>`;
 }
@@ -853,7 +898,11 @@ function renderFocus(plan){
   let h=scoreboard(kick);
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich (PIN 1234) Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
-  h+=msgBox()+reviewCards()+meetCard();
+  h+=msgBox();
+  if(ui.brk&&ui.brk.until>Date.now())h+=`<div class="card pausek"><h2>${ui.brk.long?'Große Pause':'Bewegungspause'}: ${ui.brk.len} Min.</h2>
+    <div class="pidea">${esc(ui.brk.idea)}</div><div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((ui.brk.until-Date.now())/60000)+nowMin())} Uhr.</div>
+    <div class="row" style="margin-top:10px"><button class="btn" data-act="brkend">Pause vorbei</button><button class="btn ghost" data-act="brknew">Andere Idee</button></div></div>`;
+  h+=reviewCards()+meetCard();
   if(S.settings.checksOn&&!checksDone(T)&&!day.free){
     const c=S.checks[T]||{};
     h+=`<div class="card"><h2>Kabinen-Check</h2>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} aktuell?</span>${c[k]?`<span class="chip ${c[k]==='ok'?'ok':'wa'}">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn sm" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn sm" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
@@ -863,6 +912,8 @@ function renderFocus(plan){
     h+=`<div class="card focus" style="--c:${col(t.subject)}"><div class="label">${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}${cur.segs?' ab '+hm(cur.segs[0][0]):''}</div>
       <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
       <div class="chips"><span class="chip">${cur.P} Min.</span>${t.together?'<span class="chip wa">Zusammen mit Mama oder Papa</span>':''}${cur.over?'<span class="chip er">passt eigentlich nicht mehr in den Tag</span>':''}</div>
+      ${t.sheet?`<div style="margin-top:10px">${t.link?`<a class="btn" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
+      ${t.examId&&(examOf(t)||{}).focus?`<div class="sub" style="margin-top:8px">Darum geht es: ${esc(examOf(t).focus.join(', '))}</div>`:''}
       ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:10px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
       ${ui.fb===t.id?fbPanel(t,cur.P):timerRow(t)}</div>`;
     const rest=q.filter(x=>x!==cur);
@@ -885,7 +936,8 @@ function renderHeute(plan){
   h+=msgBox();
   if(day.free)h+=`<div class="card">${esc(freeReason(parse(day.date))||'Sonntag')}: lernfrei.</div>`;
   const ent=day.appts.map(a=>({s:toMin(a.start),h:`<div class="item appt"><div class="grow"><div class="tt">${esc(a.title)}</div><div class="time">${a.start} bis ${a.end}</div></div></div>`}))
-    .concat(day.items.map(it=>({s:it.segs[0][0],h:renderTaskCard(it.t,it.P,it.segs)})));
+    .concat(day.items.map(it=>({s:it.segs[0][0],h:renderTaskCard(it.t,it.P,it.segs)})))
+    .concat(day.breaks.filter(b=>b.long||b.e-b.s>=5).map(b=>({s:b.s+.5,h:`<div class="item brk"><div class="grow"><div class="tt">${b.long?'Große Pause':'Bewegungspause'}, ${b.e-b.s} Min.</div><div class="time">${hm(b.s)} bis ${hm(b.e)}: ${esc(breakIdea(b.long,day.date+b.s))}</div></div></div>`})));
   ent.sort((a,b)=>a.s-b.s);h+=ent.map(e=>e.h).join('');
   if(!day.free&&!day.items.length&&!day.over.length)h+=`<div class="card muted">Für diesen Tag ist nichts geplant.</div>`;
   if(day.over.length)h+=`<div class="note warn">Das passt nicht mehr in den Tag. Sprich mit Mama oder Papa, was zuerst dran ist.</div>`+day.over.map(o=>renderTaskCard(o.t,o.P,null)).join('');
@@ -1002,7 +1054,7 @@ function renderEltern(plan){
   const subs=Object.keys(S.pace).filter(k=>k!=='_all'&&!k.includes('|'));
   sec.ueb+=`<details class="card"${ui.learnOpen?' open':''}><summary data-act="learnopen"><h2 style="display:inline">Was die App gelernt hat</h2></summary>
   <div class="li"><span class="grow">Gut machbare Lernzeit an Schultagen</span><b>${S.model.cap} Min.</b></div>
-  <div class="sub">Startwert 75 Min. Steigt nach gewonnenen vollen Tagen, sinkt nach verlorenen. Mehr wird nur eingeplant, wenn es sonst nicht geht.</div>
+  <div class="sub">Startwert 60 Min., bewegt sich zwischen 45 und 75. Steigt nach gewonnenen vollen Tagen, sinkt nach verlorenen. Mehr als 75 Min. plant die App an Schultagen nie ein, auch nicht vor Prüfungen. Was dann nicht passt, steht als Hinweis bei euch. Grundlage: Studien finden für 12- bis 14-Jährige um 60 bis 70 Min. am Tag den größten Nutzen, darüber kaum noch Gewinn.</div>
   ${subs.map(k=>{const p=S.pace[k],pct=Math.round((p.f-1)*100);return `<div class="li"><span class="dot" style="background:${col(k)}"></span><span class="grow">Tempo ${esc(k)}</span><span>${pct>5?'braucht etwa '+pct+' % länger':pct<-5?'ist etwa '+(-pct)+' % schneller':'passt zur Schätzung'}</span><span class="sub">&nbsp;(${p.n}×)</span></div>`}).join('')}
   ${Object.entries(S.model.prep).map(([k,f])=>`<div class="li"><span class="dot" style="background:${col(k)}"></span><span class="grow">Vorbereitung ${esc(k)}</span><span>${f>1.04?Math.round((f-1)*100)+' % mehr Lernzeit':f<.96?Math.round((1-f)*100)+' % weniger Lernzeit':'Standard'}</span></div>`).join('')}
   ${sd&&sd.med>20?`<div class="note warn">Er fängt meist etwa ${sd.med} Min. später an als geplant (letzte ${sd.n} Schultage). Vielleicht die Pause nach der Schule verlängern, damit der Plan realistischer wird.</div>`:''}
@@ -1014,11 +1066,13 @@ function renderEltern(plan){
   sec.ein+=`<form data-form="exam" class="card"><h2>Prüfung eintragen</h2>
   <div class="g2"><label>Fach<select name="subject">${subjOpts()}</select></label>
   <label>Art<select name="type">${Object.keys(EXAM).map(k=>`<option>${k}</option>`).join('')}</select></label></div>
-  <div class="g2"><label>Datum<input type="date" name="date" required min="${iso(addDays(today(),1))}"></label><label>Was kommt dran?<input name="topic" placeholder="Lektion 38, S. 40 bis 52"></label></div>
-  <div class="sub" style="margin-top:8px">Die Lernzeit wird auf die Tage davor verteilt, möglichst auf Tage mit wenig anderem. Jede Einheit bekommt einen konkreten Auftrag.${AI_OK()?' Claude passt die Aufträge danach an Thema und Lehrwerk an.':''}</div>
+  <div class="g2"><label>Datum<input type="date" name="date" required min="${iso(addDays(today(),1))}"></label><label>Thema oder Seiten<input name="topic" placeholder="z. B. Bruchrechnen oder Lektion 38"></label></div>
+  <label class="srow"><span>Übungsblatt einplanen<small>Aufgaben, die ihr mit Claude erstellt habt</small></span><input type="checkbox" class="tg" name="sheet"></label>
+  <label>Link zum Übungsblatt (optional)<input name="link" type="url" placeholder="https://claude.ai/…"></label>
+  <div class="sub" style="margin-top:8px">Die Lernzeit wird auf die Tage davor verteilt, möglichst auf Tage mit wenig anderem. Jede Einheit bekommt einen konkreten Auftrag.${AI_OK()?' Gebt ihr ein Thema an, gleicht Claude es mit dem LehrplanPLUS fürs bayerische Gymnasium und eurem Lehrwerk ab und plant daraus die Schritte.':''}</div>
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
-  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt</span></span>${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm danger" data-act="delexam" data-id="${e.id}">Löschen</button></div>`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span>${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm danger" data-act="delexam" data-id="${e.id}">Löschen</button></div>`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
   ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
   const open=S.tasks.filter(t=>!t.done&&t.kind!=='daily').sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
   sec.schule+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
@@ -1049,8 +1103,12 @@ function renderEltern(plan){
   ${sr('Spätestens fertig',tim('latest',st.latest),'Uhr')}
   ${sr('Samstag ab',tim('weekendStart',st.weekendStart),'Uhr')}
   ${sr('Puffer um Termine',num('buffer',st.buffer,0,90),'Min.')}
-  ${sr('Längster Lernblock',num('blockMax',st.blockMax,10,60),'Min.')}
-  ${sr('Pause zwischen Blöcken',num('pause',st.pause,0,20),'Min.')}
+  ${sr('Längster Lernblock',num('blockMax',st.blockMax,10,45),'Min.')}
+  ${sr('Bewegungspause nach jedem Block',num('pause',st.pause,0,20),'Min.')}
+  ${sr('Große Pause nach',num('longAfter',st.longAfter,20,90),'Min. Lernen')}
+  ${sr('Länge der großen Pause',num('longPause',st.longPause,5,45),'Min.')}
+  <label class="srow col"><span>Eigene Pausenideen<small>Eine pro Zeile, kommen zu den Vorschlägen dazu</small></span><textarea name="breakIdeas" rows="3" placeholder="Meerschweinchen füttern">${esc(st.breakIdeas||'')}</textarea></label>
+  ${sr('Jahrgangsstufe',num('grade',st.grade||7,5,13),'. Klasse')}
   <h3 class="sh">Lernfrei</h3>
   ${tog('Sonntag','sundayFree',st.sundayFree)}
   ${tog('Ferien und Feiertage','holidaysFree',st.holidaysFree!==false)}
@@ -1116,6 +1174,8 @@ document.addEventListener('click',e=>{
       if(!r.feel||!r.prep){ui.msg='Bitte beide Fragen beantworten.';ui.msgType='err';break}
       S.results.push({id:uid(),examId:id,subject:e.subject,type:e.type,date:e.date,feel:r.feel,prep:r.prep});
       applyResult(e,r.feel,r.prep);award(PTS.review,'Spielanalyse');delete ui.rv[id];save();break}
+    case'brkend':ui.brk=null;break;
+    case'brknew':if(ui.brk)ui.brk.idea=breakIdea(ui.brk.long,Date.now());break;
     case'meet':S.meets[b.dataset.k]=iso(today());award(PTS.meet,'Mannschaftsbesprechung');save();break;
     case'toggleha':ui.addHA=!ui.addHA;ui.scanOpen=false;break;
     case'del':S.tasks=S.tasks.filter(x=>x.id!==id);save();break;
@@ -1164,7 +1224,7 @@ document.addEventListener('submit',e=>{
       let n=0;(ui.scan.items||[]).forEach((it,i)=>{if(!v['on'+i])return;const title=(v['t'+i]||'').trim();if(!title)return;
         const sub=v['s'+i]||it.subject,due=v['d'+i]||it.due;if(isDup(sub,title,due))return;addHA(sub,title,due,+v['m'+i]||it.est);n++});
       ui.scan={status:'idle'};ui.scanOpen=false;ui.msg=n?`${n} Hausaufgabe${n>1?'n':''} übernommen und eingeplant.`:'Keine neuen Hausaufgaben übernommen.';break}
-    case'exam':{if(!v.date)return;const id=addExam(v.subject,v.type,v.date,v.topic.trim());ui.msg=`${v.subject} ${v.type} gespeichert. Die Lerneinheiten sind verteilt.`;ui.msgType='okn';save();if(AI_OK()){refineExam(id);return}break}
+    case'exam':{if(!v.date)return;const lk=(v.link||'').trim();const id=addExam(v.subject,v.type,v.date,v.topic.trim(),{sheet:!!v.sheet,link:/^https?:\/\//.test(lk)?lk:''});ui.msg=`${v.subject} ${v.type} gespeichert. Die Lerneinheiten sind verteilt.`;ui.msgType='okn';save();if(AI_OK()){refineExam(id);return}break}
     case'edit':{const t=S.tasks.find(x=>x.id===f.dataset.id);if(t&&v.title.trim())t.title=v.title.trim();ui.edit=null;break}
     case'grade':{const r=S.results.find(x=>x.id===f.dataset.id);if(r)r.grade=String(v.grade).trim().slice(0,4);ui.edit=null;break}
     case'book':S.books=S.books.filter(b=>b.subject!==v.subject);S.books.push({id:uid(),subject:v.subject,title:v.title.trim(),isbn:(v.isbn||'').replace(/[^0-9Xx-]/g,''),chapter:(v.chapter||'').trim(),toc:''});ui.msg='Lehrwerk gespeichert.';ui.msgType='okn';break;
@@ -1177,7 +1237,7 @@ document.addEventListener('submit',e=>{
     case'settings':{
       const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);
       st.afterSchool=+v.afterSchool||0;st.latest=v.latest||st.latest;st.weekendStart=v.weekendStart||st.weekendStart;
-      st.buffer=+v.buffer||0;st.blockMax=Math.max(10,+v.blockMax||15);st.pause=+v.pause||0;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
+      st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
       st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
       st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
       if(v.pin&&v.pin.trim())st.pin=v.pin.trim();

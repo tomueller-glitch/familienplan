@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   const key = Deno.env.get('ANTHROPIC_API_KEY') || Deno.env.get('CLAUDE_API_KEY') || Deno.env.get('ANTHROPIC_KEY') || Deno.env.get('CLAUDE_KEY');
   if (!key) return json({ error: 'Kein Claude-Schlüssel in den Secrets gefunden' }, 500);
 
-  let body: { prompt?: unknown; images?: unknown };
+  let body: { prompt?: unknown; images?: unknown; web?: unknown };
   try { body = await req.json(); } catch { return json({ error: 'Ungültige Anfrage' }, 400); }
   const prompt = body.prompt;
   const images = Array.isArray(body.images) ? body.images as { type?: string; data?: string }[] : [];
@@ -37,11 +37,19 @@ Deno.serve(async (req) => {
       .map((i) => ({ type: 'image', source: { type: 'base64', media_type: /^image\/(png|jpeg|gif|webp)$/.test(i.type || '') ? i.type : 'image/jpeg', data: i.data } })),
     { type: 'text', text: prompt },
   ];
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  // Mit web: true darf Claude im Lehrplan und bei den Schulbuchverlagen nachsehen (Websuche der Claude-API).
+  const web = body.web === true;
+  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4,
+    allowed_domains: ['lehrplanplus.bayern.de', 'isb.bayern.de', 'km.bayern.de', 'ccbuchner.de', 'klett.de', 'cornelsen.de', 'westermann.de'] }];
+  const ask = (withWeb: boolean) => fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: Deno.env.get('LERNPLANER_MODEL') || 'claude-sonnet-5-5', max_tokens: 2000, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ model: Deno.env.get('LERNPLANER_MODEL') || 'claude-sonnet-5-5', max_tokens: withWeb ? 4000 : 2000,
+      messages: [{ role: 'user', content }], ...(withWeb ? { tools } : {}) }),
   });
+  let r = await ask(web);
+  // Steht die Websuche nicht zur Verfügung, ohne sie noch einmal versuchen.
+  if (web && !r.ok && r.status !== 429) r = await ask(false);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return json({ error: j?.error?.message || 'Fehler bei der Claude-API' }, r.status === 429 ? 429 : 502);
   const text = (j.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('');
