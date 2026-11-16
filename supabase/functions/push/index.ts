@@ -1979,7 +1979,7 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
     const next = addDays(mon, 7);
     const to = [...(kid ? [kid.id] : []), ...adults];
     if (!lp.meets[next] && to.length) {
-      out.push({ key: `lp-besprechung:${next}`, to, ttl: 4 * 3600, msg: { title: 'Mannschaftsbesprechung', body: 'Schaut euch zusammen die nächste Woche im Lernplaner an: Prüfungen, Training, volle Tage. Dafür gibt es 3 Tore.', tag: 'lernplaner-woche', url } });
+      out.push({ key: `lp-besprechung:${next}`, to, ttl: 4 * 3600, msg: { title: 'Mannschaftsbesprechung', body: 'Schaut euch zusammen die nächste Woche im Lernplaner an: Prüfungen, Training, volle Tage. Dafür gibt es ein Tor.', tag: 'lernplaner-woche', url } });
     }
   }
   return out;

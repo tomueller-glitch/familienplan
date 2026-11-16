@@ -175,12 +175,20 @@ details.grp[open] summary{margin-bottom:6px}
 /* Pokale */
 .badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .badge{border:1px solid var(--linie);border-radius:12px;padding:10px 12px;font-size:14px;color:var(--tinte2);overflow-wrap:break-word;min-width:0}
-.badge.off{opacity:.45}
+.badge.off{color:var(--tinte2)}
+.badge.off b{color:var(--tinte2)}
+.badge .bdone{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--tinte);background:var(--leise);border-radius:999px;padding:2px 8px}
+.badge .bprog{display:block;height:5px;border-radius:3px;background:var(--leise);margin-top:8px;overflow:hidden}
+.badge .bprog i{display:block;height:100%;background:var(--tinte)}
+.badge .bcnt{display:block;font-size:12px;margin-top:3px}
+.rules{margin:0 0 8px;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}
+.rules b{font-family:var(--anz);font-size:16px}
 .badge b{display:block;font:700 17px/1.2 var(--anz);color:var(--tinte)}
 .jgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.jer{display:flex;flex-direction:column;align-items:center;gap:2px;height:140px;background:var(--leise);border:2px solid transparent;border-radius:14px;color:var(--tinte);padding:10px 4px 8px}
+.jer{display:flex;flex-direction:column;align-items:center;gap:2px;height:152px;background:var(--leise);border:2px solid transparent;border-radius:14px;color:var(--tinte);padding:10px 4px 8px}
 .jer svg{width:56px;height:72px;flex:0 0 auto;margin-bottom:4px}
 .jer .jn{font:700 16px/1.1 var(--anz)}
+.jer .js.lg{font-size:12px;white-space:normal;line-height:1.15;text-align:center}
 .jer .js{font-size:12px;color:var(--tinte2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .jer.on{border-color:var(--tinte);background:var(--blatt)}
 .jer.lock{cursor:default}
@@ -217,7 +225,8 @@ const COL={Mathe:'#378ADD',Deutsch:'#D85A30',Englisch:'#1D9E75',Latein:'#7F77DD'
 const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
 const WDL=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
 const EXAM={'Schulaufgabe':[[-8,30],[-6,30],[-4,30],[-3,30],[-2,35],[-1,20]],'Kurzarbeit':[[-4,20],[-2,25],[-1,15]],'Ex / Test':[[-3,20],[-2,20],[-1,15]],'Referat':[[-10,30],[-7,30],[-4,30],[-2,30],[-1,20]]};
-const LIGA=[['Kreisliga',0],['Bezirksliga',40],['Bezirksoberliga',100],['Landesliga',180],['Bayernliga',280],['3. Liga',400],['2. Bundesliga',550],['1. Bundesliga',750],['Europapokal',1000]];
+// Rund 5 Tore pro Schultag: Bundesliga nach etwa 14 Wochen, Europapokal nach etwa 18.
+const LIGA=[['Kreisliga',0],['Bezirksliga',20],['Bezirksoberliga',50],['Landesliga',90],['Bayernliga',140],['3. Liga',200],['2. Bundesliga',270],['1. Bundesliga',350],['Europapokal',450]];
 // Trikots: Shirt, Kragen und Ärmelränder, Hose. Coburg gelb-schwarz (Vereinsfarben), Kiel weiß mit schwarzen Streifen („Zebras“).
 const THEMES=[
   {n:'Coburg',d:'Heim',m:'#F5C400',on:'#111111',s:'#111111',shirt:'#F5C400',trim:'#111111',shorts:'#111111',lvl:0},
@@ -228,20 +237,22 @@ const THEMES=[
   {n:'Coburg',d:'Auswärts',m:'#1A1A1A',on:'#F5C400',s:'#F5C400',shirt:'#1A1A1A',trim:'#F5C400',shorts:'#1A1A1A',lvl:5},
   {n:'Lila',d:'',m:'#6A3FB5',on:'#ffffff',s:'#ffffff',shirt:'#6A3FB5',trim:'#ffffff',shorts:'#ffffff',lvl:6},
   {n:'Kiel',d:'Zebra',m:'#1A1A1A',on:'#ffffff',s:'#ffffff',shirt:'#ffffff',trim:'#1A1A1A',shorts:'#1A1A1A',stripes:'#1A1A1A',lvl:7},
-  {n:'Kiel',d:'Europapokal',m:'#B8901A',on:'#ffffff',s:'#1A1A1A',shirt:'#ffffff',trim:'#C9A227',trim2:'#1A1A1A',shorts:'#ffffff',band:'#C9A227',diag:'#C9A227',lvl:8}];
+  {n:'Kiel',d:'Champions League',m:'#B08A2E',on:'#ffffff',s:'#1A1A1A',shirt:'#ffffff',trim:'#B08A2E',shorts:'#ffffff',band:'#B08A2E',diag:'#C8A45A',chest:'#1A1A1A',lvl:8}];
 function kitSvg(th,i){
   const shirt='M21 6 L27 3 Q32 8 37 3 L43 6 L57 14 L52 26 L45 23 L45 48 L19 48 L19 23 L12 26 L7 14 Z';
-  const diag=th.diag?`<g clip-path="url(#kc${i})" stroke="${th.diag}" stroke-width=".8" opacity=".85">${[-20,-10,0,10,20,30,40,50].map(x=>`<line x1="${x}" y1="50" x2="${x+40}" y2="0"/>`).join('')}</g>`:'';
+  const diag=th.diag?`<g clip-path="url(#kc${i})" stroke="${th.diag}" stroke-width=".6">${[-26,-19,-12,-5,2,9,16,23,30,37,44,51].map(x=>`<line x1="${x}" y1="50" x2="${x+34}" y2="0"/>`).join('')}</g>`:'';
+  const chest=th.chest?`<g clip-path="url(#kc${i})"><rect x="19" y="15" width="26" height="7" fill="${th.chest}"/><path d="M19 15 H45 M19 22 H45" stroke="${th.trim}" stroke-width=".9"/></g>`:'';
   const t2=th.trim2?`<path d="M27.6 3.6 Q32 7.6 36.4 3.6" fill="none" stroke="${th.trim2}" stroke-width=".9"/><path d="M8.2 15.2 L12.4 25 M55.8 15.2 L51.6 25" stroke="${th.trim2}" stroke-width=".9"/>`:'';
   const stripes=th.stripes?`<g clip-path="url(#kc${i})">${[22,29,36,43].map(x=>`<rect x="${x}" y="0" width="3.5" height="50" fill="${th.stripes}"/>`).join('')}</g>`:'';
   return `<svg viewBox="0 0 64 82" aria-hidden="true"><defs><clipPath id="kc${i}"><path d="${shirt}"/></clipPath></defs>
-  <path d="${shirt}" fill="${th.shirt}" stroke="rgba(0,0,0,.25)" stroke-width="1"/>${stripes}${diag}
+  <path d="${shirt}" fill="${th.shirt}" stroke="rgba(0,0,0,.25)" stroke-width="1"/>${stripes}${diag}${chest}
   <path d="M27 3 Q32 8 37 3" fill="none" stroke="${th.trim}" stroke-width="2.5" stroke-linecap="round"/>
   <path d="M7 14 L12 26 M57 14 L52 26" stroke="${th.trim}" stroke-width="2.5" stroke-linecap="round"/>${t2}
   <path d="M19 52 L45 52 L47 78 L35 78 L32 64 L29 78 L17 78 Z" fill="${th.shorts}" stroke="rgba(0,0,0,.25)" stroke-width="1"/>
   <path d="M19 55 L45 55" stroke="${th.band||(th.shirt==='#ffffff'?th.trim:th.shirt)}" stroke-width="1.5" opacity=".9"/></svg>`;
 }
-const PTS={task:2,check:1,kick:1,fair:1,win:3,review:1,meet:3};
+// Jede Sache ist genau ein Tor. Der Tagessieg zählt im Wochenspiel, nicht als Tore.
+const PTS={task:1,check:1,kick:1,review:1,meet:1};
 const CHECKS=[['latein','Latein'],['englisch','Englisch']];
 
 const pad=n=>String(n).padStart(2,'0');
@@ -568,8 +579,11 @@ function checksDone(di){if(!S.settings.checksOn)return true;const c=S.checks[di]
 function checkDayWin(){
   const T=iso(today());if(S.wins[T])return;
   const day=simulate()[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
-  if(!day.items.length&&!day.over.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;award(PTS.win,'Tagessieg!')}
+  // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
+  if(!day.items.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;ui.msg='Tagessieg! Alles geschafft, was heute dran war.';ui.msgType='okn'}
 }
+function toWin(){const T=iso(today()),day=simulate()[0];if(S.wins[T]||day.free)return 0;
+  return queueOf(day).length+(S.settings.checksOn&&!checksDone(T)?1:0)}
 function weekInfo(){
   const m=monday(today()),all=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
   const days=all.filter(d=>!isFree(parse(d)));
@@ -582,19 +596,18 @@ function badges(){
   wins.forEach(d=>{let p=addDays(parse(d),-1);while(!isWeekday(p))p=addDays(p,-1);streak=(prev===iso(p))?streak+1:1;best=Math.max(best,streak);prev=d});
   const cnt=w=>S.goals.filter(g=>g.why===w).length;
   const weeks={};wins.forEach(d=>{if(isWeekday(parse(d))){const k=iso(monday(parse(d)));weeks[k]=(weeks[k]||0)+1}});
-  const exDone=S.exams.some(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return ts.length&&ts.every(t=>t.done)});
+  const wg=+S.settings.winGoal||4,exDone=S.exams.some(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return ts.length&&ts.every(t=>t.done)});
+  // [Name, was zu tun ist, erreicht, Ziel]
   return[
-    ['Erster Sieg','Einen Tagessieg geholt',wins.length>=1],
-    ['Siegesserie','3 Tagessiege hintereinander',best>=3],
-    ['Wochensieger','Ein Wochenspiel gewonnen',Object.values(weeks).some(n=>n>=(+S.settings.winGoal||4))],
-    ['Pünktlicher Anpfiff','10-mal pünktlich angefangen',cnt('Pünktlicher Anpfiff')>=10],
-    ['Fairplay','5-mal ehrlich gesagt, dass es schwer war',cnt('Fairplay')>=5],
-    ['Ludus-Profi','10-mal Ludus Latinus gespielt',S.tasks.filter(t=>t.kind==='daily'&&t.done).length>=10],
-    ['Kabinen-Chef','An 7 Tagen den Vokabel-Check gemacht',Object.keys(S.checks).filter(d=>CHECKS.every(([k])=>S.checks[d][k])).length>=7],
-    ['Gut vorbereitet','Alle Lerneinheiten vor einer Prüfung geschafft',exDone],
-    ['Taktiker','3-mal die Woche gemeinsam geplant',Object.keys(S.meets).length>=3],
-    ['Torjäger','100 Tore insgesamt',totalGoals()>=100],
-    ['Bundesliga-Profi','Die 1. Bundesliga erreicht',liga().i>=7]
+    ['Erster Sieg','Einen Tagessieg holen',Math.min(1,wins.length),1],
+    ['Siegesserie','3 Tagessiege hintereinander',Math.min(3,best),3],
+    ['Wochensieger','Ein Wochenspiel gewinnen',Object.values(weeks).some(n=>n>=wg)?1:0,1],
+    ['Pünktlich','10-mal pünktlich angefangen',Math.min(10,cnt('Pünktlicher Anpfiff')),10],
+    ['Fairplay','5-mal ehrlich „schwer“ gesagt',Math.min(5,S.tasks.filter(t=>t.done&&t.feel==='schwer').length),5],
+    ['Ludus-Profi','10-mal Ludus Latinus gespielt',Math.min(10,S.tasks.filter(t=>t.kind==='daily'&&t.done).length),10],
+    ['Kabinen-Chef','7-mal den Vokabel-Check gemacht',Math.min(7,Object.keys(S.checks).filter(d=>CHECKS.every(([k])=>S.checks[d][k])).length),7],
+    ['Gut vorbereitet','Alle Lerneinheiten vor einer Prüfung geschafft',exDone?1:0,1],
+    ['Taktiker','3-mal die Woche gemeinsam geplant',Math.min(3,Object.keys(S.meets).length),3]
   ];
 }
 
@@ -608,7 +621,6 @@ function finish(id){
   Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel});
   award(PTS.task,'Tor!',t.id);
   if(ui.fbFeel==='schwer'){
-    award(PTS.fair,'Fairplay',t.id);
     S.help.push({id:uid(),date:iso(today()),subject:t.subject,title:t.title});
     if(t.examId){const nx=S.tasks.filter(x=>x.examId===t.examId&&!x.done).sort((a,b)=>a.date.localeCompare(b.date))[0];if(nx)nx.together=true}
     ui.msg='Danke für deine ehrliche Antwort. Mama oder Papa bekommen Bescheid und helfen dir beim nächsten Mal.';
@@ -620,7 +632,7 @@ function answerCheck(k,ok){
   const T=iso(today()),c=Object.assign({},S.checks[T]||{});if(c[k])return;
   c[k]=ok?'ok':'nach';S.checks[T]=c;
   const lab=(CHECKS.find(x=>x[0]===k)||[])[1];
-  award(PTS.check,'Kabinen-Check');
+  if(CHECKS.every(([x])=>c[x]))award(PTS.check,'Kabinen-Check');
   if(!ok)S.tasks.push({id:uid(),kind:'ha',subject:lab,title:'Vokabelkasten '+lab+' nachtragen',due:schoolDayIn(1),est:10,done:false,created:T});
   checkDayWin();save();
 }
@@ -800,14 +812,14 @@ function addButtons(withDay){
 
 /* ===== Seiten ===== */
 function scoreboard(kick){
-  const T=iso(today()),w=weekInfo(),L=liga(),bt=+S.settings.bedtimeMin||30;
+  const T=iso(today()),w=weekInfo(),L=liga(),bt=+S.settings.bedtimeMin||30,tw=toWin();
   let prize;
   if(w.prize)prize=w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Wochenspiel gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`;
-  else if(w.possible)prize=`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''} bis zur Siegprämie: ${bt} Min. länger aufbleiben.`;
+  else if(w.possible)prize=`Wochenspiel: noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`;
   else prize='Für die Siegprämie reicht es diese Woche nicht mehr. Am Montag geht es neu los.';
   return `<section class="board" aria-label="Spielstand">
-  <div class="b-top"><div><div class="b-lab">Tore heute</div><div class="b-num">${goalsOn(T)}</div></div>
-  <div class="b-liga"><div class="b-lab">${L.n} Tore insgesamt</div><div class="b-ligan">${esc(L.name)}</div></div></div>
+  <div class="b-top"><div><div class="b-lab">Tore heute</div><div class="b-num">${goalsOn(T)}</div>${tw?`<div class="b-lab">Noch ${tw} bis zum Tagessieg</div>`:''}</div>
+  <div class="b-liga"><div class="b-lab">Deine Liga</div><div class="b-ligan">${esc(L.name)}</div>${L.next?`<div class="b-lab">Noch ${L.next[1]-L.n} Tore bis zum Aufstieg</div>`:''}</div></div>
   <div class="b-week">${w.days.map((d,i)=>{const fr=isFree(parse(d));return `<div class="${S.wins[d]?'won':fr?'':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<b>${S.wins[d]?'Sieg':fr?'frei':d<T?'0':'&nbsp;'}</b></div>`}).join('')}</div>
   <div class="b-prize">${prize}</div>${kick||''}</section>`;
 }
@@ -891,21 +903,20 @@ function renderPokale(){
   const L=liga(),b=badges();
   const pct=L.next?Math.round((L.n-LIGA[L.i][1])/(L.next[1]-LIGA[L.i][1])*100):100;
   const nextJ=THEMES.find(t=>t.lvl>L.i);
-  let h=msgBox()+`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
+  const wg=S.settings.winGoal,bt=S.settings.bedtimeMin;
+  let h=msgBox()+`<div class="card"><h2>So funktioniert das Spiel</h2>
+  <ol class="rules">
+  <li><b>Tore.</b> Jede erledigte Aufgabe ist ein Tor. Auch der Kabinen-Check, ein pünktlicher Anpfiff, die Spielanalyse nach einer Prüfung und die Besprechung am Wochenende bringen je ein Tor.</li>
+  <li><b>Tagessieg.</b> Du gewinnst den Tag, wenn alles erledigt ist, was heute dran war, und der Kabinen-Check gemacht ist.</li>
+  <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
+  <li><b>Aufstieg.</b> Mit deinen Toren steigst du in die nächste Liga auf. In jeder neuen Liga bekommst du ein neues Trikot.</li>
+  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></div>
+  <div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
   <div class="bar"><div style="width:${pct}%"></div></div>
   <div class="sub">${L.next?`Noch ${L.next[1]-L.n} Tore bis zum Aufstieg in die ${esc(L.next[0])}.`:'Ganz oben angekommen!'}${nextJ?` Nächstes Trikot: ${esc(nextJ.n)} in der ${esc(LIGA[nextJ.lvl][0])}.`:''}</div></div>`;
   h+=`<div class="card"><h2>Trikots</h2><div class="sub" style="margin-bottom:10px">Mit jedem Aufstieg kommt ein neues Trikot dazu. Die Kiel-Trikots gibt es in der 1. Bundesliga und im Europapokal.</div><div class="jgrid">`+
-    THEMES.map((th,i)=>{const ok=L.i>=th.lvl;return `<button class="jer ${S.settings.theme===i?'on':''} ${ok?'':'lock'}" ${ok?`data-act="theme" data-i="${i}"`:'disabled'} aria-label="${esc(th.n+' '+th.d)}">${kitSvg(th,i)}<span class="jn">${esc(th.n)}</span><span class="js">${ok?esc(th.d||'\u00a0'):'ab '+esc(LIGA[th.lvl][0])}</span></button>`}).join('')+`</div></div>`;
-  h+=`<div class="card"><h2>Abzeichen</h2><div class="badges">`+b.map(([n,d,ok])=>`<div class="badge ${ok?'':'off'}"><b>${n}</b>${d}</div>`).join('')+`</div></div>`;
-  h+=`<div class="card"><h2>So gibt es Tore</h2>
-  <div class="li"><span class="grow">Aufgabe erledigt</span><b>${PTS.task}</b></div>
-  <div class="li"><span class="grow">Kabinen-Check beantwortet (je Fach)</span><b>${PTS.check}</b></div>
-  <div class="li"><span class="grow">Pünktlicher Anpfiff</span><b>${PTS.kick}</b></div>
-  <div class="li"><span class="grow">Fairplay: ehrlich „schwer“ gesagt</span><b>${PTS.fair}</b></div>
-  <div class="li"><span class="grow">Tagessieg: alles für heute geschafft</span><b>${PTS.win}</b></div>
-  <div class="li"><span class="grow">Spielanalyse nach einer Prüfung</span><b>${PTS.review}</b></div>
-  <div class="li"><span class="grow">Mannschaftsbesprechung am Wochenende</span><b>${PTS.meet}</b></div>
-  <div class="sub" style="margin-top:8px">Wochenspiel: ${S.settings.winGoal} Tagessiege von Montag bis Freitag gewinnen das Spiel. Siegprämie: ${S.settings.bedtimeMin} Min. länger aufbleiben am Freitag und Samstag.</div></div>`;
+    THEMES.map((th,i)=>{const ok=L.i>=th.lvl;return `<button class="jer ${S.settings.theme===i?'on':''} ${ok?'':'lock'}" ${ok?`data-act="theme" data-i="${i}"`:'disabled'} aria-label="${esc(th.n+' '+th.d)}">${kitSvg(th,i)}<span class="jn">${esc(th.n)}</span>${(()=>{const t=ok?(th.d||'\u00a0'):'ab '+LIGA[th.lvl][0];return `<span class="js${t.length>13?' lg':''}">${esc(t)}</span>`})()}</button>`}).join('')+`</div></div>`;
+  h+=`<div class="card"><h2>Abzeichen</h2><div class="badges">`+b.map(([n,d,c,z])=>`<div class="badge ${c>=z?'':'off'}"><b>${n}</b>${d}${c>=z?'<span class="bdone">Geschafft</span>':z>1?`<span class="bprog"><i style="width:${Math.round(c/z*100)}%"></i></span><span class="bcnt">${c} von ${z}</span>`:''}</div>`).join('')+`</div></div>`;
   return h;
 }
 function renderStundenplan(){
@@ -1095,7 +1106,7 @@ document.addEventListener('click',e=>{
     case'fbsave':finish(ui.fb);break;
     case'fbcancel':ui.fb=null;break;
     case'start':S.running={id,at:Date.now()};if(!S.kick[iso(today())])S.kick[iso(today())]=hm(nowMin());save();break;
-    case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d]){delete S.wins[d];S.goals=S.goals.filter(g=>!(g.date===d&&g.why==='Tagessieg!'))}save()}break;
+    case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d])delete S.wins[d];save()}break;
     case'rv':ui.rv[id]=Object.assign({},ui.rv[id],{[b.dataset.k]:b.dataset.v});break;
     case'rvsave':{const r=ui.rv[id]||{},e=S.exams.find(x=>x.id===id);if(!e)break;
       if(!r.feel||!r.prep){ui.msg='Bitte beide Fragen beantworten.';ui.msgType='err';break}

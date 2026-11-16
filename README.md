@@ -364,7 +364,7 @@ Die Schrift Barlow wird von Google Fonts geladen, die Supabase-Bibliothek von js
 ## Lernplaner (lernen.html)
 
 Eigene Seite für den Lernalltag des großen Sohns, auf derselben Adresse wie der Familienplan und mit derselben Anmeldung.
-Tagesplan mit Hausaufgaben, Prüfungslernen, Ludus Latinus und Vokabelkasten-Check, Handball-Punktesystem (Tore, Ligen, Trikots, Wochenspiel mit Siegprämie),
+Tagesplan mit Hausaufgaben, Prüfungslernen, Ludus Latinus und Vokabelkasten-Check, Handball-Spiel (jede Aufgabe ein Tor, Tagessieg, Wochenspiel mit Siegprämie, Aufstieg mit neuen Trikots),
 lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der Tabelle `lp_data`, die Karte „Schule“ im Bereich Aufgaben liest die Ansichten `lp_stand` und `lp_erledigt_heute`.
 
 - Einrichten: `supabase/lernplaner.sql` im SQL Editor ausführen, Funktion `lernplaner` anlegen (Code in `supabase/functions/lernplaner/index.ts`).
