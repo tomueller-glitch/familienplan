@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Familienplan</title>
+  <meta name="description" content="Essensplan, Einkaufsliste und Haushaltsaufgaben der Familie.">
+  <meta name="theme-color" content="#14323C" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A1418" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <!-- Hintergrund schon vor dem Laden der Styles, damit im dunklen Design nichts hell aufblitzt -->
+  <style>html,body{background:#E7EDEF}@media (prefers-color-scheme:dark){html,body{background:#0E1A1F;color:#E2EBED}}</style>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/haus-rund.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/haus-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Familienplan">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app"><p class="lade">Familienplan wird geladen</p></div>
+  <div id="sheet-root"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <noscript><p class="lade">Der Familienplan braucht JavaScript.</p></noscript>
+  <script src="js/config.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

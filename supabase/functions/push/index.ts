@@ -1,0 +1,2265 @@
+// Familienplan: Push-Nachrichten.
+// Supabase Edge Function "push". Läuft alle 5 Minuten über Supabase Cron und schickt:
+//  - am Vorabend der Müllabfuhr ab 18 Uhr eine Erinnerung an das Kind, das mit der Tonne dran ist,
+//  - den Eltern eine Nachricht, sobald ein Kind eine Aufgabe als erledigt meldet,
+//  - dem Kind eine Nachricht, sobald Mama oder Papa die Aufgabe bestätigt oder abgelehnt hat,
+//  - freitags um 17 Uhr den Kindern eine Erinnerung an das Herz der Woche,
+//  - am Einkaufstag ab 7 Uhr den Eltern eine Erinnerung, solange auf der Liste noch etwas offen ist,
+//  - den Eltern eine Erinnerung, wenn es Zeit zum Kochen ist (Essenszeit minus Kochdauer). Abschaltbar.
+//  - den Eltern um 19 Uhr, was für den nächsten Tag vorzubereiten ist (Fisch auftauen, Brötchen aufbacken),
+//  - allen morgens einen Überblick über den Tag (werktags 7 Uhr, am Wochenende 8:30 Uhr). Abschaltbar.
+//  - freitags einen Wochenplan-Entwurf von Claude (wenn ANTHROPIC_API_KEY gesetzt ist), siehe „Wochenplan mit Claude“.
+//  - abends eine Erinnerung an alle, die mitgegessen, aber das Abendessen noch nicht bewertet haben.
+//    Kinder etwa eine Stunde nach dem Essen, spätestens 20:15 Uhr, Erwachsene nach 90 Minuten. Abschaltbar.
+// Außerdem kann die App eine Testnachricht an das eigene Gerät anfordern.
+//
+// Die Datei kommt ohne fremde Bibliotheken aus. Verschlüsselung (RFC 8291) und
+// VAPID-Anmeldung (RFC 8292) laufen über die eingebaute WebCrypto-Schnittstelle.
+//
+// Secrets der Funktion (Dashboard > Edge Functions > Secrets):
+//   VAPID_PUBLIC_KEY   öffentlicher Schlüssel, derselbe wie in js/config.js
+//   VAPID_PRIVATE_KEY  privater Schlüssel, nur hier eintragen
+//   VAPID_SUBJECT      Kontakt für die Push-Dienste, z. B. https://familienplan.netlify.app
+//   CRON_SECRET        langes Zufallswort, das auch im Cron-Job steht
+// SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY stellt Supabase selbst bereit. Sind die alten
+// Schlüssel im Projekt abgeschaltet, zusätzlich SERVICE_KEY mit dem Secret Key (sb_secret_...) anlegen.
+
+// deno-lint-ignore no-explicit-any
+type Row = Record<string, any>;
+type Sub = { endpoint: string; p256dh: string; auth: string };
+type Vapid = { publicKey: string; privateKey: string; subject: string };
+type Message = {
+  title: string; body: string; tag?: string; url?: string;
+  // Knöpfe in der Nachricht (Android, Windows, Chrome). iPhone zeigt keine Knöpfe, dort öffnet ein Tippen die App.
+  actions?: { action: string; title: string }[]; actionUrls?: Record<string, string>;
+};
+
+const enc = new TextEncoder();
+
+/* ---------- Base64url ---------- */
+
+export function b64u(bytes: Uint8Array): string {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function unb64u(text: string): Uint8Array {
+  const t = text.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(t + '='.repeat((4 - (t.length % 4)) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function concat(...parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let i = 0;
+  for (const p of parts) { out.set(p, i); i += p.length; }
+  return out;
+}
+
+// Eigener ArrayBuffer für WebCrypto und fetch. Neuere TypeScript-Versionen verlangen das ausdrücklich.
+const ab = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
+
+async function hmac(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
+  const k = await crypto.subtle.importKey('raw', ab(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, ab(data)));
+}
+
+/* ---------- Verschlüsselung nach RFC 8291 (aes128gcm) ---------- */
+
+// Für Tests lassen sich Absenderschlüssel und Salz vorgeben, sonst werden sie zufällig erzeugt.
+export async function encryptPayload(
+  sub: Sub,
+  payload: Uint8Array,
+  fixed?: { asPrivate: string; asPublic: string; salt: string },
+): Promise<Uint8Array> {
+  const uaPublic = unb64u(sub.p256dh);
+  const authSecret = unb64u(sub.auth);
+  let asKeys: CryptoKeyPair | { privateKey: CryptoKey };
+  let asPublic: Uint8Array;
+  if (fixed) {
+    asPublic = unb64u(fixed.asPublic);
+    const jwk = {
+      kty: 'EC', crv: 'P-256', d: fixed.asPrivate,
+      x: b64u(asPublic.slice(1, 33)), y: b64u(asPublic.slice(33, 65)),
+    };
+    asKeys = { privateKey: await crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']) };
+  } else {
+    asKeys = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']) as CryptoKeyPair;
+    asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', (asKeys as CryptoKeyPair).publicKey));
+  }
+  const uaKey = await crypto.subtle.importKey('raw', ab(uaPublic), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, asKeys.privateKey, 256));
+  const salt = fixed ? unb64u(fixed.salt) : crypto.getRandomValues(new Uint8Array(16));
+
+  const prkKey = await hmac(authSecret, ecdh);
+  const keyInfo = concat(enc.encode('WebPush: info\0'), uaPublic, asPublic, new Uint8Array([1]));
+  const ikm = await hmac(prkKey, keyInfo);
+  const prk = await hmac(salt, ikm);
+  const cek = (await hmac(prk, concat(enc.encode('Content-Encoding: aes128gcm\0'), new Uint8Array([1])))).slice(0, 16);
+  const nonce = (await hmac(prk, concat(enc.encode('Content-Encoding: nonce\0'), new Uint8Array([1])))).slice(0, 12);
+
+  const aes = await crypto.subtle.importKey('raw', ab(cek), 'AES-GCM', false, ['encrypt']);
+  const plain = concat(payload, new Uint8Array([2]));
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ab(nonce) }, aes, ab(plain)));
+
+  const rs = new Uint8Array([0, 0, 16, 0]); // Datensatzgröße 4096
+  return concat(salt, rs, new Uint8Array([asPublic.length]), asPublic, cipher);
+}
+
+/* ---------- VAPID-Anmeldung nach RFC 8292 ---------- */
+
+export async function vapidHeader(endpoint: string, vapid: Vapid, nowSec = Math.floor(Date.now() / 1000)): Promise<string> {
+  const pub = unb64u(vapid.publicKey);
+  const jwk = { kty: 'EC', crv: 'P-256', d: vapid.privateKey, x: b64u(pub.slice(1, 33)), y: b64u(pub.slice(33, 65)) };
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const head = b64u(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const claims = b64u(enc.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: nowSec + 12 * 3600, sub: vapid.subject })));
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(`${head}.${claims}`)));
+  return `vapid t=${head}.${claims}.${b64u(sig)}, k=${vapid.publicKey}`;
+}
+
+// Schickt eine Nachricht an ein Gerät. Liefert den HTTP-Status des Push-Dienstes.
+export async function sendPush(sub: Sub, msg: Message, vapid: Vapid, ttl = 86400): Promise<number> {
+  const body = await encryptPayload(sub, enc.encode(JSON.stringify(msg)));
+  const res = await fetch(sub.endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: await vapidHeader(sub.endpoint, vapid),
+      'Content-Encoding': 'aes128gcm',
+      'Content-Type': 'application/octet-stream',
+      TTL: String(ttl),
+      // „high“: Apple stellt sonst im Stromsparmodus verzögert oder gar nicht zu.
+      Urgency: 'high',
+      ...(msg.tag ? { Topic: msg.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) } : {}),
+    },
+    body: ab(body),
+  });
+  await res.body?.cancel();
+  return res.status;
+}
+
+/* ---------- Datum und Uhrzeit in Deutschland ---------- */
+
+export function berlin(ms: number): { day: string; min: number; wd: number } {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short',
+  }).formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+  return { day: `${parts.year}-${parts.month}-${parts.day}`, min: Number(parts.hour) * 60 + Number(parts.minute), wd };
+}
+
+const DAY = 86400000;
+export const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const wdOf = (iso: string) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
+export const mondayOf = (iso: string) => addDays(iso, -wdOf(iso));
+
+// Wer ist dran? Gleiche Regel wie in js/aufgaben.js: wöchentlicher Wechsel ab dem 1.1.2024.
+export function assignees(task: Row, day: string): string[] {
+  const who: string[] = task.who || [];
+  if (!who.length) return [];
+  if (!task.rotate) return who;
+  const n = Math.floor((Date.parse(`${mondayOf(day)}T00:00:00Z`) - Date.parse('2024-01-01T00:00:00Z')) / DAY / 7) + (task.rot_offset || 0);
+  return [who[((n % who.length) + who.length) % who.length]];
+}
+
+// Bayerische Schulferien, gleiche Liste wie in js/ferien.js (die Prüfung tests/funktion-schultage.mts vergleicht beide).
+export const FERIEN: [string, string][] = [
+  ['2026-08-03', '2026-09-14'],
+  ['2026-11-02', '2026-11-06'],
+  ['2026-12-24', '2027-01-08'],
+  ['2027-02-08', '2027-02-12'],
+  ['2027-03-22', '2027-04-02'],
+  ['2027-05-18', '2027-05-28'],
+  ['2027-08-02', '2027-09-13'],
+  ['2027-11-02', '2027-11-05'],
+  ['2027-12-24', '2028-01-07'],
+  ['2028-02-28', '2028-03-03'],
+  ['2028-04-10', '2028-04-21'],
+  ['2028-06-06', '2028-06-16'],
+  ['2028-07-31', '2028-09-11'],
+];
+// Schultag: Montag bis Freitag, keine Ferien, kein Feiertag und nicht Buß- und Bettag.
+export function schoolDay(day: string): boolean {
+  if (wdOf(day) >= 5) return false;
+  if (FERIEN.some(([a, b]) => day >= a && day <= b)) return false;
+  if (shopHoliday(day)) return false;
+  const y = Number(day.slice(0, 4));
+  const n22 = `${y}-11-22`;
+  const buss = addDays(n22, -((wdOf(n22) - 2 + 7) % 7));
+  return day !== buss && day.slice(5) !== '08-15';
+}
+const inSeason = (task: Row, day: string) => (!task.school_only || schoolDay(day)) && (!(task.months || []).length || task.months.includes(Number(day.slice(5, 7))));
+
+const TONNEN: Record<string, string> = { schwarz: 'schwarze Tonne', gruen: 'grüne Tonne', gelb: 'gelbe Tonne' };
+
+/* ---------- Was ist fällig? ---------- */
+
+// extraKeys: weitere Schlüssel, die mit dem Versand als erledigt gelten (z. B. die Einkaufserinnerung,
+// wenn der Morgenüberblick sie schon enthält).
+export type Due = { key: string; to: string[]; msg: Message; ttl: number; extraKeys?: string[] };
+
+// Feste Aufgaben eines Kindes an einem Tag, die noch offen sind. Gleiche Regeln wie in js/aufgaben.js.
+export function openTasks(tasks: Row[], log: Row[], pid: string, day: string, binTomorrow: string | null): string[] {
+  const week = mondayOf(day);
+  const d10 = (x: unknown) => String(x || '').slice(0, 10);
+  const done = (t: Row, from: string, to: string) => log.some((e) => e.task_id === t.id && e.person_id === pid && d10(e.day) >= from && d10(e.day) <= to && e.status !== 'abgelehnt');
+  const out: string[] = [];
+  for (const t of tasks) {
+    if (t.active === false || !inSeason(t, day) || !assignees(t, day).includes(pid)) continue;
+    if (t.schedule === 'taeglich' && !done(t, day, day)) out.push(t.name);
+    else if (t.schedule === 'woechentlich' && !done(t, week, addDays(week, 6))) out.push(`${t.name} (diese Woche)`);
+    else if (t.schedule === 'tonne' && binTomorrow && !done(t, day, day)) out.push(`heute Abend ${binTomorrow} an die Straße`);
+  }
+  return out;
+}
+
+// Offene Grundaufgaben des Tages: täglich oder Tonne, ohne Minuten. Wochenaufgaben zählen nicht.
+export function basicsOpen(tasks: Row[], log: Row[], pid: string, day: string, binTomorrow: string | null): string[] {
+  const d10 = (x: unknown) => String(x || '').slice(0, 10);
+  const done = (t: Row) => log.some((e) => e.task_id === t.id && e.person_id === pid && d10(e.day) === day && e.status !== 'abgelehnt');
+  return tasks.filter((t) => !t.minutes && t.active !== false && inSeason(t, day) && assignees(t, day).includes(pid)
+    && (t.schedule === 'taeglich' || (t.schedule === 'tonne' && binTomorrow)) && !done(t)).map((t) => t.name);
+}
+
+// Was heute auf jeden Fall erledigt sein muss, wie im roten Kasten der App: Tagesaufgaben (auch mit Minuten),
+// die Tonne am Vorabend und am Sonntag die Wochenaufgaben, die in dieser Woche noch fehlen.
+export function mustOpen(tasks: Row[], log: Row[], pid: string, day: string, binTomorrow: string | null): string[] {
+  const d10 = (x: unknown) => String(x || '').slice(0, 10);
+  const sunday = wdOf(day) === 6;
+  const monday = new Date(Date.parse(`${day}T00:00:00Z`) - 6 * DAY).toISOString().slice(0, 10);
+  const doneFrom = (t: Row, from: string) => log.some((e) => e.task_id === t.id && e.person_id === pid && d10(e.day) >= from && d10(e.day) <= day && e.status !== 'abgelehnt');
+  return tasks.filter((t) => t.active !== false && inSeason(t, day) && assignees(t, day).includes(pid)
+    && ((t.schedule === 'taeglich' && !doneFrom(t, day))
+      || (t.schedule === 'tonne' && binTomorrow && !doneFrom(t, day))
+      || (t.schedule === 'woechentlich' && sunday && !doneFrom(t, monday)))).map((t) => t.name);
+}
+
+// Uhrzeiten der Aufgaben-Erinnerungen in Minuten nach Mitternacht, null heißt aus.
+// Die frühere Kinder-Erinnerung ist die sanfte, die spätere die mit Nachdruck.
+export function reminderTimes(raw?: Row): { kind1: number | null; kind2: number | null; eltern: number | null } {
+  const v = { kind1: '16:30', kind2: '19:00', eltern: '20:00', ...(raw || {}) } as Row;
+  const mins = (t: unknown) => { const m = String(t ?? '').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  let k1 = mins(v.kind1);
+  let k2 = mins(v.kind2);
+  if (k1 != null && k2 != null && k1 > k2) [k1, k2] = [k2, k1];
+  if (k1 != null && k2 == null) [k1, k2] = [null, k1];
+  return { kind1: k1, kind2: k2, eltern: mins(v.eltern) };
+}
+
+// Rein rechnerisch: aus dem Datenstand und der Uhrzeit die fälligen Nachrichten bestimmen.
+// Urlaub und Tage auswärts aus ep_settings (Schlüssel "urlaub"): [{ id, von, bis, name, weg }].
+export function holidayOn(list: Row[], day: string): Row | null {
+  return (Array.isArray(list) ? list : []).find((u) => u && u.von && u.bis && day >= String(u.von) && day <= String(u.bis)) || null;
+}
+
+export function dueMessages(data: {
+  persons: Row[]; tasks: Row[]; log: Row[]; abfuhr: Row[]; hearts: Row[]; plan: Row[]; shopping?: Row[]; dishes?: Row[]; ratings?: Row[]; urlaub?: Row[];
+  grundZuerst?: boolean; added?: Row[]; erinnerung?: Row;
+}, nowMs: number): Due[] {
+  const out: Due[] = [];
+  const { day, min, wd } = berlin(nowMs);
+  // Urlaub: kein Essen zu Hause. Mit "weg" ist die Familie verreist, dann pausieren auch Tonne, Aufgaben und Morgenüberblick.
+  const holiday = holidayOn(data.urlaub || [], day);
+  const awayHome = !!holiday && holiday.weg !== false;
+  const name = (id: string) => (data.persons.find((p) => p.id === id) || {}).name || 'Jemand';
+  const adults = data.persons.filter((p) => p.adult).map((p) => p.id);
+  const kids = data.persons.filter((p) => !p.adult).map((p) => p.id);
+
+  // Mülltonne am Vorabend, ab 18 Uhr bis 22 Uhr.
+  const tomorrow = addDays(day, 1);
+  const bins = data.abfuhr.filter((a) => String(a.day).slice(0, 10) === tomorrow).map((a) => TONNEN[a.bin] || a.bin);
+  if (bins.length && !awayHome && min >= 18 * 60 && min < 22 * 60) {
+    const tasks = data.tasks.filter((t) => t.schedule === 'tonne' && t.active !== false && inSeason(t, day));
+    const who = new Set<string>();
+    for (const t of tasks) {
+      for (const id of assignees(t, day)) {
+        const done = data.log.some((e) => e.task_id === t.id && e.person_id === id && String(e.day).slice(0, 10) === day && e.status !== 'abgelehnt');
+        if (!done) who.add(id);
+      }
+    }
+    if (!tasks.length) adults.forEach((id) => who.add(id));
+    const label = bins.join(' und ');
+    for (const id of who) {
+      out.push({
+        key: `tonne:${tomorrow}:${id}`, to: [id], ttl: 4 * 3600,
+        msg: { title: `${label.charAt(0).toUpperCase()}${label.slice(1)} rausstellen`, body: `Morgen wird abgeholt. Bitte heute Abend an die Straße stellen.`, tag: 'tonne', url: './#aufgaben' },
+      });
+    }
+  }
+
+  // Kontrolle um 21 Uhr: Hat das zuständige Kind die Tonne noch nicht abgehakt, erfahren es die Eltern.
+  if (bins.length && !awayHome && min >= 21 * 60 && min < 23 * 60) {
+    const tasks = data.tasks.filter((t) => t.schedule === 'tonne' && t.active !== false && inSeason(t, day));
+    const missing: string[] = [];
+    for (const t of tasks) {
+      for (const id of assignees(t, day)) {
+        const done = data.log.some((e) => e.task_id === t.id && e.person_id === id && String(e.day).slice(0, 10) === day && e.status !== 'abgelehnt');
+        if (!done && !missing.includes(id)) missing.push(id);
+      }
+    }
+    const label = bins.join(' und ');
+    if (missing.length && adults.length) {
+      out.push({
+        key: `tonne-kontrolle:${tomorrow}`, to: adults, ttl: 3 * 3600,
+        msg: {
+          title: `${label.charAt(0).toUpperCase()}${label.slice(1)} steht noch nicht draußen`,
+          body: `${missing.map(name).join(' und ')} hat die Tonne noch nicht abgehakt. Morgen wird abgeholt.`,
+          tag: 'tonne-kontrolle', url: './#aufgaben',
+        },
+      });
+    }
+  }
+
+  // Neu gemeldete Aufgaben an die Eltern. Nur Meldungen der letzten 24 Stunden.
+  const recent = (iso: string | null) => !!iso && Date.parse(iso) > nowMs - DAY;
+  // Mit der Regel „Minuten erst nach den Grundaufgaben“ melden sich heutige Extras erst, wenn die Grundaufgaben erledigt sind.
+  const binToday = bins.length ? bins.join(' und ') : null;
+  const locked = (e: Row) => data.grundZuerst !== false && !awayHome && String(e.day).slice(0, 10) === day
+    && basicsOpen(data.tasks, data.log, e.person_id, day, binToday).length > 0;
+  const open = data.log.filter((e) => e.status === 'offen' && e.minutes > 0 && !locked(e));
+  for (const e of open.filter((x) => recent(x.created_at))) {
+    const all = open.filter((x) => recent(x.created_at));
+    const body = all.length === 1
+      ? `${name(e.person_id)}: ${e.label} (+${e.minutes} Min.)`
+      : `${all.length} Aufgaben warten: ${[...new Set(all.map((x) => x.person_id))].map((id) => `${name(id)} (${all.filter((x) => x.person_id === id).length})`).join(', ')}`;
+    out.push({ key: `offen:${e.id}`, to: adults, ttl: DAY / 1000, msg: { title: 'Aufgabe erledigt, bitte bestätigen', body, tag: 'offen', url: './#aufgaben' } });
+  }
+
+  // Aufgaben der Kinder: eine Erinnerung am Nachmittag, eine mit Nachdruck am Abend, danach der Stand für die Eltern.
+  // Die Uhrzeiten stellen die Eltern unter „Aufgaben verwalten“ ein (Standard 16:30, 19:00 und 20:00, leer heißt aus).
+  const times = reminderTimes(data.erinnerung);
+  if (!awayHome) {
+    const left = (k: string) => mustOpen(data.tasks, data.log, k, day, binToday);
+    const plural = (n: number) => (n === 1 ? 'eine Aufgabe' : `${n} Aufgaben`);
+    for (const [at, slot] of [[times.kind1, 'nachmittag'], [times.kind2, 'abend']] as [number | null, string][]) {
+      if (at == null || min < at || min >= at + 45) continue;
+      for (const k of kids) {
+        const l = left(k);
+        if (!l.length) continue;
+        out.push({
+          key: `grund:${slot}:${day}:${k}`, to: [k], ttl: 2 * 3600,
+          msg: slot === 'abend'
+            ? { title: `Noch ${plural(l.length)} offen, bitte jetzt erledigen`, body: `${l.join(', ')}.${data.grundZuerst !== false && basicsOpen(data.tasks, data.log, k, day, binToday).length ? ' Erst danach gibt es Minuten für Extras.' : ''}`, tag: 'grundaufgaben', url: './#aufgaben' }
+            : { title: `Heute noch ${plural(l.length)}`, body: `${l.join(', ')}.`, tag: 'grundaufgaben', url: './#aufgaben' },
+        });
+      }
+    }
+    if (times.eltern != null && min >= times.eltern && min < times.eltern + 60 && adults.length) {
+      const lines = kids.map((k) => (left(k).length ? `${name(k)}: ${left(k).join(', ')}` : '')).filter(Boolean);
+      // Alles, was noch auf Bestätigung wartet, auch von den Vortagen.
+      const waiting = data.log.filter((e) => e.status === 'offen' && e.task_id && String(e.day).slice(0, 10) <= day).length;
+      if (lines.length || waiting) {
+        out.push({
+          key: `grund-eltern:${day}`, to: adults, ttl: 3 * 3600,
+          msg: {
+            title: lines.length ? 'Bei den Kindern ist noch etwas offen' : 'Aufgaben zu bestätigen',
+            body: [lines.length ? `${lines.join('. ')}.` : '', waiting ? `${waiting === 1 ? 'Eine Aufgabe wartet' : `${waiting} Aufgaben warten`} auf eure Bestätigung.` : ''].filter(Boolean).join(' '),
+            tag: 'grund-eltern', url: './#aufgaben',
+          },
+        });
+      }
+    }
+  }
+
+  // Neu auf der Einkaufsliste: an die Erwachsenen außer dem, der es eingetragen hat. Nachts wartet es bis 7 Uhr.
+  if (min >= 7 * 60 && min < 21 * 60 + 30) {
+    const fresh = (data.added || []).filter((i) => i.added_by && !i.checked && Date.parse(i.created_at) > nowMs - 12 * 3600000);
+    for (const i of fresh) {
+      const to = data.persons.filter((p) => p.adult && p.id !== i.added_by && p.notify_list !== false).map((p) => p.id);
+      if (!to.length) continue;
+      const t = Date.parse(i.created_at);
+      const same = fresh.filter((x) => x.added_by === i.added_by && Math.abs(Date.parse(x.created_at) - t) < 15 * 60000);
+      const labels = same.map((x) => x.label);
+      out.push({
+        key: `liste:${i.id}`, to, ttl: 6 * 3600,
+        msg: {
+          title: 'Neu auf der Einkaufsliste',
+          body: `${name(i.added_by)}: ${labels.slice(0, 6).join(', ')}${labels.length > 6 ? ` und ${labels.length - 6} weitere` : ''}`,
+          tag: 'liste-neu', url: './#einkauf',
+        },
+      });
+    }
+  }
+
+  // Wochenbonus: Die App schreibt ihn gut, das Kind bekommt die gute Nachricht.
+  for (const e of data.log.filter((x) => String(x.id || '').startsWith('bonus-') && x.minutes > 0 && x.status === 'bestaetigt' && recent(x.decided_at))) {
+    out.push({
+      key: `bonus:${e.id}`, to: [e.person_id], ttl: DAY / 1000,
+      msg: { title: `+${e.minutes} Minuten Wochenbonus`, body: 'Du hast die ganze Woche alle Grundaufgaben geschafft. Stark!', tag: 'wochenbonus', url: './#aufgaben' },
+    });
+  }
+
+  // Entscheidung der Eltern an das Kind.
+  // Bei Grundaufgaben (ohne Minuten) nur die Ablehnung melden, sonst kämen zu viele Nachrichten.
+  for (const e of data.log.filter((x) => x.task_id && x.decided_by && recent(x.decided_at) && ((x.minutes > 0 && (x.status === 'bestaetigt' || x.status === 'abgelehnt')) || (!(x.minutes > 0) && x.status === 'abgelehnt')))) {
+    const ok = e.status === 'bestaetigt';
+    out.push({
+      key: `entschieden:${e.id}`, to: [e.person_id], ttl: DAY / 1000,
+      msg: {
+        title: ok ? `+${e.minutes} Minuten` : 'Nicht bestätigt',
+        body: ok ? `${name(e.decided_by)} hat „${e.label}“ bestätigt.` : `${name(e.decided_by)} hat „${e.label}“ nicht bestätigt. Frag nach, was noch fehlt, und melde es danach noch einmal.`,
+        tag: `entschieden-${e.id}`.slice(0, 32), url: './#aufgaben',
+      },
+    });
+  }
+
+  // Kochen: Essenszeit (von der App aus den Terminen berechnet, sonst 18:30) minus Kochdauer.
+  // Die Nachricht kommt zur Startzeit, höchstens 30 Minuten verspätet, an Eltern, die mitessen
+  // und die Erinnerung nicht abgeschaltet haben.
+  const tonight = data.plan.find((p) => String(p.day).slice(0, 10) === day && p.dish_id && !p.skipped);
+  const dish = tonight && (data.dishes || []).find((d) => d.id === tonight.dish_id);
+  if (dish && !holiday) {
+    const hm = /^\d{1,2}:\d{2}$/.test(String(tonight.dinner_time || '')) ? String(tonight.dinner_time) : '18:30';
+    const eat = Number(hm.split(':')[0]) * 60 + Number(hm.split(':')[1]);
+    const dur = Math.max(5, Number(dish.duration_min) || 30);
+    const start = eat - dur;
+    const away: string[] = Array.isArray(tonight.dinner_away) ? tonight.dinner_away : [];
+    const cooks = data.persons.filter((p) => p.adult && p.notify_cook !== false && !away.includes(p.id)).map((p) => p.id);
+    if (cooks.length && min >= start && min < start + 30) {
+      out.push({
+        key: `kochen:${day}`, to: cooks, ttl: 3600,
+        msg: { title: `Zeit zum Kochen: ${dish.name}`, body: `Dauert etwa ${dur} Minuten, gegessen wird um ${hm} Uhr.`, tag: 'kochen', url: './#woche' },
+      });
+    }
+  }
+
+  // Vorabend: ab 19 Uhr, was für morgen vorzubereiten ist. Aus dem Gericht und der Notiz zum Tag.
+  if (min >= 19 * 60 && min < 21 * 60 + 30 && !holidayOn(data.urlaub || [], tomorrow)) {
+    const next = data.plan.find((p) => String(p.day).slice(0, 10) === tomorrow);
+    if (next) {
+      const nd = !next.skipped && (data.dishes || []).find((d) => d.id === next.dish_id);
+      const todo = [nd && nd.prep, next.prep].map((t) => String(t || '').trim()).filter(Boolean);
+      if (todo.length && adults.length) {
+        out.push({ key: `vorabend:${tomorrow}`, to: adults, ttl: 4 * 3600, msg: { title: 'Für morgen vorbereiten', body: todo.join(' '), tag: 'vorabend', url: './#woche' } });
+      }
+    }
+  }
+
+  // Einkaufstag: ab 7 Uhr bis 20 Uhr, solange noch etwas offen ist. Mehrere Touren am selben Tag
+  // landen in einer gemeinsamen Nachricht (gleiches Kennzeichen). Ist schon jemand eingetragen,
+  // steht der Name drin statt der Frage.
+  // Morgenüberblick: werktags 7 Uhr, Samstag und Sonntag 8:30 Uhr, jeweils eine halbe Stunde lang.
+  const mStart = wd >= 5 ? 8 * 60 + 30 : 7 * 60;
+  const inMorning = min >= mStart && min < mStart + 30;
+  const wantsMorning = (id: string) => (data.persons.find((p) => p.id === id) || {}).notify_morning !== false;
+
+  if (min >= 7 * 60 && min < 20 * 60) {
+    const open = (data.shopping || []).filter((i) => String(i.due || '').slice(0, 10) === day && !i.checked);
+    const tripOf = (i: Row) => `${String(i.week_start || '').slice(0, 10)}|${i.trip || 'Einkauf'}`;
+    const trips = [...new Set(open.map(tripOf))];
+    if (trips.length) {
+      const buyerOf = (t: string) => (open.find((i) => tripOf(i) === t && i.buyer) || {}).buyer as string | undefined;
+      const label = (t: string) => `${t.split('|')[1]} (${open.filter((i) => tripOf(i) === t).length} Posten)`;
+      const buyers = [...new Set(trips.map(buyerOf).filter(Boolean))] as string[];
+      const allTaken = trips.every((t) => buyerOf(t));
+      const nLidl = open.filter((i) => i.shop === 'lidl').length;
+      const list = (trips.length === 1 ? `${trips[0].split('|')[1]}: ${open.length} Posten auf der Liste.` : `${trips.map(label).join(', ')}.`)
+        + (nLidl ? ` Davon ${nLidl} bei Lidl.` : '');
+      const week = trips[0].split('|')[0];
+      const base = week ? `./?woche=${week}#einkauf` : './#einkauf';
+      // Wer den Morgenüberblick bekommt, findet den Einkauf dort. Die eigene Erinnerung kommt dann nur,
+      // wenn der Einkaufstag erst nach dem Morgenüberblick festgelegt wurde.
+      for (const t of trips) for (const a of adults) {
+        if (wantsMorning(a) && min < mStart + 30) continue;
+        out.push({
+          key: `einkauf:${day}:${t}:${a}`, to: [a], ttl: 12 * 3600,
+          msg: {
+            title: 'Heute ist Einkauf',
+            body: allTaken ? `${list} ${buyers.map(name).join(' und ')} geht einkaufen.` : `${list} Wer übernimmt?`,
+            tag: 'einkauf', url: base,
+            ...(allTaken ? {} : {
+              actions: [{ action: 'uebernehmen', title: 'Ich gehe einkaufen' }],
+              actionUrls: { uebernehmen: `${base.replace('#einkauf', '')}${week ? '&' : '?'}uebernehmen=1#einkauf` },
+            }),
+          },
+        });
+      }
+      // Sobald sich jemand einträgt, erfahren es die anderen Eltern.
+      for (const t of trips) {
+        const b = buyerOf(t);
+        if (!b) continue;
+        const others = adults.filter((id) => id !== b);
+        if (!others.length) continue;
+        out.push({
+          key: `einkauf-wer:${day}:${t}:${b}`, to: others, ttl: 12 * 3600,
+          msg: { title: `${name(b)} geht einkaufen`, body: `${name(b)} übernimmt „${t.split('|')[1]}“. Du musst heute nicht los.`, tag: 'einkauf', url: base },
+        });
+      }
+    }
+  }
+
+  if (inMorning && !awayHome) {
+    const tonight = data.plan.find((p) => String(p.day).slice(0, 10) === day && p.dish_id);
+    const dish = tonight && !tonight.skipped && (data.dishes || []).find((d) => d.id === tonight.dish_id);
+    const eatAt = tonight && /^\d{1,2}:\d{2}$/.test(String(tonight.dinner_time || '')) ? String(tonight.dinner_time) : '18:30';
+    const shortName = (n: string) => String(n).split(/ mit | in | und | auf | aus /)[0].trim();
+    const binTomorrow = bins.length ? bins.join(' und ') : null;
+    const open = (data.shopping || []).filter((i) => String(i.due || '').slice(0, 10) === day && !i.checked);
+    const tripOf = (i: Row) => `${String(i.week_start || '').slice(0, 10)}|${i.trip || 'Einkauf'}`;
+    const trips = [...new Set(open.map(tripOf))];
+    const title = wd >= 5 ? 'Guten Morgen' : 'Heute';
+    for (const p of data.persons) {
+      if (p.notify_morning === false) continue;
+      const lines: string[] = [];
+      let actions: Message['actions'];
+      let actionUrls: Message['actionUrls'];
+      let url = './';
+      if (!p.adult) {
+        const todo = openTasks(data.tasks, data.log, p.id, day, binTomorrow);
+        lines.push(todo.length ? `Deine Aufgaben: ${todo.join(', ')}.` : 'Heute stehen keine festen Aufgaben an.');
+        if (dish) lines.push(`Abendessen: ${shortName(dish.name)}.`);
+        url = './#aufgaben';
+      } else {
+        if (dish) {
+          const dur = Math.max(5, Number(dish.duration_min) || 30);
+          const startMin = Number(eatAt.split(':')[0]) * 60 + Number(eatAt.split(':')[1]) - dur;
+          lines.push(`Abendessen um ${eatAt}: ${shortName(dish.name)}, kochen ab ${String(Math.floor(startMin / 60)).padStart(2, '0')}:${String(startMin % 60).padStart(2, '0')}.`);
+        } else if (tonight && tonight.skipped) {
+          lines.push('Das Abendessen fällt heute aus.');
+        }
+        if (trips.length) {
+          const buyers = [...new Set(trips.map((t) => (open.find((i) => tripOf(i) === t && i.buyer) || {}).buyer).filter(Boolean))] as string[];
+          const names = trips.map((t) => t.split('|')[1]).join(', ');
+          const nLidl = open.filter((i) => i.shop === 'lidl').length;
+          lines.push(`Einkauf: ${names}, ${open.length} Posten${nLidl ? `, davon ${nLidl} bei Lidl` : ''}. ${buyers.length ? `${buyers.map((b) => (b === p.id ? 'Du' : name(b))).join(' und ')} ${buyers.length === 1 && buyers[0] === p.id ? 'gehst' : 'geht'} einkaufen.` : 'Wer übernimmt?'}`);
+          const week = trips[0].split('|')[0];
+          url = `./?woche=${week}#einkauf`;
+          if (!buyers.length) {
+            actions = [{ action: 'uebernehmen', title: 'Ich gehe einkaufen' }];
+            actionUrls = { uebernehmen: `./?woche=${week}&uebernehmen=1#einkauf` };
+          }
+        }
+        const waiting = data.log.filter((e) => e.status === 'offen' && e.minutes > 0).length;
+        if (waiting) lines.push(`${waiting} ${waiting === 1 ? 'Aufgabe wartet' : 'Aufgaben warten'} auf eure Bestätigung.`);
+        const kidsTodo = kids.map((k) => [k, openTasks(data.tasks, data.log, k, day, binTomorrow)] as [string, string[]]).filter(([, t]) => t.length);
+        if (kidsTodo.length) lines.push(`Offene Aufgaben der Kinder: ${kidsTodo.map(([k, t]) => `${name(k)}: ${t.length}`).join(', ')}.`);
+        if (!lines.length) continue;
+      }
+      out.push({
+        key: `morgen:${day}:${p.id}`, to: [p.id], ttl: 4 * 3600,
+        msg: { title: p.adult ? title : `${title}, ${name(p.id)}`, body: lines.join('\n'), tag: 'morgen', url, ...(actions ? { actions, actionUrls } : {}) },
+        extraKeys: p.adult ? trips.map((t) => `einkauf:${day}:${t}:${p.id}`) : [],
+      });
+    }
+  }
+
+  // Bewertung des Abendessens. Nur wer mitgegessen und noch keine Sterne vergeben hat.
+  {
+    const tonight = data.plan.find((p) => String(p.day).slice(0, 10) === day && p.dish_id && !p.skipped);
+    const dish = tonight && (data.dishes || []).find((d) => d.id === tonight.dish_id);
+    if (dish && !holiday) {
+      const hm = /^\d{1,2}:\d{2}$/.test(String(tonight.dinner_time || '')) ? String(tonight.dinner_time) : '18:30';
+      const eat = Number(hm.split(':')[0]) * 60 + Number(hm.split(':')[1]);
+      const away: string[] = Array.isArray(tonight.dinner_away) ? tonight.dinner_away : [];
+      const rated = new Set((data.ratings || []).filter((x) => String(x.day).slice(0, 10) === day).map((x) => x.person_id));
+      const KID_LAST = 20 * 60 + 15;
+      const kidAt = Math.min(eat + 60, KID_LAST - 5);
+      const shortName = String(dish.name).split(/ mit | in | und | auf | aus /)[0].trim();
+      for (const p of data.persons) {
+        if (p.notify_rating === false || away.includes(p.id) || rated.has(p.id)) continue;
+        let from: number; let to: number;
+        if (p.adult) { from = eat + 90; to = Math.min(from + 60, 22 * 60); }
+        else {
+          // Bei sehr spätem Essen bleibt für die Kinder keine sinnvolle Zeit vor 20:15, dann entfällt die Erinnerung.
+          if (kidAt < eat + 20) continue;
+          from = kidAt; to = KID_LAST + 1;
+        }
+        if (min < from || min >= to) continue;
+        out.push({
+          key: `bewerten:${day}:${p.id}`, to: [p.id], ttl: 3 * 3600,
+          msg: { title: 'Wie hat es geschmeckt?', body: `Heute gab es ${shortName}. Tippe hier und vergib deine Sterne.`, tag: 'bewerten', url: `./?tag=${day}#woche` },
+        });
+      }
+    }
+  }
+
+  // Freitag ab 17 Uhr: Herz der Woche, falls noch keins vergeben und die Woche geplant ist.
+  if (wd === 4 && min >= 17 * 60 && min < 21 * 60) {
+    const week = mondayOf(day);
+    const planned = data.plan.some((p) => p.dish_id && String(p.day).slice(0, 10) >= week && String(p.day).slice(0, 10) <= addDays(week, 6));
+    if (planned) {
+      for (const id of kids) {
+        if (data.hearts.some((h) => String(h.week_start).slice(0, 10) === week && h.person_id === id)) continue;
+        out.push({ key: `herz:${week}:${id}`, to: [id], ttl: 3 * DAY / 1000, msg: { title: 'Herz der Woche', body: 'Welches Essen war diese Woche dein Lieblingsgericht? Vergib dein Herz.', tag: 'herz', url: './' } });
+      }
+    }
+  }
+  return out;
+}
+
+
+/* ======================================================================
+   Wochenplan mit Claude
+   Ablauf in zwei Schritten über die Message Batches API, damit die Funktion
+   nie lange warten muss: 1. Claude sucht die Angebote von Aldi Süd und Lidl,
+   2. Claude schreibt den Plan als festes JSON. Jeder Lauf der Funktion
+   (alle fünf Minuten) schaut nach, ob ein Schritt fertig ist.
+   ====================================================================== */
+
+const API = 'https://api.anthropic.com/v1';
+const API_VERSION = '2026-10-21';
+
+export const DEFAULT_RULES = {
+  ausschluesse: ['Brokkoli', 'Rosenkohl', 'Vollkornnudeln', 'Ofenlachs'],
+  vorlieben: 'Fisch gern gebacken oder paniert, zum Beispiel Seelachs oder Kabeljau. Lachs nur geräuchert. Fett muss nicht krampfhaft reduziert werden, Fischstäbchen lieber in der Pfanne.',
+  ziele: 'Gesünder und proteinreicher essen. Bio wann immer möglich. Kinderfreundlich für 9 und 12 Jahre. Thermomix und Airfryer gern einbauen.',
+  kochzeit: 60,
+  neue_rezepte: 2,
+  vegan: 1,
+  auto: true,
+  tag: 4,
+  zeit: '12:00',
+  modell: 'claude-sonnet-5-5',
+  lidl: true,
+  saison: true,
+};
+export type Rules = typeof DEFAULT_RULES;
+
+// Saison in Franken: [Gemüse, Obst] pro Monat. Gleiche Liste wie in js/planer.js.
+export const SAISON: Record<string, [string, string]> = {"1": ["Grünkohl, Rosenkohl, Lauch, Wirsing, Rotkohl, Weißkohl, Feldsalat, Chicorée, Pastinaken, Schwarzwurzeln, Rote Bete, Karotten, Kartoffeln, Knollensellerie, Zwiebeln, Topinambur", "Äpfel, Birnen"], "2": ["Grünkohl, Rosenkohl, Lauch, Wirsing, Rotkohl, Weißkohl, Feldsalat, Chicorée, Pastinaken, Schwarzwurzeln, Rote Bete, Karotten, Kartoffeln, Knollensellerie, Zwiebeln", "Äpfel, Birnen"], "3": ["Lauch, Feldsalat, Chicorée, Bärlauch, Rote Bete, Karotten, Kartoffeln, Knollensellerie, Zwiebeln, Pastinaken, Rotkohl, Weißkohl", "Äpfel"], "4": ["Bärlauch, Spinat, Rhabarber, Radieschen, Spargel, Feldsalat, Lauch, Frühlingszwiebeln, Karotten, Kartoffeln", "Äpfel, Rhabarber"], "5": ["Spargel, Rhabarber, Spinat, Radieschen, Kohlrabi, Kopfsalat, Frühlingszwiebeln, Mangold, Rucola, Lauch", "Erdbeeren, Rhabarber"], "6": ["Spargel, Kohlrabi, Zucchini, Erbsen, Brokkoli, Blumenkohl, Kopfsalat, Radieschen, Gurken, Mangold, Frühkartoffeln, Karotten, Spinat, Rhabarber", "Erdbeeren, Kirschen, Johannisbeeren"], "7": ["Zucchini, Gurken, Tomaten, Paprika, Bohnen, Erbsen, Brokkoli, Blumenkohl, Kohlrabi, Kopfsalat, Mangold, Karotten, Kartoffeln, Spitzkohl, Fenchel", "Kirschen, Himbeeren, Heidelbeeren, Johannisbeeren, Aprikosen, Erdbeeren"], "8": ["Tomaten, Paprika, Zucchini, Auberginen, Gurken, Bohnen, Mais, Brokkoli, Blumenkohl, Kohlrabi, Kopfsalat, Karotten, Kartoffeln, Fenchel, Spitzkohl, Mangold", "Zwetschgen, Pflaumen, Mirabellen, Birnen, Äpfel, Brombeeren, Heidelbeeren, Himbeeren"], "9": ["Tomaten, Paprika, Zucchini, Kürbis, Bohnen, Brokkoli, Blumenkohl, Lauch, Mais, Rote Bete, Karotten, Kartoffeln, Weißkohl, Rotkohl, Spinat, Fenchel, Zwiebeln", "Äpfel, Birnen, Zwetschgen, Weintrauben, Brombeeren"], "10": ["Kürbis, Lauch, Rote Bete, Weißkohl, Rotkohl, Wirsing, Rosenkohl, Karotten, Kartoffeln, Knollensellerie, Pastinaken, Feldsalat, Spinat, Mangold, Brokkoli, Blumenkohl, Fenchel, Zwiebeln", "Äpfel, Birnen, Quitten, Weintrauben, Walnüsse"], "11": ["Grünkohl, Rosenkohl, Kürbis, Lauch, Wirsing, Rotkohl, Weißkohl, Feldsalat, Chicorée, Pastinaken, Schwarzwurzeln, Rote Bete, Karotten, Kartoffeln, Knollensellerie, Topinambur, Spinat, Zwiebeln", "Äpfel, Birnen, Quitten, Walnüsse"], "12": ["Grünkohl, Rosenkohl, Kürbis, Lauch, Wirsing, Rotkohl, Weißkohl, Feldsalat, Chicorée, Pastinaken, Schwarzwurzeln, Rote Bete, Karotten, Kartoffeln, Knollensellerie, Zwiebeln", "Äpfel, Birnen, Walnüsse"]};
+const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+export function seasonLines(week: string) {
+  const mid = addDays(week, 3);
+  const m = Number(mid.slice(5, 7));
+  const [g, o] = SAISON[String(m)] || ['', ''];
+  return [
+    `Saison und Region (${MONTH_NAMES[m - 1]} in Franken):`,
+    `- Gemüse aus der Region: ${g}.`,
+    `- Obst aus der Region: ${o}.`,
+    '- Bevorzuge diese Sorten bei Gemüse, Salat, Beilagen und in der Brotbox. Gemüse und Obst außerhalb der Saison (zum Beispiel Tomaten, Zucchini, Paprika oder Beeren im Winter) nur sparsam und wenn ein Gericht es wirklich braucht. Tiefkühlgemüse ist in Ordnung.',
+    '- Die Ausschlüsse oben gelten trotzdem.',
+    '',
+  ];
+}
+
+const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+const SHOP = ['obst', 'brot', 'fleisch', 'kuehl', 'tk', 'vorrat', 'haushalt', 'sonst'];
+const DISH_KINDS = ['rind', 'gefluegel', 'fisch', 'schwein', 'vegan', 'veggie', 'gemischt'];
+const fmtDay = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}.`;
+export const isoWeekNo = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7)));
+  const first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t.getTime() - first.getTime()) / DAY - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+};
+
+export function mergeRules(stored: Row | null | undefined): Rules {
+  const r = { ...DEFAULT_RULES, ...(stored || {}) } as Rules;
+  r.ausschluesse = (Array.isArray(r.ausschluesse) ? r.ausschluesse : String(r.ausschluesse || '').split(/[,\n]/)).map((x) => String(x).trim()).filter(Boolean);
+  return r;
+}
+
+// Das Antwortformat. Alle Felder sind Pflicht, leere Werte sind erlaubt. So bleibt das Schema einfach.
+export const PLAN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['hinweise', 'angebote_genutzt', 'neue_gerichte', 'tage', 'einkauf', 'wunsch_erfuellt', 'kosten'],
+  properties: {
+    hinweise: { type: 'string', description: 'Zwei bis drei Sätze an die Eltern: Was ist diese Woche besonders?' },
+    wunsch_erfuellt: { type: 'string' },
+    kosten: { type: 'number' },
+    angebote_genutzt: { type: 'array', items: { type: 'string' } },
+    neue_gerichte: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'kategorie', 'dauer_min', 'tags', 'hinweis', 'vorabend', 'zutaten', 'schritte'],
+        properties: {
+          name: { type: 'string' },
+          kategorie: { type: 'string', enum: DISH_KINDS },
+          dauer_min: { type: 'integer' },
+          tags: { type: 'array', items: { type: 'string' } },
+          hinweis: { type: 'string' },
+          vorabend: { type: 'string' },
+          zutaten: {
+            type: 'array',
+            items: {
+              type: 'object', additionalProperties: false,
+              required: ['menge', 'einheit', 'name', 'abteilung'],
+              properties: {
+                menge: { type: 'number' },
+                einheit: { type: 'string' },
+                name: { type: 'string' },
+                abteilung: { type: 'string', enum: [...SHOP, 'basis'] },
+              },
+            },
+          },
+          schritte: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+    tage: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['datum', 'gericht', 'brotbox', 'vorabend'],
+        properties: { datum: { type: 'string' }, gericht: { type: 'string' }, brotbox: { type: 'string' }, vorabend: { type: 'string' } },
+      },
+    },
+    einkauf: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'menge', 'abteilung', 'tour', 'wofuer', 'markt'],
+        properties: {
+          name: { type: 'string' },
+          menge: { type: 'string' },
+          abteilung: { type: 'string', enum: SHOP },
+          tour: { type: 'string', enum: ['gross', 'frisch'] },
+          wofuer: { type: 'string' },
+          markt: { type: 'string', enum: ['aldi', 'lidl'] },
+        },
+      },
+    },
+  },
+};
+
+// Tage der Woche aus dem Kontext der App (schulfrei, Essenszeit, wer fehlt). Fehlt etwas, gelten Werktage als Schultage.
+export function weekDays(ctx: Row | null, week: string, urlaub: Row[] = []) {
+  const known: Row[] = (ctx && Array.isArray(ctx.tage)) ? ctx.tage : [];
+  return Array.from({ length: 7 }, (_, n) => {
+    const day = addDays(week, n);
+    const k = known.find((t) => t.tag === day);
+    const u = holidayOn(urlaub, day);
+    return {
+      urlaub: u ? String(u.name || 'Urlaub') : (k && k.urlaub) || null,
+      tag: day, wochentag: DAY_NAMES[n],
+      schultag: k ? !k.schulfrei : n < 5,
+      schulfrei: k ? k.schulfrei || null : (n < 5 ? null : 'Wochenende'),
+      essen: k ? k.essen : '18:30',
+      esser: k ? k.esser : 4,
+      weg: k ? k.weg || [] : [],
+      kurz: k ? !!k.kurz : false,
+      gaeste: k ? Math.max(0, Number(k.gaeste) || 0) : 0,
+      bekannt: !!k,
+    };
+  });
+}
+
+// Märkte, in denen die Familie einkauft. Die Websites zeigen meist bundesweite Angebote, die Filiale hilft bei regionalen.
+export const MARKETS = { aldi: 'Aldi Süd, Coburg-Creidlitz', lidl: 'Lidl, Coburg-Ketschendorf' };
+
+
+/* ---------- Einkaufstage und Feiertage ---------- */
+
+// Tage, an denen in Coburg die Märkte zu sind. Mariä Himmelfahrt gilt nur in katholisch geprägten Gemeinden,
+// in Coburg nicht. Buß- und Bettag ist nur schulfrei.
+function easterOf(y: number) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+export function shopHoliday(day: string): string | null {
+  const y = Number(day.slice(0, 4));
+  const e = easterOf(y);
+  const p = (m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const list: Record<string, string> = {
+    [p(1, 1)]: 'Neujahr', [p(1, 6)]: 'Heilige Drei Könige', [addDays(e, -2)]: 'Karfreitag', [addDays(e, 1)]: 'Ostermontag',
+    [p(5, 1)]: 'Tag der Arbeit', [addDays(e, 39)]: 'Christi Himmelfahrt', [addDays(e, 50)]: 'Pfingstmontag', [addDays(e, 60)]: 'Fronleichnam',
+    [p(10, 3)]: 'Tag der Deutschen Einheit', [p(11, 1)]: 'Allerheiligen', [p(12, 25)]: '1. Weihnachtstag', [p(12, 26)]: '2. Weihnachtstag',
+  };
+  return list[day] || null;
+}
+// Heiligabend und Silvester: Die Märkte schließen mittags.
+export const shortDay = (day: string) => /-12-(24|31)$/.test(day);
+const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+// Einkaufstage einer Woche: Großeinkauf am Samstag davor, Frischeinkauf am Mittwoch. Ist der Markt zu,
+// rückt der Einkauf auf den letzten offenen Tag davor. Den Großeinkauf nie auf einen Tag, an dem mittags Schluss ist.
+export function shopDays(week: string) {
+  const back = (day: string, avoidShort: boolean) => {
+    let d = day;
+    for (let n = 0; n < 7 && (wdOf(d) === 6 || shopHoliday(d) || (avoidShort && shortDay(d))); n += 1) d = addDays(d, -1);
+    return d;
+  };
+  const plan = (kind: 'gross' | 'frisch', regular: string) => {
+    const day = back(regular, kind === 'gross');
+    const why = day !== regular ? `${WD_SHORT[wdOf(regular)]} ${fmtDay(regular)} ist ${shopHoliday(regular) || (shortDay(regular) ? 'nur bis mittags offen' : 'Sonntag')}` : '';
+    return { day, wd: DAY_NAMES[wdOf(day)], short: WD_SHORT[wdOf(day)], why, mittags: shortDay(day) };
+  };
+  return { gross: plan('gross', addDays(week, -2)), frisch: plan('frisch', addDays(week, 2)) };
+}
+
+export function offersPrompt(week: string, lidl = true) {
+  const sd = shopDays(week);
+  const sites = lidl ? 'aldi-sued.de und lidl.de' : 'aldi-sued.de';
+  return `Suche auf ${sites} die Lebensmittel-Angebote, die an einem der beiden Einkaufstage im Laden zu haben sind: am ${sd.gross.wd}, ${fmtDay(sd.gross.day)} (Großeinkauf) oder am ${sd.frisch.wd}, ${fmtDay(sd.frisch.day)} (Frischeinkauf). `
+    + 'Achte genau auf das Datum, ab dem ein Angebot gilt. Aktionsartikel gibt es erst ab diesem Tag im Laden, nicht vorher. Angebote, die erst nach dem Frischeinkauf beginnen, lässt du weg.\n'
+    + '„Aktionsartikel“ heißt: gibt es nur im Aktionszeitraum, sonst gar nicht im Markt (zum Beispiel Wochenaktionen wie Knödel, Spezialitätenwochen). „Sortiment“ heißt: gibt es immer, nur gerade günstiger.\n'
+    + `Eingekauft wird bei ${MARKETS.aldi}${lidl ? ` und bei ${MARKETS.lidl}` : ''}. Gibt es regionale Angebote für Coburg oder Oberfranken, nimm sie mit dazu.\n`
+    + 'Wichtig sind Fleisch, Fisch, Obst, Gemüse, Milchprodukte, Eier, Brot und Vorrat. Getränke, Süßigkeiten und Non-Food weglassen.\n'
+    + `Antworte nur mit einer Liste, eine Zeile pro Angebot, im Format: Markt (${lidl ? 'Aldi oder Lidl' : 'Aldi'}) | Produkt | Packungsgröße | Preis | Bio oder nicht Bio | gültig ab (Datum, zum Beispiel 20.11.) | gültig bis (Datum oder leer) | Aktionsartikel oder Sortiment.\n`
+    + (lidl ? 'Gilt ein Lidl-Preis nur mit der App Lidl Plus, schreibe hinter den Preis „nur mit Lidl Plus“.\n' : '')
+    + `Schreibe nur Angebote auf, die du auf ${sites} wirklich gefunden hast, und rate nichts. Steht nicht ausdrücklich Bio dabei, schreibe „nicht Bio“. `
+    + 'Findest du für diese Woche noch nichts, antworte genau mit: keine Angebote gefunden';
+}
+
+export type PlanExtra = { wishes?: { kind: string; wunsch: string }[]; lastWish?: string; prices?: string; reste?: string[]; packungen?: string[] };
+
+export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; week: string; wish: string; problems?: string[]; urlaub?: Row[]; extra?: PlanExtra }) {
+  const { rules, ctx, offers, week, wish, problems } = o;
+  const extra = o.extra || {};
+  const wishes = extra.wishes || [];
+  const days = weekDays(ctx, week, o.urlaub);
+  const sd = shopDays(week);
+  const sat = sd.gross.day;
+  const wed = sd.frisch.day;
+  const system = [
+    `Du erstellst den Abendessen-Wochenplan einer Familie mit zwei Erwachsenen und zwei Kindern (12 und 9 Jahre), dazu die Brotboxen der Kinder und die Einkaufsliste. Eingekauft wird bei ${MARKETS.aldi}${rules.lidl ? `, als zweiter Markt bei ${MARKETS.lidl}` : ''}.`,
+    '',
+    `Ziele der Familie: ${rules.ziele}`,
+    `Vorlieben: ${rules.vorlieben}`,
+    `Diese Lebensmittel kommen nie vor, auch nicht als Beilage oder in der Brotbox: ${rules.ausschluesse.join(', ') || 'keine'}.`,
+    '',
+    'Regeln für den Plan:',
+    '- Tage mit "gaeste" größer 0: So viele Gäste essen zusätzlich mit. Die Rezepte bleiben für 4 Personen, aber die Einkaufsmengen für diesen Tag entsprechend erhöhen. Lieber ein Gericht, das sich gut für mehr Personen eignet.',
+    '- Tage mit "urlaub" (nicht leer): Dort isst niemand zu Hause. Den Tag trotzdem aufführen, aber "gericht", "brotbox" und "vorabend" leer lassen und dafür nichts einkaufen.',
+    `- Für jeden anderen Tag genau ein Abendessen. Kein Gericht doppelt in der Woche, keine gleiche Hauptzutat an zwei Tagen hintereinander, höchstens zweimal rotes Fleisch.`,
+    `- Kochzeit werktags höchstens ${rules.kochzeit} Minuten. An Tagen mit "kurz": true höchstens 40 Minuten. Am Wochenende darf es länger dauern.`,
+    '- Jedes Abendessen soll reichlich Eiweiß liefern, als Richtwert mindestens 30 g pro Erwachsenenportion.',
+    '- "esser" sagt, wie viele mitessen, "weg" wer an dem Abend fehlt. Bei weniger Essern darf es etwas Einfaches sein.',
+    `- Vegane Abendessen pro Woche: ${rules.vegan}.`,
+    `- Genau ${rules.neue_rezepte} neue Gerichte, die noch nicht in der Sammlung stehen. Alle anderen Tage mit Gerichten aus der Sammlung, und zwar mit genau dem Namen, der dort steht.`,
+    '- Aus der Sammlung bevorzugt Gerichte mit guten Sternen, Herzen oder als Lieblingsgericht markiert. Nie Gerichte mit Status "aussortiert", nie solche mit "nicht_einplanen_bis" an oder nach dem jeweiligen Tag, nie Gerichte der Art "Brotbox-Rezept" als Abendessen. Was in den letzten 14 Tagen gegessen wurde, möglichst nicht wiederholen.',
+    '- Brotbox nur an Tagen mit "schultag": true, sonst ein leerer Text. Kindgerecht, abwechslungsreich, ohne Nüsse, ein bis zwei Sätze. Wo nötig an den Kühlakku erinnern.',
+    '- Gerichte aus der Sammlung mit "notizen_der_familie": Das sind Erfahrungen vom letzten Kochen. Berücksichtige sie, zum Beispiel zusätzliche Möhren oder die Zutaten für eine Soße mit auf die Einkaufsliste setzen und den Hinweis in "vorabend" oder im Tag erwähnen, wenn etwas vorzubereiten ist.',
+    '- "vorabend" beim Tag: was am Abend vorher zu tun ist (Fisch auftauen, Brötchen für die Brotbox backen). Sonst leer.',
+    '',
+    'Angebote:',
+    '- Nutze passende Angebote, aber nur die aus der mitgeschickten Liste. Erfinde keine Angebote.',
+    `- Ein Angebot darf nur auf eine Tour, wenn es am Einkaufstag dieser Tour schon gilt: Tour "gross" am ${fmtDay(sat)} nur mit Angeboten, die spätestens an diesem Tag beginnen, Tour "frisch" am ${fmtDay(wed)} nur mit Angeboten, die spätestens an diesem Tag beginnen und dann noch gelten. Angebote, die erst später beginnen, gar nicht einplanen. Steht kein Datum dabei, nicht als Angebot einplanen.`,
+    '- Ein Aktionsartikel gibt es nur im Aktionszeitraum, sonst gar nicht im Markt. Plane ihn nie als normales Produkt ein. Passt der Zeitraum nicht zum Einkaufstag, nimm ein anderes Produkt, das es immer gibt.',
+    '- Steht dort "nicht Bio", ist es nicht Bio. Schreibe bei Angeboten in der Einkaufsliste in "menge" das Startdatum und die Bio-Angabe dazu, zum Beispiel: "2 Packungen, Angebot ab 13.11., nicht Bio".',
+    '- Liste die genutzten Angebote in "angebote_genutzt" auf, mit Markt und Bio-Angabe, zum Beispiel "Lidl: Hähnchenbrustfilet 1 kg, 7,99 €, nicht Bio".',
+    '',
+    'Markt:',
+    ...(rules.lidl ? [
+      '- Bevorzugt wird Aldi Süd. Jeder Posten der Einkaufsliste bekommt "markt": "aldi" oder "lidl".',
+      '- "lidl" nur, wenn das Produkt dort im Angebot ist und deutlich günstiger oder besser (zum Beispiel Bio) als bei Aldi, oder wenn es Aldi nicht führt und du dir dabei sicher bist.',
+      '- Lohnt sich der Weg zu Lidl nur für ein oder zwei Kleinigkeiten ohne echten Vorteil, bleib bei Aldi.',
+      '- Angebote, die nur mit Lidl Plus gelten, gehen nur in den Plan, wenn du in "menge" "nur mit Lidl Plus" dazuschreibst.',
+    ] : ['- Alles kommt von Aldi Süd, "markt" ist immer "aldi". Nutze keine Lidl-Angebote.']),
+    '',
+    ...(rules.saison !== false ? seasonLines(week) : []),
+    'Neue Gerichte:',
+    '- Zutaten für 4 Personen mit Menge, Einheit (g, ml, EL, TL, Stk., Pck., Dose oder leer) und Abteilung. Grundzutaten wie Öl, Salz, Pfeffer, Gewürze bekommen Abteilung "basis", Menge 0 und den Text mit Menge im Namen, zum Beispiel "2 EL Öl".',
+    '- Schritte kurz und klar, mit Thermomix-Angaben (Zeit, Temperatur, Stufe), wo es passt. "tags" zum Beispiel Thermomix, Airfryer, Schnell, Vegan.',
+    '- "vorabend" beim Gericht nur, wenn jedes Mal etwas vorzubereiten ist.',
+    '',
+    'Einkaufsliste:',
+    `- Alle Zutaten der Woche zusammengefasst, in üblichen Packungsgrößen. Ohne Grundzutaten und ohne das, was laut Vorrat da ist.`,
+    `- Tour "gross": Großeinkauf am ${sd.gross.wd}, ${fmtDay(sat)}${sd.gross.why ? ` (vorgezogen, weil ${sd.gross.why})` : ''}`,
+    `- Tour "frisch": kleiner Einkauf am ${sd.frisch.wd}, ${fmtDay(wed)}${sd.frisch.why ? ` (vorgezogen, weil ${sd.frisch.why})` : ''}, für Frisches, das sonst nicht bis zum Ende der Woche hält`,
+    ...(sd.gross.day > addDays(week, -7) && wdOf(sd.gross.day) < 5 ? ['- Der Großeinkauf liegt früher als sonst. Plane Frisches für die ersten Tage der Woche so, dass es bis dahin hält, oder lege es auf die Tour "frisch".'] : []),
+    '- "wofuer" immer ausfüllen: Kurzname des Gerichts mit Wochentag, zum Beispiel "Hackbällchen (Mo), Brotbox (Do)".',
+    '',
+    'Wunschessen der Kinder:',
+    ...(wishes.length ? [
+      '- Baue genau einen der Wünsche ein, wenn er zu den Regeln passt. Die Ausschlüsse gelten auch hier.',
+      `- Gibt es mehrere Wünsche, nimm den eines Kindes, dessen Wunsch zuletzt nicht dran war.${extra.lastWish ? ` Zuletzt erfüllt wurde der Wunsch von ${extra.lastWish}.` : ''}`,
+      '- Steht der Wunsch nicht in der Sammlung, schreib ein neues Rezept dafür, gesund und kindgerecht umgesetzt.',
+      '- In "wunsch_erfuellt" den Namen des Kindes, dessen Wunsch drin ist. Passt kein Wunsch, leer lassen und in "hinweise" kurz sagen, warum.',
+    ] : ['- Diese Woche gibt es keine Wünsche, "wunsch_erfuellt" bleibt leer.']),
+    '',
+    'Was muss weg:',
+    ...((extra.reste || []).length ? [
+      '- Die Familie hat Reste, Angebrochenes oder Gartenernte, die bald verbraucht werden müssen. Verplane sie in den ersten Tagen der Woche, im Abendessen oder in der Brotbox.',
+      '- Kauf dafür nichts davon ein. Sag in "hinweise" kurz, wo es verwendet wird. Passt etwas gar nicht, sag das auch.',
+    ] : ['- Diese Woche ist nichts angegeben.']),
+    '',
+    'Packungsgrößen:',
+    ...((extra.packungen || []).length ? [
+      '- Unten steht, in welchen Packungsgrößen es manche Produkte im Markt wirklich gibt. Plane mit ganzen Packungen: Mengen in neuen Rezepten so wählen, dass eine oder zwei Packungen aufgehen.',
+      '- Bleibt doch ein Rest (zum Beispiel 300 g von 800 g Pute), verwende ihn in einem zweiten Gericht derselben Woche oder in der Brotbox und sag das in "hinweise".',
+      '- In der Einkaufsliste schreibst du für diese Produkte die Menge als Packungen, zum Beispiel "2 Packungen à 400 g".',
+    ] : ['- Nimm übliche Packungsgrößen bei Aldi Süd.']),
+    '',
+    'Kosten:',
+    '- "kosten": geschätzte Summe der Einkaufsliste in Euro. Nimm dafür die Preise, die die Familie zuletzt bezahlt hat (Preisgedächtnis), sonst übliche Discounter-Preise.',
+    '- Vergleiche Angebote mit diesen Preisen. Ist ein Angebot nicht günstiger als das, was die Familie sonst zahlt, ist es kein Grund für ein Gericht. Das gilt auch für die Wahl zwischen Aldi und Lidl.',
+    '- In der Auswertung steht bei vielen Gerichten "kosten_pro_portion". Wird die Woche teuer (etwa durch Gäste oder teure neue Rezepte), gleiche mit gut bewerteten, günstigen Gerichten aus.',
+    '',
+    'Sprache: Deutsch, schlicht und freundlich, ohne Gedankenstriche und ohne Werbesprache.',
+  ].join('\n');
+
+  const pantry = ctx && Array.isArray(ctx.vorrat) ? ctx.vorrat : [];
+  const user = [
+    `Plane die Woche von Montag, ${fmtDay(week)} bis Sonntag, ${fmtDay(addDays(week, 6))} (KW ${isoWeekNo(week)}).`,
+    '',
+    'Die Tage:',
+    JSON.stringify(days.map(({ bekannt, ...d }) => d)),
+    '',
+    `Vorrat, der im Haus ist: ${pantry.length ? pantry.join(', ') : 'keine Angabe'}.`,
+    '',
+    `Angebote rund um die Einkaufstage (${shopDays(week).gross.wd} ${fmtDay(shopDays(week).gross.day)} und ${shopDays(week).frisch.wd} ${fmtDay(shopDays(week).frisch.day)}):`,
+    offers && offers.trim() ? offers.trim() : 'Keine Angebote bekannt. Dann plane ohne Angebote.',
+    '',
+    'Auswertung aus der App (Sammlung, Bewertungen, Herzen, letzte Wochen):',
+    ctx && ctx.auswertung ? JSON.stringify(ctx.auswertung) : 'Keine Auswertung vorhanden.',
+    ...(wish ? ['', `Wunsch der Eltern für diese Woche: ${wish}`] : []),
+    ...(wishes.length ? ['', 'Wunschessen der Kinder für diese Woche:', ...wishes.map((w) => `- ${w.kind}: ${w.wunsch}`)] : []),
+    ...((extra.reste || []).length ? ['', 'Was muss weg (bald verbrauchen):', ...(extra.reste || []).map((x) => `- ${x}`)] : []),
+    ...((extra.packungen || []).length ? ['', 'Packungsgrößen, wie es sie im Markt wirklich gibt (von der Familie gemeldet oder vom Kassenzettel):', ...(extra.packungen || []).map((x) => `- ${x}`)] : []),
+    '',
+    'Preisgedächtnis (was die Familie zuletzt bezahlt hat, aus den Kassenzetteln):',
+    extra.prices && extra.prices.trim() ? extra.prices.trim() : 'Noch keine Kassenzettel erfasst.',
+    ...(problems && problems.length ? ['', 'Dein letzter Entwurf hatte diese Fehler. Bitte behebe sie:', ...problems.map((x) => `- ${x}`)] : []),
+  ].join('\n');
+  return { system, user };
+}
+
+// Prüft den Entwurf. errors führen zu einem neuen Versuch, warnings stehen nur dabei.
+// Startdatum aus „Angebot ab 20.11.“ als JJJJ-MM-TT, passend zum Jahr der geplanten Woche.
+export function offerStart(menge: string, week: string): string | null {
+  const m = menge.match(/angebot[^0-9]{0,12}ab\s+(\d{1,2})\.(\d{1,2})\./i);
+  if (!m) return null;
+  const mon = Number(m[2]); const day = Number(m[1]);
+  if (!(mon >= 1 && mon <= 12 && day >= 1 && day <= 31)) return null;
+  let y = Number(week.slice(0, 4));
+  const wm = Number(week.slice(5, 7));
+  if (wm === 12 && mon === 1) y += 1;
+  if (wm === 1 && mon === 12) y -= 1;
+  return `${y}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function checkDraft(d: Row, o: { rules: Rules; ctx: Row | null; week: string; urlaub?: Row[] }) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const days = weekDays(o.ctx, o.week, o.urlaub);
+  const norm = (x: unknown) => String(x || '').trim().toLowerCase();
+  const collection: Row[] = o.ctx && o.ctx.auswertung && Array.isArray(o.ctx.auswertung.gerichte) ? o.ctx.auswertung.gerichte : [];
+  const fresh: Row[] = Array.isArray(d.neue_gerichte) ? d.neue_gerichte : [];
+  const tage: Row[] = Array.isArray(d.tage) ? d.tage : [];
+  const banned = o.rules.ausschluesse.map(norm).filter(Boolean);
+  const hit = (text: string) => banned.find((b) => norm(text).includes(b));
+
+  for (const day of days) {
+    const n = tage.filter((t) => t.datum === day.tag).length;
+    if (n === 0 && day.urlaub) continue;
+    if (n === 0) errors.push(`Für ${day.wochentag}, ${day.tag} fehlt ein Abendessen.`);
+    if (n > 1) errors.push(`${day.wochentag}, ${day.tag} steht mehrfach im Plan.`);
+  }
+  for (const t of tage) if (!days.some((x) => x.tag === t.datum)) errors.push(`Der Tag ${t.datum} gehört nicht zur geplanten Woche.`);
+
+  const seen = new Set<string>();
+  for (const t of tage) {
+    const day = days.find((x) => x.tag === t.datum);
+    const name = norm(t.gericht);
+    if (day && day.urlaub) {
+      if (name) warnings.push(`${day.wochentag} ist ${day.urlaub}, „${t.gericht}“ wurde weggelassen.`);
+      t.gericht = ''; t.brotbox = ''; t.vorabend = '';
+      continue;
+    }
+    if (!name) { errors.push(`Am ${t.datum} steht kein Gericht.`); continue; }
+    if (seen.has(name)) errors.push(`„${t.gericht}“ steht zweimal in der Woche.`);
+    seen.add(name);
+    const isNew = fresh.find((g) => norm(g.name) === name);
+    const old = collection.find((g) => norm(g.name) === name);
+    if (!isNew && !old) errors.push(`„${t.gericht}“ (${t.datum}) ist weder ein neues Gericht noch steht es so in der Sammlung.`);
+    if (old) {
+      if (String(old.status || '').startsWith('aussortiert') || String(old.status || '').includes('von Hand aussortiert')) errors.push(`„${t.gericht}“ ist aussortiert und darf nicht in den Plan.`);
+      if (old.nicht_einplanen_bis && t.datum <= old.nicht_einplanen_bis) errors.push(`„${t.gericht}“ ist bis ${old.nicht_einplanen_bis} gesperrt.`);
+      if (old.art === 'Brotbox-Rezept') errors.push(`„${t.gericht}“ ist ein Brotbox-Rezept und kein Abendessen.`);
+    }
+    const dur = isNew ? Number(isNew.dauer_min) : old ? Number(old.dauer_min) : 0;
+    if (day && day.kurz && dur > 40) warnings.push(`${day.wochentag}: „${t.gericht}“ dauert ${dur} Minuten, an dem Tag ist es knapp.`);
+    else if (day && day.schultag && dur > o.rules.kochzeit) warnings.push(`${day.wochentag}: „${t.gericht}“ dauert ${dur} Minuten.`);
+    const b = hit(t.gericht) || hit(t.brotbox);
+    if (b) errors.push(`Am ${t.datum} kommt „${b}“ vor, das ist ausgeschlossen.`);
+    if (day && !day.schultag && norm(t.brotbox)) { warnings.push(`${day.wochentag} ist schulfrei, die Brotbox wurde weggelassen.`); t.brotbox = ''; }
+    if (day && day.schultag && !norm(t.brotbox)) warnings.push(`${day.wochentag} ist ein Schultag ohne Brotbox.`);
+  }
+  for (const g of fresh) {
+    if (!tage.some((t) => norm(t.gericht) === norm(g.name))) warnings.push(`Das neue Gericht „${g.name}“ steht an keinem Tag und wird nur gespeichert.`);
+    if (collection.some((c) => norm(c.name) === norm(g.name))) warnings.push(`„${g.name}“ gab es schon, das gespeicherte Rezept wird ersetzt.`);
+    const b = hit(g.name) || (g.zutaten || []).map((z: Row) => hit(z.name)).find(Boolean);
+    if (b) errors.push(`Im neuen Gericht „${g.name}“ kommt „${b}“ vor, das ist ausgeschlossen.`);
+    if (!(g.zutaten || []).length || !(g.schritte || []).length) errors.push(`Beim neuen Gericht „${g.name}“ fehlen Zutaten oder Schritte.`);
+  }
+  for (const e of Array.isArray(d.einkauf) ? d.einkauf : []) {
+    const b = hit(e.name);
+    if (b) errors.push(`Auf der Einkaufsliste steht „${e.name}“, das ist ausgeschlossen.`);
+    // Angebote erst ab ihrem Starttag: Liegt der nach dem Einkaufstag der Tour, gibt es den Artikel dort noch nicht.
+    const start = offerStart(String(e.menge || ''), o.week);
+    const shop = e.tour === 'frisch' ? shopDays(o.week).frisch.day : shopDays(o.week).gross.day;
+    if (start && start > shop) errors.push(`„${e.name}“ ist erst ab ${fmtDay(start)} im Angebot, die Tour "${e.tour === 'frisch' ? 'frisch' : 'gross'}" ist aber schon am ${fmtDay(shop)}, also dort noch nicht zu haben. Ist es ein Aktionsartikel, gibt es ihn vorher gar nicht: Nimm ein anderes Produkt, das es immer gibt. Gibt es den Artikel sonst auch im Sortiment, nimm ihn ohne Angebot.`);
+  }
+  return { errors, warnings };
+}
+
+// Wandelt den geprüften Entwurf in das Importformat der App um.
+export function toImport(d: Row, week: string, lidl = true) {
+  const sd = shopDays(week);
+  const sat = sd.gross.day;
+  const wed = sd.frisch.day;
+  const name = (t: Row, label: string) => `${label} am ${t.short} ${fmtDay(t.day)}${t.why ? `, vorgezogen (${t.why})` : ''}${t.mittags ? ', Markt schließt mittags' : ''}`;
+  const trips = { gross: name(sd.gross, 'Großeinkauf'), frisch: name(sd.frisch, 'Frischeeinkauf') } as Record<string, string>;
+  return {
+    week_start: week,
+    dishes: (d.neue_gerichte || []).map((g: Row) => ({
+      name: String(g.name).trim(),
+      category: DISH_KINDS.includes(g.kategorie) ? g.kategorie : 'gemischt',
+      duration_min: Math.max(5, Math.round(Number(g.dauer_min) || 30)),
+      tags: Array.isArray(g.tags) ? g.tags.map(String) : [],
+      note: String(g.hinweis || ''),
+      prep: String(g.vorabend || ''),
+      ingredients: (g.zutaten || []).map((z: Row) => (z.abteilung === 'basis' || !(Number(z.menge) > 0)
+        ? [null, '', String(z.name), 'basis']
+        : [Number(z.menge), String(z.einheit || ''), String(z.name), String(z.abteilung)])),
+      steps: (g.schritte || []).map(String),
+    })),
+    plan: (d.tage || []).filter((t: Row) => String(t.gericht || '').trim()).slice().sort((a: Row, b: Row) => (a.datum < b.datum ? -1 : 1)).map((t: Row) => ({
+      day: t.datum, dish: String(t.gericht).trim(), lunchbox: String(t.brotbox || ''), prep: String(t.vorabend || ''),
+    })),
+    shopping: (d.einkauf || []).map((e: Row) => ({
+      label: String(e.name), qty: String(e.menge || ''), category: SHOP.includes(e.abteilung) ? e.abteilung : 'sonst',
+      trip: trips[e.tour] || trips.gross, due: e.tour === 'frisch' ? wed : sat, purpose: String(e.wofuer || ''),
+      shop: lidl && e.markt === 'lidl' ? 'lidl' : '',
+    })),
+  };
+}
+
+const textOf = (msg: Row) => (msg && Array.isArray(msg.content) ? msg.content : []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join('');
+
+function apiHeaders() {
+  const key = env('ANTHROPIC_API_KEY');
+  if (!key) throw new Error('Der Schlüssel ANTHROPIC_API_KEY fehlt in den Secrets der Funktion.');
+  return { 'x-api-key': key, 'anthropic-version': API_VERSION, 'content-type': 'application/json' };
+}
+/* ---------- Was Claude kostet ---------- */
+
+// US-Dollar pro Million Tokens [Eingabe, Ausgabe], Stand der Preisliste von Anthropic im November 2026.
+export const PRICES: Record<string, [number, number]> = {
+  'claude-opus-5-5': [4, 20], 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5],
+};
+const SEARCH_USD = 0.01;
+// Kosten einer Antwort in US-Dollar. Batches kosten die Hälfte, Cache-Lesen ein Bruchteil.
+export function usageCost(model: string, u: Row | null | undefined, batch = false): number {
+  if (!u) return 0;
+  const key = Object.keys(PRICES).find((k) => String(model || '').startsWith(k)) || 'claude-sonnet-5-5';
+  const [inp, out] = PRICES[key];
+  const readFactor = key === 'claude-haiku-5-5' ? 0.1 : 0.05;
+  const tokens = (Number(u.input_tokens) || 0) * inp + (Number(u.cache_creation_input_tokens) || 0) * inp * 1.25
+    + (Number(u.cache_read_input_tokens) || 0) * inp * readFactor + (Number(u.output_tokens) || 0) * out;
+  const searches = Number((u.server_tool_use || {}).web_search_requests) || 0;
+  return (tokens / 1e6) * (batch ? 0.5 : 1) + searches * SEARCH_USD;
+}
+let usageKind = 'sonstiges';
+const usageQueue: { kind: string; usd: number }[] = [];
+function noteUsage(model: string, u: Row | null | undefined, batch = false, kind = usageKind) {
+  const usd = usageCost(model, u, batch);
+  if (usd > 0) usageQueue.push({ kind, usd });
+}
+// Gesammelte Kosten in ep_settings "ki_verbrauch" ablegen, pro Monat und Art. Die letzten 13 Monate bleiben.
+export async function flushUsage(store: Store, nowMs = Date.now()) {
+  if (!usageQueue.length) return;
+  const items = usageQueue.splice(0);
+  const month = berlin(nowMs).day.slice(0, 7);
+  const rows = await store.get('ep_settings?select=value&key=eq.ki_verbrauch').catch(() => []);
+  const all: Row = (rows[0] && rows[0].value && typeof rows[0].value === 'object') ? rows[0].value : {};
+  const m: Row = all[month] || { usd: 0, n: 0, arten: {} };
+  for (const x of items) {
+    m.usd = Math.round((Number(m.usd || 0) + x.usd) * 10000) / 10000;
+    m.n = Number(m.n || 0) + 1;
+    m.arten = m.arten || {};
+    m.arten[x.kind] = Math.round((Number(m.arten[x.kind] || 0) + x.usd) * 10000) / 10000;
+  }
+  all[month] = m;
+  const keep = Object.keys(all).sort().slice(-13);
+  const value = Object.fromEntries(keep.map((k) => [k, all[k]]));
+  await store.upsert('ep_settings', [{ key: 'ki_verbrauch', value, updated_at: nowIso(nowMs) }]);
+}
+
+async function apiCall(url: string, init: RequestInit = {}) {
+  const res = await fetch(url.startsWith('http') ? url : `${API}${url}`, { ...init, headers: { ...apiHeaders(), ...(init.headers || {}) } });
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = text.slice(0, 300);
+    try { msg = JSON.parse(text).error.message || msg; } catch (e) { /* Text bleibt */ }
+    throw new Error(`Claude-Schnittstelle ${res.status}: ${msg}`);
+  }
+  // Direkte Anfragen gleich mitzählen. Batches zählt fetchResult, wenn das Ergebnis da ist.
+  if (url === '/messages') {
+    try { const r = JSON.parse(text); noteUsage(String(r.model || ''), r.usage); } catch (e) { /* keine Zählung */ }
+  }
+  return text;
+}
+async function submit(customId: string, params: Row): Promise<string> {
+  const t = await apiCall('/messages/batches', { method: 'POST', body: JSON.stringify({ requests: [{ custom_id: customId, params }] }) });
+  return JSON.parse(t).id;
+}
+// Liefert null, solange der Batch läuft, sonst das Ergebnis des einen Requests.
+async function fetchResult(batchId: string): Promise<Row | null> {
+  const b = JSON.parse(await apiCall(`/messages/batches/${batchId}`));
+  if (b.processing_status !== 'ended') return null;
+  if (!b.results_url) return { type: 'errored', error: { message: 'Kein Ergebnis geliefert.' } };
+  const lines = (await apiCall(b.results_url)).split('\n').filter((l) => l.trim());
+  const result = lines.length ? JSON.parse(lines[0]).result : { type: 'errored', error: { message: 'Leeres Ergebnis.' } };
+  if (result && result.message) noteUsage(String(result.message.model || ''), result.message.usage, true, 'wochenplan');
+  return result;
+}
+
+// Die neuen Modelle denken vor der Antwort nach (adaptives Thinking). Das zählt zu max_tokens,
+// deshalb sind die Grenzen großzügig. Bezahlt wird nur, was tatsächlich erzeugt wird.
+const PLAN_TOKENS = 64000;
+const PLAN_TOKENS_RETRY = 120000;
+
+function offersParams(rules: Rules, messages: Row[]) {
+  return {
+    model: rules.modell, max_tokens: 16000, messages,
+    tools: [{
+      type: 'web_search_20250305', name: 'web_search', max_uses: rules.lidl ? 8 : 5,
+      allowed_domains: rules.lidl ? ['aldi-sued.de', 'lidl.de'] : ['aldi-sued.de'],
+      user_location: { type: 'approximate', city: 'Coburg', region: 'Bayern', country: 'DE', timezone: 'Europe/Berlin' },
+    }],
+  };
+}
+function planParams(rules: Rules, prompt: { system: string; user: string }, maxTokens = PLAN_TOKENS) {
+  return {
+    model: rules.modell, max_tokens: maxTokens, system: prompt.system,
+    messages: [{ role: 'user', content: prompt.user }],
+    output_config: { format: { type: 'json_schema', schema: PLAN_SCHEMA } },
+  };
+}
+
+/* ---------- Haushaltsbuch: Kassenzettel lesen ---------- */
+
+// Gleiche Grundwerte wie in js/haushalt.js. Die Eltern können sie in der App ändern.
+export const KATEGORIEN = [
+  'Fleisch und Fisch', 'Obst und Gemüse', 'Milch, Käse und Eier', 'Brot und Backwaren', 'Vorrat und Tiefkühl',
+  'Süßes und Snacks', 'Getränke', 'Drogerie und Hygiene', 'Haushalt und Putzen', 'Tierbedarf', 'Sonstiges', 'Pfand und Rabatt',
+];
+
+export function receiptSchema(cats: string[]) {
+  return {
+    type: 'object', additionalProperties: false,
+    required: ['markt', 'datum', 'summe', 'posten', 'hinweis'],
+    properties: {
+      markt: { type: 'string' },
+      datum: { type: 'string' },
+      summe: { type: 'number' },
+      hinweis: { type: 'string' },
+      posten: {
+        type: 'array',
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['text', 'name', 'preis', 'kategorie', 'packung'],
+          properties: {
+            text: { type: 'string' },
+            name: { type: 'string' },
+            preis: { type: 'number' },
+            kategorie: { type: 'string', enum: cats },
+            packung: { type: 'string' },
+          },
+        },
+      },
+    },
+  };
+}
+
+export function receiptPrompt(cats: string[], learned: Record<string, string>) {
+  const known = Object.entries(learned || {}).filter(([k, v]) => k && cats.includes(v)).slice(-80);
+  return [
+    'Auf dem Foto ist ein deutscher Kassenzettel, meist von Aldi Süd oder Lidl. Lies ihn vollständig aus.',
+    '- "markt": Name des Geschäfts, bei Aldi Süd genau "Aldi Süd", bei Lidl genau "Lidl", sonst der Name wie auf dem Zettel.',
+    '- "datum": Kaufdatum als JJJJ-MM-TT. Ist keins lesbar, leer lassen.',
+    '- "summe": der bezahlte Gesamtbetrag in Euro (Zeile SUMME, Zu zahlen oder Gesamt).',
+    '- "posten": jede Artikelzeile einzeln. "text" so wie auf dem Zettel, "name" gut lesbar ausgeschrieben (aus "BIO HAEHN.BR.FIL" wird "Bio-Hähnchenbrustfilet"), "preis" der Zeilenbetrag in Euro.',
+    '- Mengenzeilen wie "2 x 1,29" gehören zum Artikel darüber, "preis" ist dann der Gesamtbetrag der Zeile.',
+    '- Rabatte, Preisnachlässe und Pfandrückgabe als eigener Posten mit negativem Preis, Pfand und Rabatte in die Kategorie "Pfand und Rabatt".',
+    '- Zwischensummen, Zahlungsart, Steuerzeilen, Rückgeld und Kartenbeleg sind keine Posten.',
+    `- "kategorie": genau eine aus: ${cats.join(', ')}.`,
+    '- "packung": die Packungsgröße, wenn sie auf dem Zettel im Artikeltext steht (aus "PUTENBR.FIL. 400G" wird "400 g", aus "MILCH 1L" wird "1 l", aus "EIER 10ER" wird "10 Stück"). Steht keine Größe da, leer lassen und nichts raten.',
+    ...(known.length ? ['- So hat die Familie Artikel bisher eingeordnet, daran halten: ' + known.map(([k, v]) => `${k} = ${v}`).join('; ')] : []),
+    '- "hinweis": kurz, wenn etwas unsicher oder unleserlich war, sonst leer. Weicht die Summe der Posten vom Gesamtbetrag ab, sag es dort.',
+    'Rate keine Artikel dazu, die nicht auf dem Zettel stehen.',
+  ].join('\n');
+}
+
+const MEDIA = ['image/jpeg', 'image/png', 'image/webp'];
+
+export type Photo = { data: string; media: string };
+
+export function receiptParams(model: string, photos: Photo[], cats: string[], learned: Record<string, string>) {
+  const many = photos.length > 1 ? `\nDer Kassenzettel ist auf ${photos.length} Fotos verteilt, von oben nach unten. Überschneidungen nur einmal zählen.` : '';
+  return {
+    model, max_tokens: 16000,
+    messages: [{ role: 'user', content: [
+      ...photos.map((p) => ({ type: 'image', source: { type: 'base64', media_type: p.media, data: p.data } })),
+      { type: 'text', text: receiptPrompt(cats, learned) + many },
+    ] }],
+    output_config: { format: { type: 'json_schema', schema: receiptSchema(cats) } },
+  };
+}
+
+// Antwort von Claude auf ein lesbares Ergebnis bringen.
+export function parseReceipt(res: Row, cats: string[]) {
+  if (res.stop_reason === 'max_tokens') throw new Error('Der Kassenzettel war zu lang für eine Antwort.');
+  const text = (res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join('');
+  const d = JSON.parse(text);
+  const money = (x: unknown) => Math.round((Number(x) || 0) * 100) / 100;
+  const posten = (Array.isArray(d.posten) ? d.posten : []).map((p: Row) => ({
+    text: String(p.text || '').slice(0, 120), name: String(p.name || p.text || '').slice(0, 120),
+    preis: money(p.preis), kategorie: cats.includes(p.kategorie) ? p.kategorie : 'Sonstiges', packung: String(p.packung || '').slice(0, 20),
+  })).filter((p: Row) => p.name);
+  return {
+    markt: String(d.markt || '').slice(0, 60),
+    datum: /^\d{4}-\d{2}-\d{2}$/.test(String(d.datum || '')) ? String(d.datum) : '',
+    summe: money(d.summe),
+    hinweis: String(d.hinweis || '').slice(0, 400),
+    posten,
+    usage: res.usage || null,
+  };
+}
+
+function checkPhotos(photos: Photo[]) {
+  if (!photos.length || photos.length > 4) throw new Error('Bitte ein bis vier Fotos schicken.');
+  if (photos.some((p) => !MEDIA.includes(p.media))) throw new Error('Bitte Fotos als JPEG, PNG oder WebP schicken.');
+  if (photos.some((p) => !p.data) || photos.reduce((a, p) => a + p.data.length, 0) > 12_000_000) throw new Error('Die Fotos sind zu groß.');
+}
+
+export async function readReceipt(store: Store, photos: Photo[]) {
+  checkPhotos(photos);
+  const settings = await store.get('ep_settings?select=key,value&key=in.(haushalt,regeln)');
+  const get = (k: string) => (settings.find((x) => x.key === k) || {}).value;
+  const h = get('haushalt') || {};
+  const cats: string[] = Array.isArray(h.kategorien) && h.kategorien.length ? h.kategorien.map(String) : KATEGORIEN;
+  if (!cats.includes('Sonstiges')) cats.push('Sonstiges');
+  const rules = mergeRules(get('regeln'));
+  const text = await apiCall('/messages', { method: 'POST', body: JSON.stringify(receiptParams(rules.modell, photos, cats, h.merken || {})) });
+  return parseReceipt(JSON.parse(text), cats);
+}
+
+/* ---------- Rezept aus Foto ---------- */
+
+const NUTRI = ['kcal', 'fat', 'sat', 'carbs', 'sugar', 'fiber', 'protein', 'salt'];
+
+export const RECIPE_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['erkannt', 'name', 'kategorie', 'dauer_min', 'portionen_original', 'tags', 'hinweis', 'vorabend', 'zutaten', 'schritte', 'naehrwerte'],
+  properties: {
+    erkannt: { type: 'boolean' },
+    name: { type: 'string' },
+    kategorie: { type: 'string', enum: [...DISH_KINDS, 'brotbox'] },
+    dauer_min: { type: 'integer' },
+    portionen_original: { type: 'integer' },
+    tags: { type: 'array', items: { type: 'string' } },
+    hinweis: { type: 'string' },
+    vorabend: { type: 'string' },
+    zutaten: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['menge', 'einheit', 'name', 'abteilung'],
+        properties: { menge: { type: 'number' }, einheit: { type: 'string' }, name: { type: 'string' }, abteilung: { type: 'string', enum: [...SHOP, 'basis'] } },
+      },
+    },
+    schritte: { type: 'array', items: { type: 'string' } },
+    naehrwerte: {
+      type: 'object', additionalProperties: false,
+      required: ['vom_rezept', ...NUTRI],
+      properties: { vom_rezept: { type: 'boolean' }, ...Object.fromEntries(NUTRI.map((k) => [k, { type: 'number' }])) },
+    },
+  },
+};
+
+export function recipePrompt(names: string[]) {
+  return [
+    'Auf den Fotos ist ein Rezept, zum Beispiel aus Cookidoo, von einer Kochbox-Karte, aus einem Kochbuch oder handschriftlich. Mehrere Fotos gehören zum selben Rezept.',
+    'Erfasse es für eine Familie mit zwei Erwachsenen und zwei Kindern (12 und 9 Jahre), also für 4 Portionen.',
+    '- "erkannt": false, wenn auf den Fotos kein Rezept zu erkennen ist. Dann den Rest leer lassen.',
+    '- "portionen_original": für wie viele Portionen das Rezept auf dem Foto gedacht ist. Rechne alle Mengen auf 4 Portionen um und runde sinnvoll (ganze Eier, übliche Packungsgrößen).',
+    '- "zutaten": Menge als Zahl, Einheit kurz (g, ml, EL, TL, Stück, Bund, Dose, Packung), Name ohne Menge. "abteilung" ist die Abteilung im Supermarkt: obst (Obst, Gemüse, Kräuter), brot, fleisch (Fleisch und Fisch), kuehl (Milchprodukte, Eier, Kühlregal), tk (Tiefkühl), vorrat (Nudeln, Reis, Konserven, Mehl, Gewürzpasten). "basis" für Dinge, die man im Haus hat: Salz, Pfeffer, Öl, Zucker, Wasser, Gewürze. Bei "basis" ist die Menge 0.',
+    '- "schritte": die Arbeitsschritte in eigenen, klaren Sätzen. Thermomix-Angaben (Zeit, Temperatur, Stufe, Linkslauf) beibehalten.',
+    '- "dauer_min": Gesamtzeit in Minuten. "kategorie": nach der Hauptzutat, "brotbox" nur für Snacks für die Brotbox.',
+    '- "vorabend": was am Vorabend vorbereitet werden muss (auftauen, einweichen, marinieren), sonst leer.',
+    '- "tags": zwei bis vier kurze Stichworte, etwa Thermomix, Airfryer, schnell, Ofen.',
+    '- "naehrwerte" pro Portion. Stehen sie auf dem Foto, übernimm sie und setze "vom_rezept" auf true. Sonst schätze sie aus den Zutaten und setze false.',
+    '- "hinweis": kurz, was unsicher oder unleserlich war oder was du umgerechnet hast, sonst leer.',
+    ...(names.length ? [`Diese Gerichte gibt es schon. Heißt das Rezept fast genauso, wähle einen eindeutigen Namen: ${names.slice(0, 200).join('; ')}`] : []),
+    'Erfinde nichts dazu, was nicht auf den Fotos steht, außer den umgerechneten Mengen und geschätzten Nährwerten.',
+  ].join('\n');
+}
+
+export function toDish(d: Row) {
+  if (!d.erkannt || !String(d.name || '').trim()) throw new Error('Auf den Fotos war kein Rezept zu erkennen.');
+  const n = d.naehrwerte || {};
+  const nutrition = NUTRI.every((k) => Number.isFinite(Number(n[k]))) && Number(n.kcal) > 0
+    ? Object.fromEntries(NUTRI.map((k) => [k, Math.round(Number(n[k]) * 10) / 10])) : null;
+  return {
+    name: String(d.name).trim().slice(0, 120),
+    category: [...DISH_KINDS, 'brotbox'].includes(d.kategorie) ? d.kategorie : 'gemischt',
+    duration_min: Math.max(5, Math.round(Number(d.dauer_min) || 30)),
+    tags: Array.isArray(d.tags) ? d.tags.map(String).slice(0, 6) : [],
+    note: String(d.hinweis || ''),
+    prep: String(d.vorabend || ''),
+    ingredients: (d.zutaten || []).filter((z: Row) => String(z.name || '').trim()).map((z: Row) => (z.abteilung === 'basis' || !(Number(z.menge) > 0)
+      ? [null, '', String(z.name).trim(), 'basis']
+      : [Number(z.menge), String(z.einheit || ''), String(z.name).trim(), String(z.abteilung)])),
+    steps: (d.schritte || []).map(String).filter(Boolean),
+    ...(nutrition ? { nutrition } : {}),
+    meta: { portionen_original: Number(d.portionen_original) || null, naehrwerte_vom_rezept: !!n.vom_rezept },
+  };
+}
+
+export async function readRecipe(store: Store, photos: Photo[]) {
+  checkPhotos(photos);
+  const [settings, dishes] = await Promise.all([store.get('ep_settings?select=key,value&key=eq.regeln'), store.get('ep_dishes?select=name')]);
+  const rules = mergeRules((settings[0] || {}).value);
+  const params = {
+    model: rules.modell, max_tokens: 32000,
+    messages: [{ role: 'user', content: [
+      ...photos.map((p) => ({ type: 'image', source: { type: 'base64', media_type: p.media, data: p.data } })),
+      { type: 'text', text: recipePrompt(dishes.map((x: Row) => String(x.name))) },
+    ] }],
+    output_config: { format: { type: 'json_schema', schema: RECIPE_SCHEMA } },
+  };
+  const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+  if (res.stop_reason === 'max_tokens') throw new Error('Das Rezept war zu lang für eine Antwort.');
+  const text = (res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join('');
+  return toDish(JSON.parse(text));
+}
+
+/* ---------- Schnelles Mittagessen ---------- */
+
+export const LUNCH_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['vorschlaege'],
+  properties: {
+    vorschlaege: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'minuten', 'warum', 'zutaten', 'schritte', 'reste'],
+        properties: {
+          name: { type: 'string' }, minuten: { type: 'integer' }, warum: { type: 'string' },
+          zutaten: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['menge', 'name', 'da'], properties: { menge: { type: 'string' }, name: { type: 'string' }, da: { type: 'boolean' } } } },
+          schritte: { type: 'array', items: { type: 'string' } },
+          reste: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  },
+};
+
+export function lunchPrompt(b: Row, rules: Rules) {
+  const list = (x: unknown) => (Array.isArray(x) ? x.map(String).filter(Boolean).slice(0, 80) : []);
+  const n = Math.min(10, Math.max(1, Math.round(Number(b.personen) || 1)));
+  const min = Math.min(45, Math.max(5, Math.round(Number(b.minuten) || 15)));
+  const vorrat = list(b.vorrat); const gekauft = list(b.eingekauft); const reste = list(b.reste); const tabu = list(b.nicht_verbrauchen);
+  return [
+    `Schlag zwei bis drei schnelle, gesunde Mittagessen für ${n} ${n === 1 ? 'Person' : 'Personen'} vor, fertig in höchstens ${min} Minuten.`,
+    b.kind ? 'Ein Kind (9 oder 12 Jahre) macht das allein. Nur einfache, sichere Zubereitung: Toaster, Wasserkocher, Mikrowelle, Herd nur für Einfaches wie Nudeln oder Rührei, kein Frittieren, keine scharfen Spezialmesser.' : '',
+    b.wunsch ? `Wunsch: ${String(b.wunsch).slice(0, 200)}` : '',
+    `Ziele der Familie: ${rules.ziele} Nie verwenden: ${rules.ausschluesse.join(', ') || 'nichts'}. Vorlieben: ${rules.vorlieben}`,
+    '',
+    'Was im Haus ist:',
+    `- Vorrat: ${vorrat.join(', ') || 'keine Angabe'}`,
+    `- In den letzten Tagen eingekauft, vermutlich noch da: ${gekauft.join(', ') || 'keine Angabe'}`,
+    reste.length ? `- Muss bald weg, bitte bevorzugt verwenden: ${reste.join(', ')}` : '',
+    'Übliche Grundzutaten (Salz, Pfeffer, Öl, Gewürze, Eier, Butter, Milch) darfst du als vorhanden annehmen, aber vorsichtig.',
+    tabu.length ? `Diese Zutaten werden heute oder morgen fürs Abendessen gebraucht, nicht oder nur in kleinen Mengen verwenden: ${tabu.join(', ')}` : '',
+    b.heute_abend ? `Heute Abend gibt es: ${b.heute_abend}. Mittags bitte etwas anderes.` : '',
+    '',
+    '- Möglichst nur mit dem, was da ist. Höchstens eine Kleinigkeit, die fehlt, dann bei der Zutat "da": false.',
+    '- Eiweißreich und mit Gemüse oder Obst, wenn möglich. "warum": ein kurzer Satz, was daran gut ist.',
+    '- Mengen für genau diese Personenzahl. Schritte kurz und klar, Thermomix oder Airfryer nur, wenn es schneller geht.',
+    '- "reste": welche der Einträge aus „Muss bald weg“ verbraucht werden, genau so geschrieben wie oben, sonst leer.',
+    'Deutsch, schlicht, ohne Gedankenstriche.',
+  ].filter((x) => x !== '').join('\n');
+}
+
+export async function suggestLunch(store: Store, b: Row) {
+  const settings = await store.get('ep_settings?select=key,value&key=eq.regeln');
+  const rules = mergeRules((settings[0] || {}).value);
+  const params = { model: 'claude-haiku-5-5', max_tokens: 6000, messages: [{ role: 'user', content: lunchPrompt(b, rules) }], output_config: { format: { type: 'json_schema', schema: LUNCH_SCHEMA } } };
+  const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+  if (res.stop_reason === 'max_tokens') throw new Error('Die Antwort war zu lang.');
+  const d = JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+  const reste = Array.isArray(b.reste) ? b.reste.map(String) : [];
+  const out = (d.vorschlaege || []).filter((v: Row) => String(v.name || '').trim()).slice(0, 3).map((v: Row) => ({
+    name: String(v.name).trim().slice(0, 100), minuten: Math.max(1, Math.round(Number(v.minuten) || 15)), warum: String(v.warum || '').slice(0, 200),
+    zutaten: (v.zutaten || []).filter((z: Row) => String(z.name || '').trim()).slice(0, 20).map((z: Row) => ({ menge: String(z.menge || ''), name: String(z.name).trim(), da: z.da !== false })),
+    schritte: (v.schritte || []).map(String).filter(Boolean).slice(0, 10),
+    reste: (v.reste || []).map(String).filter((x: string) => reste.includes(x)),
+  }));
+  if (!out.length) throw new Error('Claude hatte keinen Vorschlag.');
+  return out;
+}
+
+/* ---------- Kosten pro Gericht ---------- */
+
+const COST_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['gerichte'],
+  properties: { gerichte: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['nr', 'euro'], properties: { nr: { type: 'integer' }, euro: { type: 'number' } } } } },
+};
+
+export function costPrompt(dishes: Row[], prices: string) {
+  const fmt = (g: Row) => (g.q == null || g.c === 'basis' ? `${g.n} (Grundzutat)` : `${g.q} ${g.u || ''} ${g.n}`.replace(/\s+/g, ' '));
+  return [
+    'Schätze, was die Zutaten für jedes dieser Rezepte bei Aldi Süd oder Lidl kosten.',
+    '- Gerechnet wird nur der Anteil, der wirklich verbraucht wird: 250 g von einer 500-g-Packung Quark kostet die Hälfte der Packung.',
+    '- Grundzutaten wie Salz, Pfeffer, Öl, Gewürze zusammen pauschal 0,30 € pro Rezept.',
+    '- Nimm, wo vorhanden, die Preise, die die Familie zuletzt bezahlt hat. Sonst übliche Discounter-Preise in Deutschland, Bio, wenn "Bio" im Namen steht.',
+    '- "euro": Kosten für das ganze Rezept, so wie es dasteht, auf zwei Stellen gerundet.',
+    '',
+    'Preise der Familie (aus ihren Kassenzetteln):',
+    prices.trim() || 'Noch keine Kassenzettel.',
+    '',
+    'Rezepte:',
+    ...dishes.map((d, i) => `${i + 1}. ${d.name}: ${(d.ingredients || []).map(fmt).join('; ')}`),
+  ].join('\n');
+}
+
+// Schätzt die Kosten aller Gerichte und legt sie unter ep_settings "kosten" ab: { stand, kassenzettel, gerichte: { id: euro } }.
+export async function estimateCosts(store: Store, nowMs = Date.now()) {
+  const since = addDays(berlin(nowMs).day, -180);
+  const [dishes, receipts] = await Promise.all([
+    store.get('ep_dishes?select=id,name,ingredients'),
+    store.get(`ep_receipts?select=shop,items,day&day=gte.${since}`).catch(() => []),
+  ]);
+  const list = dishes.filter((d) => (d.ingredients || []).length).slice(0, 150);
+  const out: Record<string, number> = {};
+  // In Paketen zu 40 Gerichten, damit die Antwort nicht zu lang wird.
+  for (let i = 0; i < list.length; i += 40) {
+    const part = list.slice(i, i + 40);
+    const params = { model: 'claude-haiku-5-5', max_tokens: 8000, messages: [{ role: 'user', content: costPrompt(part, priceTable(receipts, 150)) }], output_config: { format: { type: 'json_schema', schema: COST_SCHEMA } } };
+    const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+    const d = JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+    for (const g of d.gerichte || []) {
+      const dish = part[Number(g.nr) - 1];
+      const euro = Math.round(Number(g.euro) * 100) / 100;
+      if (dish && euro > 0 && euro < 500) out[dish.id] = euro;
+    }
+  }
+  const value = { stand: berlin(nowMs).day, kassenzettel: receipts.length, gerichte: out };
+  await store.upsert('ep_settings', [{ key: 'kosten', value, updated_at: new Date(nowMs).toISOString() }]);
+  return value;
+}
+
+/* ---------- Festtage planen ---------- */
+
+const ZUTAT = {
+  type: 'object', additionalProperties: false, required: ['menge', 'einheit', 'name', 'abteilung'],
+  properties: { menge: { type: 'number' }, einheit: { type: 'string' }, name: { type: 'string' }, abteilung: { type: 'string', enum: [...SHOP, 'basis'] } },
+};
+export const FEAST_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['titel', 'menue', 'mengen', 'dips', 'gerichte', 'einkauf', 'zeitplan', 'kinder', 'tipps'],
+  properties: {
+    titel: { type: 'string' },
+    menue: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['gang', 'gericht', 'beschreibung'], properties: { gang: { type: 'string' }, gericht: { type: 'string' }, beschreibung: { type: 'string' } } } },
+    mengen: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['was', 'pro_erwachsener', 'pro_kind', 'gesamt'], properties: { was: { type: 'string' }, pro_erwachsener: { type: 'string' }, pro_kind: { type: 'string' }, gesamt: { type: 'string' } } } },
+    dips: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'zutaten', 'zubereitung', 'kinder'], properties: { name: { type: 'string' }, zutaten: { type: 'array', items: ZUTAT }, zubereitung: { type: 'string' }, kinder: { type: 'boolean' } } } },
+    gerichte: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'zutaten', 'schritte'], properties: { name: { type: 'string' }, zutaten: { type: 'array', items: ZUTAT }, schritte: { type: 'array', items: { type: 'string' } } } } },
+    einkauf: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'menge', 'abteilung', 'wann', 'wofuer'], properties: { name: { type: 'string' }, menge: { type: 'string' }, abteilung: { type: 'string', enum: SHOP }, wann: { type: 'string', enum: ['vorher', 'frisch'] }, wofuer: { type: 'string' } } } },
+    zeitplan: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['wann', 'was'], properties: { wann: { type: 'string' }, was: { type: 'string' } } } },
+    kinder: { type: 'array', items: { type: 'string' } },
+    tipps: { type: 'string' },
+  },
+};
+
+export function feastPrompt(f: Row, rules: Rules) {
+  const ad = Math.max(0, Math.round(Number(f.erwachsene) || 0));
+  const ki = Math.max(0, Math.round(Number(f.kinder) || 0));
+  return [
+    `Plane ein Festessen: ${f.anlass || 'Festtag'} am ${f.datum ? fmtDay(String(f.datum)) : 'Festtag'}, für ${ad} Erwachsene und ${ki} Kinder (insgesamt ${ad + ki} Personen).`,
+    `Was es geben soll: ${String(f.wunsch || 'frei wählbar, festlich, aber machbar').slice(0, 500)}`,
+    f.besonderheiten ? `Zu beachten: ${String(f.besonderheiten).slice(0, 500)}` : '',
+    `Regeln der Familie: nie verwenden: ${rules.ausschluesse.join(', ') || 'nichts'}. Vorlieben: ${rules.vorlieben}. Ziele: ${rules.ziele}`,
+    'Eingekauft wird bei Aldi Süd und Lidl in Coburg, an Festtagen sind die Läden voll.',
+    '',
+    '- "menue": die Gänge mit kurzer Beschreibung. Bei Fondue zum Beispiel: Fondue (Fleisch, Fisch, Gemüse), Beilagen, Dips, Nachtisch, falls gewünscht.',
+    '- "mengen": die wichtigsten Mengen pro Person und gesamt, zum Beispiel Fleisch, Fisch, Brühe oder Öl, Beilagen. Kinder essen weniger als Erwachsene. Lieber etwas großzügig, ohne Berge übrig zu lassen.',
+    '- "dips": vier bis sechs Dips oder Soßen mit Zutaten für alle zusammen und kurzer Zubereitung, abwechslungsreich (klassisch, kräftig, frisch, süß-scharf). "kinder": true, wenn der Dip kindertauglich ist. Gibt es keine Dips beim Essen, Soßen oder Beilagen hier eintragen.',
+    '- "gerichte": die übrigen Rezepte (Hauptgericht, Beilagen, Nachtisch) mit Zutaten für alle Personen zusammen und klaren Schritten. Thermomix-Angaben, wo es passt.',
+    '- Zutaten: Menge als Zahl, Einheit kurz, Abteilung im Supermarkt. Grundzutaten wie Salz, Pfeffer, Öl in kleinen Mengen: Abteilung "basis", Menge 0.',
+    '- "einkauf": alles zusammengefasst in üblichen Packungsgrößen, ohne Grundzutaten. "wann": "vorher" für Haltbares, das man einige Tage vorher kaufen kann, "frisch" für Fleisch, Fisch, Salat und Kräuter (ein bis zwei Tage vorher). "wofuer" kurz, zum Beispiel "Fondue", "Knoblauch-Dip".',
+    '- "zeitplan": was wann zu tun ist, ab einigen Tagen vorher bis zum Essen, mit Tag und Uhrzeit, zum Beispiel "23.12. abends: Dips vorbereiten".',
+    '- "kinder": zwei bis vier Dinge, bei denen die Kinder (12 und 9 Jahre) mithelfen können.',
+    '- "tipps": kurze praktische Hinweise, zum Beispiel was sich vorbereiten lässt oder was mit Resten passiert.',
+    'Deutsch, schlicht und freundlich, ohne Gedankenstriche.',
+  ].filter(Boolean).join('\n');
+}
+
+export async function planFeast(store: Store, f: Row) {
+  const settings = await store.get('ep_settings?select=key,value&key=eq.regeln');
+  const rules = mergeRules((settings[0] || {}).value);
+  const params = { model: rules.modell, max_tokens: 32000, messages: [{ role: 'user', content: feastPrompt(f, rules) }], output_config: { format: { type: 'json_schema', schema: FEAST_SCHEMA } } };
+  const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+  if (res.stop_reason === 'max_tokens') throw new Error('Die Antwort war zu lang.');
+  const d = JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+  const z = (list: Row[]) => (list || []).filter((x: Row) => String(x.name || '').trim()).map((x: Row) => (x.abteilung === 'basis' || !(Number(x.menge) > 0)
+    ? [null, '', String(x.name).trim(), 'basis'] : [Number(x.menge), String(x.einheit || ''), String(x.name).trim(), String(x.abteilung)]));
+  return {
+    titel: String(d.titel || f.anlass || 'Festessen').slice(0, 120),
+    menue: (d.menue || []).slice(0, 8), mengen: (d.mengen || []).slice(0, 15),
+    dips: (d.dips || []).slice(0, 8).map((x: Row) => ({ name: String(x.name), zutaten: z(x.zutaten), zubereitung: String(x.zubereitung || ''), kinder: !!x.kinder })),
+    gerichte: (d.gerichte || []).slice(0, 8).map((x: Row) => ({ name: String(x.name), zutaten: z(x.zutaten), schritte: (x.schritte || []).map(String) })),
+    einkauf: (d.einkauf || []).slice(0, 80).map((x: Row) => ({ name: String(x.name), menge: String(x.menge || ''), abteilung: SHOP.includes(x.abteilung) ? x.abteilung : 'sonst', wann: x.wann === 'frisch' ? 'frisch' : 'vorher', wofuer: String(x.wofuer || '') })),
+    zeitplan: (d.zeitplan || []).slice(0, 20), kinder: (d.kinder || []).slice(0, 6).map(String), tipps: String(d.tipps || ''),
+    usage: res.usage || null,
+  };
+}
+
+/* ---------- Ersatz, wenn im Laden etwas fehlt ---------- */
+
+export const SUBST_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['vorschlaege', 'rezept_hinweis'],
+  properties: {
+    vorschlaege: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'menge', 'warum'],
+        properties: { name: { type: 'string' }, menge: { type: 'string' }, warum: { type: 'string' } },
+      },
+    },
+    rezept_hinweis: { type: 'string' },
+  },
+};
+
+export function substPrompt(o: { posten: string; menge: string; markt: string; gerichte: Row[]; rules: Rules }) {
+  const dishes = (o.gerichte || []).slice(0, 4).map((d: Row) => `${d.name}${d.tag ? ` (${d.tag})` : ''}: Zutaten ${(d.zutaten || []).slice(0, 25).join(', ')}`);
+  return [
+    `Eine Familie (zwei Erwachsene, zwei Kinder) steht gerade bei ${o.markt || 'Aldi Süd'} und bekommt diesen Artikel nicht: ${o.posten}${o.menge ? ` (${o.menge})` : ''}.`,
+    dishes.length ? `Er ist gedacht für:\n${dishes.join('\n')}` : 'Wofür er gedacht ist, ist nicht bekannt.',
+    '',
+    '- Schlag zwei bis drei Ersatzartikel vor, die es in einem Discounter wie Aldi Süd oder Lidl üblicherweise gibt. Der beste Vorschlag zuerst.',
+    '- "menge": wie viel davon statt der ursprünglichen Menge, kurz mit Einheit.',
+    '- "warum": ein kurzer Satz, warum das passt.',
+    `- Beachte die Regeln der Familie. Nie verwenden: ${o.rules.ausschluesse.join(', ') || 'nichts'}. Vorlieben: ${o.rules.vorlieben}`,
+    '- "rezept_hinweis": was sich am Rezept ändert, wenn man den ersten Vorschlag nimmt (Garzeit, Menge, Reihenfolge), ein bis zwei Sätze. Leer, wenn sich nichts ändert oder kein Rezept bekannt ist.',
+    'Deutsch, schlicht, ohne Gedankenstriche.',
+  ].join('\n');
+}
+
+export async function suggestSubstitute(store: Store, body: Row) {
+  const settings = await store.get('ep_settings?select=key,value&key=eq.regeln');
+  const rules = mergeRules((settings[0] || {}).value);
+  const params = {
+    model: 'claude-haiku-5-5', max_tokens: 4000,
+    messages: [{ role: 'user', content: substPrompt({
+      posten: String(body.posten || '').slice(0, 80), menge: String(body.menge || '').slice(0, 40), markt: String(body.markt || ''),
+      gerichte: Array.isArray(body.gerichte) ? body.gerichte : [], rules,
+    }) }],
+    output_config: { format: { type: 'json_schema', schema: SUBST_SCHEMA } },
+  };
+  const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+  if (res.stop_reason === 'max_tokens') throw new Error('Die Antwort war zu lang.');
+  const d = JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+  const vorschlaege = (d.vorschlaege || []).filter((v: Row) => String(v.name || '').trim()).slice(0, 3)
+    .map((v: Row) => ({ name: String(v.name).trim().slice(0, 80), menge: String(v.menge || '').slice(0, 40), warum: String(v.warum || '').slice(0, 200) }));
+  if (!vorschlaege.length) throw new Error('Claude hatte keinen Vorschlag.');
+  return { vorschlaege, rezept_hinweis: String(d.rezept_hinweis || '').slice(0, 400) };
+}
+
+/* ---------- Zutaten aus Foto (für die Einkaufsliste) ---------- */
+
+export const INGREDIENTS_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['erkannt', 'gericht', 'hinweis', 'posten'],
+  properties: {
+    erkannt: { type: 'boolean' },
+    gericht: { type: 'string' },
+    hinweis: { type: 'string' },
+    posten: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['name', 'menge', 'abteilung'],
+        properties: { name: { type: 'string' }, menge: { type: 'string' }, abteilung: { type: 'string', enum: [...SHOP, 'basis'] } },
+      },
+    },
+  },
+};
+
+export function ingredientsPrompt() {
+  return [
+    'Auf den Fotos ist eine Zutatenliste, zum Beispiel ein Rezept aus Cookidoo oder eine Einkaufsliste. Mach daraus Posten für die Einkaufsliste einer Familie mit zwei Erwachsenen und zwei Kindern.',
+    '- "erkannt": false, wenn keine Zutaten zu erkennen sind.',
+    '- "gericht": Name des Rezepts, wenn es eins ist, sonst leer.',
+    '- Ist es ein Rezept für eine andere Personenzahl als 4, rechne die Mengen auf 4 Portionen um und schreib das in "hinweis".',
+    '- "name" ohne Menge, gut lesbar. "menge" kurz mit Einheit, etwa "250 g", "2 Stück", "1 Dose", sonst leer.',
+    '- Gleiche Zutaten aus mehreren Rezeptteilen zusammenfassen (etwa 1 Zwiebel für die Soße und 1 für das Gemüse ergibt 2 Zwiebeln).',
+    '- "abteilung": obst (Obst, Gemüse, Kräuter), brot, fleisch (Fleisch und Fisch), kuehl (Milchprodukte, Eier, Kühlregal), tk (Tiefkühl), vorrat (Nudeln, Reis, Konserven, Mehl), haushalt, sonst. "basis" für Dinge, die man meist im Haus hat: Salz, Pfeffer, Öl, Zucker, Wasser, Gewürze, Brühe.',
+    '- "hinweis": kurz, was unsicher oder umgerechnet war, sonst leer.',
+    'Erfinde keine Zutaten dazu.',
+  ].join('\n');
+}
+
+export function toItems(d: Row) {
+  if (!d.erkannt) throw new Error('Auf den Fotos waren keine Zutaten zu erkennen.');
+  const posten = (d.posten || []).filter((p: Row) => String(p.name || '').trim()).map((p: Row) => ({
+    name: String(p.name).trim().slice(0, 80), menge: String(p.menge || '').trim().slice(0, 40),
+    abteilung: [...SHOP, 'basis'].includes(p.abteilung) ? p.abteilung : 'sonst',
+  }));
+  if (!posten.length) throw new Error('Auf den Fotos waren keine Zutaten zu erkennen.');
+  return { gericht: String(d.gericht || '').trim().slice(0, 120), hinweis: String(d.hinweis || '').slice(0, 300), posten };
+}
+
+async function askPhotos(store: Store, photos: Photo[], prompt: string, schema: Row, maxTokens: number) {
+  checkPhotos(photos);
+  const settings = await store.get('ep_settings?select=key,value&key=eq.regeln');
+  const rules = mergeRules((settings[0] || {}).value);
+  const params = {
+    model: rules.modell, max_tokens: maxTokens,
+    messages: [{ role: 'user', content: [
+      ...photos.map((p) => ({ type: 'image', source: { type: 'base64', media_type: p.media, data: p.data } })),
+      { type: 'text', text: prompt },
+    ] }],
+    output_config: { format: { type: 'json_schema', schema } },
+  };
+  const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+  if (res.stop_reason === 'max_tokens') throw new Error('Die Antwort war zu lang.');
+  return JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+}
+
+export async function readIngredients(store: Store, photos: Photo[]) {
+  return toItems(await askPhotos(store, photos, ingredientsPrompt(), INGREDIENTS_SCHEMA, 16000));
+}
+
+type Store = ReturnType<typeof db>;
+const nowIso = (ms = Date.now()) => new Date(ms).toISOString();
+
+async function loadPlannerState(store: Store) {
+  const settings = await store.get('ep_settings?select=*');
+  const get = (k: string) => (settings.find((x) => x.key === k) || {}).value;
+  const urlaub = get('urlaub');
+  const wuensche = get('wuensche');
+  const reste = get('reste');
+  const packs = get('packungen');
+  const fmt = (q: number, u: string) => (u === 'g' && q >= 1000 ? `${q / 1000} kg` : u === 'ml' && q >= 1000 ? `${q / 1000} l` : `${q} ${u}`);
+  return {
+    packungen: packs && typeof packs === 'object' ? Object.values(packs as Record<string, Row>).filter((p) => p && p.name && Number(p.q) > 0)
+      .map((p) => `${p.name}: ${fmt(Number(p.q), String(p.u || ''))}${p.markt === 'lidl' ? ' (Lidl)' : ''}`).slice(0, 80) : [],
+    reste: Array.isArray(reste) ? (reste as Row[]).map((x) => String(x.text || '').trim()).filter(Boolean).slice(0, 20) : [],
+    rules: mergeRules(get('regeln')), ctx: get('ki_kontext') || null, wish: String(get('wunsch') || ''),
+    urlaub: Array.isArray(urlaub) ? urlaub as Row[] : [], wuensche: Array.isArray(wuensche) ? wuensche as Row[] : [],
+  };
+}
+
+/* ---------- Preisgedächtnis und Wünsche für den Planer ---------- */
+
+const median = (xs: number[]) => { const s = xs.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const eur = (x: number) => `${(Math.round(x * 100) / 100).toFixed(2).replace('.', ',')} €`;
+
+// Kompakte Preisliste aus den Kassenzetteln: pro Artikel und Markt der übliche Preis. Gleiche Regeln wie js/haushalt.js (priceBook).
+export function priceTable(receipts: Row[], max = 120) {
+  const book = new Map<string, { name: string; shops: Map<string, number[]>; n: number }>();
+  for (const r of receipts) {
+    for (const p of (r.items || [])) {
+      const price = Number(p.preis);
+      if (!(price > 0) || p.kategorie === 'Pfand und Rabatt') continue;
+      const name = String(p.name || p.text || '').trim();
+      const key = name.toLowerCase();
+      if (!key) continue;
+      const e = book.get(key) || { name, shops: new Map(), n: 0 };
+      const shop = String(r.shop || 'anderer Markt');
+      e.shops.set(shop, [...(e.shops.get(shop) || []), price]);
+      e.n += 1;
+      book.set(key, e);
+    }
+  }
+  return [...book.values()].sort((a, b) => b.n - a.n).slice(0, max)
+    .map((e) => `${e.name}: ${[...e.shops.entries()].map(([shop, xs]) => `${shop} ${eur(median(xs))}${xs.length > 1 ? ` (${xs.length}x)` : ''}`).join(', ')}`).join('\n');
+}
+
+export function wishesFor(wuensche: Row[], persons: Row[], week: string) {
+  const name = (id: string) => (persons.find((p) => p.id === id) || {}).name || 'ein Kind';
+  const wishes = wuensche.filter((w) => w.week === week && w.status !== 'nicht' && String(w.text || '').trim())
+    .map((w) => ({ kind: name(w.person_id), wunsch: String(w.text).trim().slice(0, 120) }));
+  const last = wuensche.filter((w) => w.status === 'erfuellt').sort((a, b) => (a.week < b.week ? 1 : -1))[0];
+  return { wishes, lastWish: last ? name(last.person_id) : '' };
+}
+
+// Startet einen neuen Entwurf. Ein laufender Entwurf für dieselbe Woche wird ersetzt.
+export async function startRun(store: Store, week: string, trigger: string, wishOverride?: string, nowMs = Date.now()) {
+  const { rules, wish } = await loadPlannerState(store);
+  const active = await store.get(`ep_ai_runs?select=*&week_start=eq.${week}&status=in.(angebote,plan)`);
+  for (const r of active) await store.upsert('ep_ai_runs', [{ ...r, status: 'ersetzt', updated_at: nowIso(nowMs) }]);
+  const id = `ki-${week}-${Date.now().toString(36)}`;
+  const messages = [{ role: 'user', content: offersPrompt(week, rules.lidl !== false) }];
+  const batch = await submit(`${id}-a`, offersParams(rules, messages));
+  const row = {
+    id, week_start: week, status: 'angebote', batch_id: batch, messages, offers: '', draft: null, warnings: [], error: '',
+    attempts: 0, trigger, wish: wishOverride != null ? wishOverride : wish, model: rules.modell, created_at: nowIso(nowMs), updated_at: nowIso(nowMs),
+  };
+  await store.upsert('ep_ai_runs', [row]);
+  // Der Wunsch gilt für diesen einen Entwurf.
+  if (wish) await store.upsert('ep_settings', [{ key: 'wunsch', value: '', updated_at: nowIso(nowMs) }]);
+  return row;
+}
+
+// Ein Schritt für alle laufenden Entwürfe. Liefert Push-Nachrichten für fertige oder gescheiterte Entwürfe.
+export async function stepPlanner(store: Store, nowMs: number, adults: string[]): Promise<Due[]> {
+  const out: Due[] = [];
+  if (!env('ANTHROPIC_API_KEY')) return out;
+  const { rules, ctx, urlaub, wuensche, reste, packungen } = await loadPlannerState(store);
+  // Wünsche und Preise werden erst geladen, wenn ein Plan geschrieben wird.
+  let extraCache: { persons: Row[]; prices: string } | null = null;
+  const extraFor = async (run: Row): Promise<PlanExtra> => {
+    if (!extraCache) {
+      const since = addDays(berlin(nowMs).day, -120);
+      const [persons, receipts] = await Promise.all([
+        store.get('ep_persons?select=id,name,adult'),
+        store.get(`ep_receipts?select=shop,items,day&day=gte.${since}`).catch(() => []),
+      ]);
+      extraCache = { persons, prices: priceTable(receipts) };
+    }
+    return { ...wishesFor(wuensche, extraCache.persons, String(run.week_start).slice(0, 10)), prices: extraCache.prices, reste, packungen };
+  };
+  const { day, min, wd } = berlin(nowMs);
+
+  // Automatischer Start am eingestellten Tag ab der eingestellten Uhrzeit für die nächste Woche.
+  const start = /^\d{1,2}:\d{2}$/.test(String(rules.zeit)) ? Number(String(rules.zeit).split(':')[0]) * 60 + Number(String(rules.zeit).split(':')[1]) : 12 * 60;
+  // Startet der Großeinkauf wegen eines Feiertags früher, kommt der Entwurf zwei Tage vor dem neuen Einkaufstag.
+  const autoWeek = (() => {
+    for (const next of [addDays(mondayOf(day), 7), addDays(mondayOf(day), 14)]) {
+      const g = shopDays(next).gross.day;
+      let from = addDays(next, -7 + Number(rules.tag));
+      if (from > g) from = addDays(g, -2);
+      if (day === from ? min >= start : day > from && day < g) return next;
+    }
+    return null;
+  })();
+  if (rules.auto && autoWeek) {
+    const next = autoWeek;
+    const any = await store.get(`ep_ai_runs?select=id&week_start=eq.${next}&limit=1`);
+    // Ist die Woche schon geplant (zum Beispiel von Hand), entsteht kein automatischer Entwurf.
+    const planned = any.length ? [] : await store.get(`ep_plan?select=day&day=gte.${next}&day=lte.${addDays(next, 6)}&dish_id=not.is.null&limit=1`);
+    // Ist die ganze Woche Urlaub, gibt es nichts zu planen.
+    const allAway = Array.from({ length: 7 }, (_, n) => addDays(next, n)).every((x) => holidayOn(urlaub, x));
+    if (!allAway && !any.length && !planned.length) await startRun(store, next, 'auto', undefined, nowMs);
+  }
+
+  // Liegt der Entwurf für die nächste Woche noch ungeprüft da, freitags um 19 Uhr und samstags ab 7:30 Uhr erinnern.
+  // Ohne Freigabe gibt es keine Einkaufsliste für den Großeinkauf am Samstag.
+  const remindWeek = [addDays(mondayOf(day), 7), addDays(mondayOf(day), 14)].find((w) => {
+    const g = shopDays(w).gross.day;
+    return (day === addDays(g, -1) && min >= 19 * 60) || (day === g && min >= 7 * 60 + 30 && min < 14 * 60);
+  });
+  if (remindWeek) {
+    const next = remindWeek;
+    const gday = shopDays(next).gross.day;
+    const open = await store.get(`ep_ai_runs?select=id,week_start&week_start=eq.${next}&status=eq.fertig`).catch(() => []);
+    for (const run of open) {
+      out.push({
+        key: `entwurf-offen:${run.id}:${day}`, to: adults, ttl: 6 * 3600,
+        msg: { title: `Wochenplan KW ${isoWeekNo(run.week_start)} wartet auf Freigabe`, body: day === gday ? 'Ohne Freigabe gibt es noch keine Einkaufsliste für den Großeinkauf heute.' : `Ohne Freigabe gibt es noch keine Einkaufsliste für den Großeinkauf am ${shopDays(next).gross.wd}.`, tag: 'entwurf', url: './#gerichte' },
+      });
+    }
+  }
+
+  const running = await store.get('ep_ai_runs?select=*&status=in.(angebote,plan)');
+  for (const run of running) {
+    const kw = isoWeekNo(run.week_start);
+    const fail = async (msg: string) => {
+      await store.upsert('ep_ai_runs', [{ ...run, status: 'fehler', error: msg, updated_at: nowIso(nowMs) }]);
+      out.push({ key: `entwurf:${run.id}:fehler`, to: adults, ttl: 12 * 3600, msg: { title: `Wochenplan KW ${kw} hat nicht geklappt`, body: `${msg} Ihr könnt „Woche vorschlagen“ nutzen oder es später noch einmal versuchen.`, tag: 'entwurf', url: './#gerichte' } });
+    };
+    try {
+      if (Date.parse(run.created_at) < nowMs - 26 * 3600 * 1000) { await fail('Claude hat nicht rechtzeitig geantwortet.'); continue; }
+      const result = await fetchResult(run.batch_id);
+      if (!result) continue;
+
+      if (run.status === 'angebote') {
+        let offers = '';
+        const warnings: string[] = [];
+        if (result.type === 'succeeded') {
+          const msg = result.message;
+          // Lange Suchen pausiert die Schnittstelle. Dann mit dem bisherigen Stand weitermachen, höchstens dreimal.
+          if (msg.stop_reason === 'pause_turn' && (run.attempts || 0) < 3) {
+            const messages = [...run.messages, { role: 'assistant', content: msg.content }];
+            const batch = await submit(`${run.id}-a${(run.attempts || 0) + 1}`, offersParams(rules, messages));
+            await store.upsert('ep_ai_runs', [{ ...run, messages, batch_id: batch, attempts: (run.attempts || 0) + 1, updated_at: nowIso(nowMs) }]);
+            continue;
+          }
+          offers = textOf(msg).trim();
+          if (!offers || /keine angebote gefunden/i.test(offers)) { offers = ''; warnings.push('Für diese Woche hat Claude auf aldi-sued.de noch keine Angebote gefunden. Der Plan kommt ohne Angebote aus.'); }
+        } else {
+          warnings.push('Die Suche nach Angeboten hat nicht geklappt. Der Plan kommt ohne Angebote aus.');
+        }
+        const prompt = planPrompt({ rules, ctx, offers, week: run.week_start, wish: run.wish || '', urlaub, extra: await extraFor(run) });
+        const batch = await submit(`${run.id}-p0`, planParams(rules, prompt));
+        await store.upsert('ep_ai_runs', [{ ...run, status: 'plan', offers: offers.slice(0, 6000), batch_id: batch, attempts: 0, warnings, updated_at: nowIso(nowMs) }]);
+        continue;
+      }
+
+      // Schritt 2: der Plan
+      if (result.type !== 'succeeded') { await fail(`Claude konnte den Plan nicht schreiben (${(result.error && (result.error.message || result.error.type)) || result.type}).`); continue; }
+      const msg = result.message;
+      if (msg.stop_reason === 'max_tokens') {
+        // Einmal mit mehr Platz neu anfragen, dann aufgeben.
+        if ((run.attempts || 0) < 1) {
+          const prompt = planPrompt({ rules, ctx, offers: run.offers || '', week: run.week_start, wish: run.wish || '', urlaub, extra: await extraFor(run) });
+          const batch = await submit(`${run.id}-p1`, planParams(rules, prompt, PLAN_TOKENS_RETRY));
+          await store.upsert('ep_ai_runs', [{ ...run, batch_id: batch, attempts: 1, updated_at: nowIso(nowMs) }]);
+          continue;
+        }
+        await fail('Die Antwort war zu lang und wurde abgeschnitten.');
+        continue;
+      }
+      if (msg.stop_reason === 'refusal') { await fail('Claude hat die Anfrage abgelehnt.'); continue; }
+      let draft: Row;
+      try { draft = JSON.parse(textOf(msg)); } catch (e) { await fail('Die Antwort war kein lesbarer Plan.'); continue; }
+      const check = checkDraft(draft, { rules, ctx, week: run.week_start, urlaub });
+      if (check.errors.length && (run.attempts || 0) < 1) {
+        const prompt = planPrompt({ rules, ctx, offers: run.offers || '', week: run.week_start, wish: run.wish || '', problems: check.errors, urlaub, extra: await extraFor(run) });
+        const batch = await submit(`${run.id}-p1`, planParams(rules, prompt));
+        await store.upsert('ep_ai_runs', [{ ...run, batch_id: batch, attempts: 1, updated_at: nowIso(nowMs) }]);
+        continue;
+      }
+      if (check.errors.length) { await fail(`Auch der zweite Entwurf hatte Fehler: ${check.errors.slice(0, 2).join(' ')}`); continue; }
+      const imp = toImport(draft, run.week_start, rules.lidl !== false);
+      const warnings = [...(run.warnings || []), ...check.warnings];
+      await store.upsert('ep_ai_runs', [{
+        ...run, status: 'fertig', updated_at: nowIso(nowMs), warnings,
+        draft: {
+          ...imp, hinweise: String(draft.hinweise || ''), angebote: draft.angebote_genutzt || [], neu: imp.dishes.map((g: Row) => g.name),
+          wunsch: String(draft.wunsch_erfuellt || ''), kosten: Number(draft.kosten) > 0 ? Math.round(Number(draft.kosten)) : null,
+        },
+        usage: msg.usage || null,
+      }]);
+      const nNew = imp.dishes.length;
+      const nOff = (draft.angebote_genutzt || []).length;
+      out.push({
+        key: `entwurf:${run.id}:fertig`, to: adults, ttl: 24 * 3600,
+        msg: {
+          title: `Wochenplan für KW ${kw} ist da`,
+          body: `${nNew === 1 ? '1 neues Gericht' : `${nNew} neue Gerichte`}${nOff ? `, ${nOff} Angebote berücksichtigt` : ''}. Bitte ansehen und freigeben.`,
+          tag: 'entwurf', url: `./?entwurf=${run.id}#woche`,
+        },
+      });
+    } catch (e) {
+      // Netz- oder Schnittstellenfehler: beim nächsten Lauf noch einmal versuchen, nur Dauerfehler beenden den Entwurf.
+      const text = String(e instanceof Error ? e.message : e);
+      console.warn('Planer', run.id, text);
+      if (/ 4\d\d: /.test(text) && !/ 429: /.test(text)) await fail(text);
+    }
+  }
+  return out;
+}
+
+/* ---------- Datenbank über die REST-Schnittstelle ---------- */
+
+function env(name: string): string {
+  // deno-lint-ignore no-explicit-any
+  const g = globalThis as any;
+  return (g.Deno ? g.Deno.env.get(name) : g.process?.env?.[name]) || '';
+}
+
+function db() {
+  const url = env('SUPABASE_URL');
+  const key = env('SERVICE_KEY') || env('SUPABASE_SERVICE_ROLE_KEY');
+  const headers: Record<string, string> = { apikey: key, 'Content-Type': 'application/json' };
+  if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`;
+  const call = async (path: string, init: RequestInit = {}) => {
+    const res = await fetch(`${url}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init.headers || {}) } });
+    if (!res.ok) throw new Error(`${path.split('?')[0]}: ${res.status} ${await res.text()}`);
+    // Schreibzugriffe mit „return=minimal“ antworten ohne Inhalt (204 oder 201). Dann gibt es nichts zu lesen.
+    const text = await res.text();
+    return text.trim() ? JSON.parse(text) : null;
+  };
+  return {
+    get: (path: string): Promise<Row[]> => call(path),
+    // Trägt die Schlüssel ein und liefert nur die, die neu waren. So geht keine Nachricht doppelt raus.
+    claim: async (keys: string[]): Promise<Set<string>> => {
+      if (!keys.length) return new Set();
+      const rows = await call('ep_push_log?on_conflict=key', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify(keys.map((key) => ({ key }))),
+      }) as Row[];
+      return new Set(rows.map((r) => r.key));
+    },
+    upsert: (table: string, rows: Row[]) => call(`${table}?on_conflict=${table === 'ep_settings' ? 'key' : 'id'}`, {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows),
+    }),
+    // Zustellung pro Gerät festhalten, damit die App zeigen kann, ob Nachrichten ankommen.
+    markSub: (endpoint: string, fields: Row) => call(`ep_push_subs?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(fields) }),
+    // Eine gemerkte Nachricht wieder freigeben, damit der nächste Lauf sie erneut versucht.
+    release: (key: string) => call(`ep_push_log?key=eq.${encodeURIComponent(key)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    dropSub: (endpoint: string) => call(`ep_push_subs?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    // Einkaufslisten vergangener Wochen, deren Montag vor dem Stichtag liegt.
+    dropShopping: (beforeDay: string) => call(`ep_shopping?week_start=lt.${beforeDay}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+    cleanup: (beforeIso: string) => call(`ep_push_log?sent_at=lt.${encodeURIComponent(beforeIso)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }),
+  };
+}
+
+/* ---------- Datensicherung ---------- */
+
+// Montag der Woche, die acht Wochen vor dem angegebenen Tag liegt. Ältere Listen werden gelöscht.
+export function oldListCut(day: string) {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 56 - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+// Alles, was die Familie eingetragen hat. Push-Anmeldungen und das Sendeprotokoll gehören nicht dazu.
+export const BACKUP_TABLES: [string, string][] = [
+  ['ep_persons', '*'], ['ep_dishes', '*'], ['ep_plan', '*'], ['ep_ratings', '*'], ['ep_lunch_ratings', '*'], ['ep_week_hearts', '*'],
+  ['ep_shopping', '*'], ['ep_tasks', '*'], ['ep_task_log', '*'], ['ep_events', '*'], ['ep_attendance', '*'], ['ep_pantry', '*'],
+  ['ep_staples', '*'], ['ep_settings', '*'], ['ep_receipts', '*'], ['ep_abfuhr', '*'],
+  // Ohne den langen Verlauf der Angebotssuche.
+  ['ep_ai_runs', 'id,week_start,status,offers,draft,warnings,error,trigger,wish,model,created_at,updated_at,decided_at,decided_by'],
+];
+export const BACKUP_BUCKET = 'sicherung';
+export const BACKUP_KEEP = 8;
+
+function storageHeaders(): Record<string, string> {
+  const key = env('SERVICE_KEY') || env('SUPABASE_SERVICE_ROLE_KEY');
+  const h: Record<string, string> = { apikey: key };
+  if (key.startsWith('eyJ')) h.Authorization = `Bearer ${key}`;
+  return h;
+}
+
+export async function makeBackup(store: Store, nowMs = Date.now()) {
+  const data: Record<string, Row[]> = {};
+  const counts: Record<string, number> = {};
+  for (const [t, cols] of BACKUP_TABLES) {
+    try { data[t] = await store.get(`${t}?select=${cols}`); } catch (e) { data[t] = []; }
+    counts[t] = data[t].length;
+  }
+  const { day, min } = berlin(nowMs);
+  const name = `familienplan-${day}-${String(Math.floor(min / 60)).padStart(2, '0')}${String(min % 60).padStart(2, '0')}.json`;
+  const body = JSON.stringify({ app: 'Familienplan', version: 1, erstellt: new Date(nowMs).toISOString(), anzahl: counts, daten: data });
+  const base = `${env('SUPABASE_URL')}/storage/v1/object`;
+  const up = await fetch(`${base}/${BACKUP_BUCKET}/${name}`, { method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'application/json', 'x-upsert': 'true' }, body });
+  if (!up.ok) throw new Error(`Sicherung: ${up.status} ${(await up.text()).slice(0, 200)}. Ist schema.sql neu ausgeführt?`);
+  await up.body?.cancel();
+  // Nur die letzten Sicherungen behalten.
+  const list = await fetch(`${base}/list/${BACKUP_BUCKET}`, {
+    method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix: '', limit: 200, sortBy: { column: 'name', order: 'desc' } }),
+  });
+  if (list.ok) {
+    const files = ((await list.json()) as Row[]).map((f) => String(f.name)).filter((n) => n.startsWith('familienplan-')).sort().reverse();
+    const old = files.slice(BACKUP_KEEP);
+    if (old.length) {
+      const del = await fetch(`${base}/${BACKUP_BUCKET}`, { method: 'DELETE', headers: { ...storageHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: old }) });
+      await del.body?.cancel();
+    }
+  } else await list.body?.cancel();
+  return { name, bytes: body.length, anzahl: counts };
+}
+
+function vapidFromEnv(): Vapid {
+  const v = { publicKey: env('VAPID_PUBLIC_KEY'), privateKey: env('VAPID_PRIVATE_KEY'), subject: env('VAPID_SUBJECT') || 'mailto:familienplan@example.com' };
+  if (!v.publicKey || !v.privateKey) throw new Error('VAPID_PUBLIC_KEY oder VAPID_PRIVATE_KEY fehlt in den Secrets der Funktion.');
+  return v;
+}
+
+async function deliver(store: ReturnType<typeof db>, subs: Row[], to: string[], msg: Message, ttl: number, vapid: Vapid) {
+  let sent = 0;
+  let transient = false;
+  const now = new Date().toISOString();
+  for (const s of subs.filter((x) => to.includes(x.person_id))) {
+    try {
+      const status = await sendPush(s as Sub, msg, vapid, ttl);
+      if (status === 404 || status === 410) { await store.dropSub(s.endpoint); continue; }
+      if (status < 300) {
+        sent++;
+        await noteSub(store, s, { last_ok_at: now, last_status: status, last_error: '' }, { at: now, title: msg.title, ok: true });
+      } else {
+        // 429 und 5xx sind vorübergehend: Die Nachricht wird im nächsten Lauf noch einmal versucht.
+        const again = status === 429 || status >= 500;
+        if (again) transient = true;
+        console.warn('Push abgelehnt', status, new URL(s.endpoint).host);
+        await noteSub(store, s, { last_status: status, last_error: `abgelehnt, Status ${status} am ${now}` }, { at: now, title: msg.title, ok: false, why: `abgelehnt, Status ${status}`, again });
+      }
+    } catch (e) {
+      transient = true;
+      console.warn('Push fehlgeschlagen', String(e));
+      await noteSub(store, s, { last_error: `nicht erreichbar am ${now}: ${String(e).slice(0, 120)}` }, { at: now, title: msg.title, ok: false, why: 'Push-Dienst nicht erreichbar', again: true });
+    }
+  }
+  return { sent, transient };
+}
+
+// Zustellung an ein Gerät festhalten: letzter Stand und die letzten zehn Nachrichten.
+// Fehlt die Spalte history noch (schema.sql nicht eingespielt), wird nur der letzte Stand gespeichert.
+async function noteSub(store: ReturnType<typeof db>, s: Row, fields: Row, entry: Row) {
+  s.history = [entry, ...(Array.isArray(s.history) ? s.history : [])].slice(0, 10);
+  await store.markSub(s.endpoint, { ...fields, history: s.history })
+    .catch(() => store.markSub(s.endpoint, fields))
+    .catch(() => {});
+}
+
+// Fällige Nachrichten verschicken: erst merken (damit nichts doppelt kommt), dann zustellen.
+// Scheitert die Zustellung nur vorübergehend, wird die Nachricht wieder freigegeben.
+export async function sendDue(store: ReturnType<typeof db>, subs: Row[], due: Due[], vapid: Vapid) {
+  if (!due.length) return { fresh: 0, sent: 0 };
+  const fresh = await store.claim(due.map((d) => d.key));
+  // Pro Person und Kennzeichen nur die erste Nachricht eines Laufs. Die späteren würden sie ohnehin ersetzen.
+  const seen = new Set<string>();
+  let sent = 0;
+  for (const d of due.filter((x) => fresh.has(x.key))) {
+    const to = d.to.filter((id) => !seen.has(`${d.msg.tag}|${id}`));
+    if (!to.length) continue;
+    to.forEach((id) => seen.add(`${d.msg.tag}|${id}`));
+    const r = await deliver(store, subs, to, d.msg, d.ttl, vapid);
+    sent += r.sent;
+    if (!r.sent && r.transient) { await store.release(d.key).catch(() => {}); continue; }
+    if (d.extraKeys && d.extraKeys.length) await store.claim(d.extraKeys);
+  }
+  return { fresh: fresh.size, sent };
+}
+
+async function runSchedule(nowMs = Date.now()) {
+  const store = db();
+  const vapid = vapidFromEnv();
+  const since = new Date(nowMs - 3 * DAY).toISOString();
+  const today = berlin(nowMs).day;
+  const [persons, tasks, log, abfuhr, hearts, plan, subs, shopping, dishes, ratings, urlaubRow, added] = await Promise.all([
+    store.get('ep_persons?select=*'),
+    store.get('ep_tasks?select=*'),
+    store.get(`ep_task_log?select=*&or=(created_at.gte.${since},decided_at.gte.${since},day.gte.${mondayOf(today)})`),
+    store.get(`ep_abfuhr?select=*&day=gte.${today}&day=lte.${addDays(today, 2)}`),
+    store.get(`ep_week_hearts?select=*&week_start=eq.${mondayOf(today)}`),
+    store.get(`ep_plan?select=*&day=gte.${mondayOf(today)}&day=lte.${addDays(mondayOf(today), 7)}`),
+    store.get('ep_push_subs?select=*'),
+    store.get(`ep_shopping?select=*&due=eq.${today}&checked=is.false`).catch(() => []),
+    store.get('ep_dishes?select=*'),
+    store.get(`ep_ratings?select=day,person_id&day=eq.${today}`),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben)').catch(() => []),
+    store.get(`ep_shopping?select=id,label,added_by,created_at,checked&added_by=not.is.null&created_at=gte.${encodeURIComponent(new Date(nowMs - 12 * 3600000).toISOString())}`).catch(() => []),
+  ]);
+  const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
+  const urlaub = Array.isArray(setting('urlaub')) ? setting('urlaub') : [];
+  const grundZuerst = (setting('aufgaben') || {}).grund_zuerst !== false;
+  const erinnerung = (setting('aufgaben') || {}).erinnerung;
+  const due = dueMessages({ persons, tasks, log, abfuhr, hearts, plan, shopping, dishes, ratings, urlaub, grundZuerst, added, erinnerung }, nowMs);
+  // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.
+  const first = await sendDue(store, subs, due, vapid);
+  // Datensicherung jeden Sonntag ab 3 Uhr, einmal pro Woche.
+  {
+    const b = berlin(nowMs);
+    if (b.wd === 6 && b.min >= 180) {
+      try {
+        const fresh = await store.claim([`sicherung:${b.day}`]);
+        if (fresh.size) {
+          await makeBackup(store, nowMs);
+          // Erst nach geglückter Sicherung: Einkaufslisten, die älter als acht Wochen sind, löschen.
+          await store.dropShopping(oldListCut(b.day));
+        }
+      } catch (e) { console.warn('Sicherung', String(e)); }
+      // Danach die Kosten pro Gericht mit den Preisen der Woche auffrischen.
+      if (b.min >= 200 && env('ANTHROPIC_API_KEY')) {
+        try {
+          const fresh = await store.claim([`kosten:${b.day}`]);
+          if (fresh.size) await estimateCosts(store, nowMs);
+        } catch (e) { console.warn('Kosten', String(e)); }
+      }
+    }
+  }
+  // Wochenplan mit Claude: eigener Fehlerbereich, damit Probleme dort die Erinnerungen nicht aufhalten.
+  let later: Due[] = [];
+  try {
+    later = await stepPlanner(store, nowMs, persons.filter((p) => p.adult).map((p) => p.id));
+  } catch (e) { console.warn('Planer', String(e)); }
+  const second = await sendDue(store, subs, later, vapid);
+  await store.cleanup(new Date(nowMs - 60 * DAY).toISOString());
+  return { due: due.length + later.length, new: first.fresh + second.fresh, sent: first.sent + second.sent, devices: subs.length };
+}
+
+// Testnachricht an das Gerät, das die App gerade benutzt. Nur für angemeldete Familienmitglieder.
+async function runTest(req: Request) {
+  const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  const check = await fetch(`${env('SUPABASE_URL')}/auth/v1/user`, {
+    headers: { apikey: env('SERVICE_KEY') || env('SUPABASE_ANON_KEY') || env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${token}` },
+  });
+  await check.body?.cancel();
+  if (!token || !check.ok) return { status: 401, body: { error: 'Nicht angemeldet.' } };
+  const body = await req.json().catch(() => ({}));
+  usageKind = String(body.action || 'sonstiges');
+  // Neuer Wochenplan-Entwurf auf Knopfdruck aus der App.
+  if (body.action === 'entwurf') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY. Die Anleitung steht in der README unter „Wochenplan mit Claude“.' } };
+    const week = /^\d{4}-\d{2}-\d{2}$/.test(String(body.week || '')) ? mondayOf(String(body.week)) : addDays(mondayOf(berlin(Date.now()).day), 7);
+    const run = await startRun(db(), week, 'hand', typeof body.wish === 'string' ? body.wish : undefined);
+    return { status: 200, body: { id: run.id, week } };
+  }
+  // Haushaltsbuch: Kassenzettel-Foto auslesen. Gespeichert wird erst in der App, nach dem Prüfen.
+  // Schnelles Mittagessen aus dem, was im Haus ist.
+  if (body.action === 'mittag') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try { return { status: 200, body: { mittag: await suggestLunch(db(), body.mittag || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Kosten pro Gericht neu schätzen.
+  if (body.action === 'kosten') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try { return { status: 200, body: { kosten: await estimateCosts(db()) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Festtag planen: dauert je nach Umfang bis zu einer Minute.
+  if (body.action === 'fest') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Ersatz für einen Artikel, den es im Laden nicht gab.
+  if (body.action === 'ersatz') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try { return { status: 200, body: { ersatz: await suggestSubstitute(db(), body) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Datensicherung auf Knopfdruck.
+  if (body.action === 'sicherung') {
+    try { return { status: 200, body: await makeBackup(db()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Rezept aus Foto: das Gericht kommt zur Prüfung zurück in die App.
+  if (body.action === 'kassenzettel' || body.action === 'rezept' || body.action === 'zutaten') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try {
+      const photos: Photo[] = (Array.isArray(body.photos) ? body.photos : [{ data: body.image, media: body.media }])
+        .map((p: Row) => ({ data: String((p && p.data) || ''), media: String((p && p.media) || 'image/jpeg') }));
+      if (body.action === 'zutaten') return { status: 200, body: { zutaten: await readIngredients(db(), photos) } };
+      if (body.action === 'rezept') return { status: 200, body: { rezept: await readRecipe(db(), photos) } };
+      const beleg = await readReceipt(db(), photos);
+      return { status: 200, body: { beleg } };
+    } catch (e) {
+      return { status: 502, body: { error: String((e as Error).message || e) } };
+    }
+  }
+  const { endpoint } = body;
+  const store = db();
+  const subs = await store.get(`ep_push_subs?select=*&endpoint=eq.${encodeURIComponent(endpoint || '')}`);
+  if (!subs.length) return { status: 404, body: { error: 'Dieses Gerät ist noch nicht angemeldet.' } };
+  const status = await sendPush(subs[0] as Sub, { title: 'Familienplan', body: 'Testnachricht: Benachrichtigungen funktionieren auf diesem Gerät.', tag: 'test', url: './' }, vapidFromEnv(), 600);
+  const at = new Date().toISOString();
+  if (status === 404 || status === 410) {
+    await store.dropSub(subs[0].endpoint);
+    return { status: 502, body: { pushStatus: status, error: 'Der Push-Dienst kennt dieses Gerät nicht mehr. Bitte Benachrichtigungen aus- und wieder einschalten.' } };
+  }
+  await noteSub(store, subs[0], status < 300 ? { last_ok_at: at, last_status: status, last_error: '' } : { last_status: status, last_error: `abgelehnt, Status ${status} am ${at}` },
+    status < 300 ? { at, title: 'Testnachricht', ok: true } : { at, title: 'Testnachricht', ok: false, why: `abgelehnt, Status ${status}` });
+  return { status: status < 300 ? 200 : 502, body: { pushStatus: status, ...(status < 300 ? {} : { error: `Der Push-Dienst hat die Nachricht abgelehnt (Status ${status}).` }) } };
+}
+
+/* ---------- Einkaufsliste per Siri-Kurzbefehl ---------- */
+
+// "Milch, Brot und Eier" wird zu drei Einträgen.
+export function splitSpoken(text: string): string[] {
+  return String(text || '').split(/\s*(?:,|;|\n|\bund\b|\bsowie\b)\s*/i)
+    .map((x) => x.trim().replace(/[.!?]+$/, '')).filter((x) => x.length > 1).slice(0, 12)
+    .map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+}
+
+// Diktat ohne Kommas ("Milch Butter Käse"): Claude zerlegt es in Posten. Zusammengehöriges bleibt zusammen.
+const SPLIT_SCHEMA = { type: 'object', additionalProperties: false, required: ['posten'], properties: { posten: { type: 'array', items: { type: 'string' } } } };
+export function splitParams(text: string) {
+  return {
+    model: 'claude-haiku-5-5', max_tokens: 2000,
+    messages: [{ role: 'user', content: [
+      'Das ist eine diktierte Einkaufsliste ohne Satzzeichen. Zerlege sie in einzelne Posten.',
+      'Wörter, die zusammen einen Artikel ergeben, bleiben zusammen, zum Beispiel "rote Linsen", "griechischer Joghurt", "Bio Milch", "Spaghetti", "geriebener Käse".',
+      'Mengen bleiben beim Posten, zum Beispiel "2 Liter Milch". Schreib die Posten so, wie sie im Text stehen, nur mit großem Anfangsbuchstaben. Erfinde nichts dazu.',
+      '', `Text: ${text}`,
+    ].join('\n') }],
+    output_config: { format: { type: 'json_schema', schema: SPLIT_SCHEMA } },
+  };
+}
+export function checkSplit(text: string, posten: unknown): string[] | null {
+  if (!Array.isArray(posten)) return null;
+  const words = new Set(String(text).toLowerCase().split(/\s+/).map((w) => w.replace(/[.,!?]/g, '')));
+  const out = posten.map((x) => String(x || '').trim()).filter(Boolean)
+    .map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+  // Nur Posten, deren Wörter auch im Diktat vorkommen.
+  if (!out.length || out.some((x) => x.toLowerCase().split(/\s+/).some((w) => !words.has(w.replace(/[.,!?]/g, ''))))) return null;
+  return out.slice(0, 12);
+}
+async function splitWithClaude(text: string): Promise<string[] | null> {
+  if (!env('ANTHROPIC_API_KEY')) return null;
+  try {
+    const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(splitParams(text)) }));
+    const t = (res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join('');
+    return checkSplit(text, JSON.parse(t).posten);
+  } catch (e) {
+    console.warn('Zerlegen', String(e));
+    return null;
+  }
+}
+
+export async function addFromShortcut(store: Store, key: string, body: Row, nowMs = Date.now()) {
+  const settings = await store.get('ep_settings?select=value&key=eq.kurzbefehl');
+  const saved = String(((settings[0] || {}).value || {}).schluessel || '');
+  if (!saved || saved.length < 16 || key !== saved) return { status: 401, body: { text: 'Der Schlüssel stimmt nicht. Bitte den Kurzbefehl neu einrichten.' } };
+  let labels = splitSpoken(String(body.text || ''));
+  if (!labels.length) return { status: 400, body: { text: 'Ich habe nichts verstanden, was auf die Liste soll.' } };
+  // Ein einziger Posten mit mehreren Wörtern: vermutlich ohne Kommas diktiert.
+  if (labels.length === 1 && labels[0].split(/\s+/).length >= 2) {
+    const split = await splitWithClaude(labels[0]);
+    if (split && split.length > 1) labels = split;
+  }
+  const persons = await store.get('ep_persons?select=id,name');
+  const person = persons.find((p) => p.id === body.person);
+  const { day } = berlin(nowMs);
+  const week = mondayOf(day);
+  const items = await store.get(`ep_shopping?select=label,trip,due,sort,checked&week_start=eq.${week}`);
+  // Gleiche Regel wie in der App: der erste Einkauf, der noch offen ist und nicht in der Vergangenheit liegt.
+  const sorted = items.slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
+  const trips = [...new Set(sorted.map((i) => i.trip || 'Einkauf'))];
+  const open = trips.find((t) => sorted.some((i) => (i.trip || 'Einkauf') === t && !i.checked && (!i.due || String(i.due).slice(0, 10) >= day)));
+  const trip = open || trips[trips.length - 1] || 'Einkauf';
+  const sample = sorted.find((i) => (i.trip || 'Einkauf') === trip) || {};
+  const have = new Set(items.filter((i) => !i.checked).map((i) => String(i.label).toLowerCase()));
+  const fresh = labels.filter((l) => !have.has(l.toLowerCase()));
+  const maxSort = Math.max(0, ...items.map((i) => Number(i.sort) || 0));
+  const now = new Date(nowMs).toISOString();
+  const rows = fresh.map((label, n) => ({
+    id: `s${nowMs.toString(36)}${n}${Math.random().toString(36).slice(2, 6)}`, week_start: week, trip, due: sample.due || null, category: 'sonst',
+    label, qty: '', sort: maxSort + 1 + n, checked: false, manual: true, purpose: '', missing: false,
+    added_by: person ? person.id : null, created_at: now,
+  }));
+  if (rows.length) await store.upsert('ep_shopping', rows);
+  const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} und ${xs[xs.length - 1]}` : xs[0]);
+  const skipped = labels.filter((l) => !fresh.includes(l));
+  const text = [rows.length ? `${list(fresh)} ${rows.length === 1 ? 'steht' : 'stehen'} jetzt auf der Einkaufsliste.` : '', skipped.length ? `${list(skipped)} ${skipped.length === 1 ? 'stand' : 'standen'} schon drauf.` : ''].filter(Boolean).join(' ');
+  return { status: 200, body: { text, neu: fresh } };
+}
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-cron-secret, x-liste-schluessel',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
+export async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+  try {
+    const secret = env('CRON_SECRET');
+    usageKind = 'kosten';
+    if (secret && secret.length >= 16 && req.headers.get('x-cron-secret') === secret) return json(200, await runSchedule());
+    usageKind = 'siri';
+    // Siri-Kurzbefehl, einfache Form: alles steht in der Adresse, die Antwort ist Text zum Vorlesen.
+    const q = new URL(req.url).searchParams;
+    if (q.get('schluessel')) {
+      const r = await addFromShortcut(db(), String(q.get('schluessel')), { text: q.get('text') || '', person: q.get('person') || '' });
+      return new Response(String(r.body.text || ''), { status: r.status, headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
+    // Siri-Kurzbefehl mit Header und JSON (ältere Anleitung): eigener Familien-Schlüssel statt Anmeldung.
+    const listKey = req.headers.get('x-liste-schluessel');
+    if (listKey) {
+      const r = await addFromShortcut(db(), listKey, await req.json().catch(() => ({})));
+      return json(r.status, r.body);
+    }
+    const r = await runTest(req);
+    return json(r.status, r.body);
+  } catch (e) {
+    console.error(e);
+    return json(500, { error: String(e instanceof Error ? e.message : e) });
+  } finally {
+    await flushUsage(db()).catch((e) => console.warn('Verbrauch', String(e)));
+  }
+}
+
+// Für Tests: Zugriff auf die Datenbank wie im Betrieb.
+export const makeDb = () => db();
+
+// deno-lint-ignore no-explicit-any
+const D = (globalThis as any).Deno;
+if (D && typeof D.serve === 'function') D.serve(handler);

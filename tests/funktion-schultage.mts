@@ -1,0 +1,11 @@
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
+const m = await import(ROOT + '/supabase/functions/push/index.ts');
+const L = await import(ROOT + '/js/logic.js');
+const A = await import(ROOT + '/js/aufgaben.js');
+let diff: string[] = [];
+for (let d = '2026-09-01'; d <= '2028-09-11'; d = m.addDays(d, 1)) if (m.schoolDay(d) !== L.isSchoolDay(d)) diff.push(d);
+console.log('Schultage App und Funktion gleich:', diff.length === 0, diff.slice(0, 5).join(','));
+const task = { id: 't', name: 'Tisch decken', schedule: 'taeglich', who: ['p3'], school_only: true, active: true, months: [] };
+console.log('App: Mi 18.11. (Buß- und Bettag):', A.tasksFor([task], [], 'p3', '2026-11-18').fixed.length, 'Do 19.11.:', A.tasksFor([task], [], 'p3', '2026-11-19').fixed.length, 'Sa 21.11.:', A.tasksFor([task], [], 'p3', '2026-11-21').fixed.length);
+console.log('Funktion: Mi 18.11.:', m.openTasks([task], [], 'p3', '2026-11-18', null).length, 'Do 19.11.:', m.openTasks([task], [], 'p3', '2026-11-19', null).length, 'Mo 28.12. (Ferien):', m.openTasks([task], [], 'p3', '2026-12-28', null).length);

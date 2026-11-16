@@ -1,0 +1,803 @@
+/* Essensplan. Leitbild: der Abreißkalender in der Küche.
+   Farben: Wand (kühles Fliesengrau), Blatt (weiß), Tinte (Petrol), Kalenderrot, Sternengelb, Abhakgrün. */
+
+:root {
+  --wand: #E7EDEF;
+  --blatt: #FFFFFF;
+  --tinte: #14323C;
+  --tinte-2: #4F6972;
+  --linie: #C9D5D9;
+  --rot: #D4312A;
+  --gelb: #F0B323;
+  --gruen: #2E7D55;
+  --fuell: #14323C;
+  --dunkel: #14323C;
+  --kopf-h: 0px;
+  --anzeige: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --text: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* Dunkles Design: folgt der Einstellung des Handys. Gefüllte Flächen (Kopf, Knöpfe) bleiben petrolfarben. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wand: #0E1A1F;
+    --blatt: #172930;
+    --tinte: #E2EBED;
+    --tinte-2: #9AB0B7;
+    --linie: #2B4048;
+    --rot: #E8574F;
+    --gelb: #F0B323;
+    --gruen: #3E9E6B;
+    --fuell: #1F4A58;
+    --dunkel: #14323C;
+    color-scheme: dark;
+  }
+  .kopf, body::before { background: #0A1418; }
+  .markt-lidl .markt-kopf { background: #3a3207; color: #fbe9a6; border-left-color: #c9a000; }
+  .knopf.zweit { background: transparent; }
+  img { opacity: .92; }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--wand);
+  color: var(--tinte);
+  font: 400 17px/1.45 var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+html.gesperrt, html.gesperrt body { overflow: hidden; }
+h1, h2, h3, p, ul, ol { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; text-align: inherit; }
+:focus-visible { outline: 3px solid var(--tinte); outline-offset: 2px; border-radius: 4px; }
+svg { display: block; }
+
+.lade { padding: 30vh 24px 0; text-align: center; color: var(--tinte-2); }
+
+/* ---------- Grundgerüst ---------- */
+
+.rahmen { max-width: 600px; margin: 0 auto; min-height: 100dvh; padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+.kopf {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--fuell); color: #fff;
+  padding: 10px 16px 12px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--fuell); }
+.kopf-zeile { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.kopf h1 { font: 700 26px/1 var(--anzeige); letter-spacing: 0.01em; }
+.ich { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); font-weight: 500; font-size: 15px; }
+.ich:focus-visible { outline-color: #fff; }
+.kreis {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  font: 700 17px/1 var(--anzeige); color: #fff;
+}
+.kreis.klein { width: 24px; height: 24px; font-size: 14px; }
+
+.wochenwahl { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+.wochenwahl .mitte { flex: 1; text-align: center; line-height: 1.15; }
+.wochenwahl .kw { font: 700 21px/1 var(--anzeige); display: block; }
+.wochenwahl .spanne { font-size: 14px; opacity: 0.85; }
+.pfeil { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; }
+.pfeil:focus-visible, .zurueck-heute:focus-visible { outline-color: #fff; }
+.zurueck-heute { display: block; margin: 4px auto 0; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px; }
+
+.inhalt { padding: 16px 14px 8px; }
+.hinweis-demo { background: var(--gelb); color: var(--dunkel); font-size: 14px; padding: 6px 16px; text-align: center; }
+
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+  background: var(--blatt); border-top: 1px solid var(--linie);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabs-innen { max-width: 600px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+.tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 9px 4px 8px; color: var(--tinte-2); font-size: 13px; font-weight: 500;
+  border-top: 3px solid transparent; margin-top: -1px;
+}
+.tab[aria-current="page"] { color: var(--tinte); border-top-color: var(--rot); font-weight: 600; }
+.tab svg { width: 26px; height: 26px; }
+.tab .zahl-offen { font-weight: 600; }
+
+/* ---------- Kalenderblatt (Heute) ---------- */
+
+.blatt {
+  background: var(--blatt);
+  border-radius: 4px 4px 10px 10px;
+  /* Stapel aus Blättern, die noch am Kalender hängen */
+  box-shadow: 0 3px 0 -1px var(--blatt), 0 4px 0 -1px var(--linie), 0 7px 0 -2px var(--blatt), 0 8px 0 -2px var(--linie);
+  margin-bottom: 26px;
+  overflow: hidden;
+}
+.blatt-band {
+  background: var(--rot); color: #fff;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 16px; font: 600 17px/1.2 var(--anzeige); letter-spacing: 0.03em;
+  border-bottom: 2px dashed rgba(255, 255, 255, 0.65);
+}
+.blatt-koerper { padding: 12px 16px 18px; }
+.datum { display: flex; align-items: center; gap: 14px; }
+.datum .zahl { font: 700 104px/0.86 var(--anzeige); letter-spacing: -0.02em; }
+.datum .zahl.so { color: var(--rot); }
+.datum .wtag { font: 700 30px/1 var(--anzeige); display: block; }
+.datum .monat { font-size: 16px; color: var(--tinte-2); }
+.gericht { font: 700 30px/1.08 var(--anzeige); margin-top: 14px; text-wrap: balance; }
+.meta { color: var(--tinte-2); font-size: 15px; margin-top: 6px; }
+.zaehler { font-size: 15px; margin-top: 2px; color: var(--tinte-2); }
+.ausgefallen .gericht { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--tinte-2); }
+
+/* ---------- Sterne ---------- */
+
+.bewertung { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--linie); }
+.bewertung .frage { font-weight: 600; }
+.sterne { display: flex; gap: 2px; margin: 6px 0 0 -7px; }
+.stern { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; }
+.stern svg { width: 38px; height: 38px; fill: none; stroke: var(--tinte-2); stroke-width: 1.4; stroke-linejoin: round; }
+.stern.an svg { fill: var(--gelb); stroke: var(--tinte); }
+.stern:active svg { transform: scale(0.88); }
+.runde { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 15px; }
+.runde li { display: flex; align-items: center; gap: 6px; }
+.runde .offen { color: var(--tinte-2); }
+.mini-stern { width: 15px; height: 15px; fill: var(--gelb); stroke: var(--tinte); stroke-width: 1.6; stroke-linejoin: round; display: inline-block; vertical-align: -2px; }
+.schnitt { white-space: nowrap; font-weight: 600; }
+
+/* ---------- Knöpfe ---------- */
+
+.knopf {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; padding: 10px 18px; border-radius: 8px;
+  background: var(--fuell); color: #fff; font-weight: 600;
+}
+.knopf.zweit { background: var(--blatt); color: var(--tinte); box-shadow: inset 0 0 0 2px var(--tinte); }
+.knopf.rot { background: var(--blatt); color: var(--rot); box-shadow: inset 0 0 0 2px var(--rot); }
+.knopf.breit { width: 100%; }
+.knopf[disabled] { opacity: 0.5; cursor: default; }
+.knopfreihe { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.textknopf { text-decoration: underline; text-underline-offset: 3px; font-weight: 500; padding: 8px 0; }
+
+/* ---------- Wochenliste ---------- */
+
+.abschnitt { font: 700 22px/1.1 var(--anzeige); margin: 0 2px 10px; }
+.woche { display: grid; gap: 8px; }
+.tag-zeile {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: var(--blatt); border-radius: 8px; padding: 8px 12px 8px 8px; min-height: 68px;
+}
+.tag-zeile.heute { box-shadow: inset 0 0 0 2px var(--tinte); }
+.tag-zeile.vorbei .tz-name { color: var(--tinte-2); }
+.mini-blatt {
+  flex: none; width: 52px; border-radius: 3px 3px 6px 6px; overflow: hidden;
+  background: var(--wand); text-align: center;
+}
+.mini-blatt .mw { display: block; background: var(--fuell); color: #fff; font: 600 14px/1.5 var(--anzeige); letter-spacing: 0.04em; }
+.mini-blatt .mz { display: block; font: 700 27px/1.15 var(--anzeige); padding-bottom: 1px; }
+.mini-blatt.so .mw { background: var(--rot); }
+.mini-blatt.so .mz { color: var(--rot); }
+.tz-text { flex: 1; min-width: 0; }
+.tz-name { display: block; font-weight: 600; line-height: 1.25; }
+.tz-meta { display: block; font-size: 14px; color: var(--tinte-2); margin-top: 2px; }
+.tz-leer { color: var(--tinte-2); font-weight: 500; }
+.gestrichen { text-decoration: line-through; }
+
+.leer {
+  background: var(--blatt); border-radius: 8px; padding: 22px 18px; text-align: center;
+}
+.leer p { color: var(--tinte-2); margin-top: 4px; }
+.leer .knopfreihe { justify-content: center; }
+.fuss { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+
+/* ---------- Einkaufsliste ---------- */
+
+.fortschritt { background: var(--blatt); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+.fortschritt .zeile { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.fortschritt .gross { font: 700 26px/1 var(--anzeige); }
+.balken { height: 8px; border-radius: 4px; background: var(--wand); margin-top: 10px; overflow: hidden; }
+.balken span { display: block; height: 100%; background: var(--gruen); border-radius: 4px; }
+.schalter { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
+.schalter input { width: 20px; height: 20px; accent-color: var(--tinte); margin: 0; }
+
+.tour { font: 700 22px/1.15 var(--anzeige); margin: 22px 2px 4px; }
+.tour:first-of-type { margin-top: 4px; }
+.einkaufstag { margin: 4px 2px 2px; }
+.einkaeufer { margin: 6px 2px 2px; font-weight: 600; }
+.einkauf-hinweis { margin-bottom: 14px; }
+.einkaufstag summary { cursor: pointer; list-style: none; }
+.einkaufstag summary::-webkit-details-marker { display: none; }
+.einkaufstag .dazu { margin-top: 8px; }
+.einkaufstag > .meta { margin-top: 6px; }
+.abteilung { font-size: 14px; font-weight: 600; color: var(--tinte-2); margin: 12px 2px 6px; }
+.posten { background: var(--blatt); border-radius: 8px; overflow: hidden; }
+.posten li { display: flex; align-items: stretch; border-top: 1px solid var(--wand); }
+.posten li:first-child { border-top: 0; }
+.haken-knopf { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 54px; min-width: 0; }
+.kasten {
+  flex: none; width: 28px; height: 28px; border-radius: 6px;
+  box-shadow: inset 0 0 0 2px var(--tinte); display: grid; place-items: center;
+}
+.kasten svg { width: 20px; height: 20px; stroke: #fff; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.erledigt .kasten { background: var(--gruen); box-shadow: none; }
+.erledigt .kasten svg { opacity: 1; }
+.p-text { min-width: 0; }
+.p-name { display: block; font-weight: 600; line-height: 1.25; }
+.p-menge { display: block; font-size: 14px; color: var(--tinte-2); }
+.erledigt .p-name { text-decoration: line-through; color: var(--tinte-2); font-weight: 500; }
+.weg { flex: none; width: 48px; display: grid; place-items: center; color: var(--tinte-2); }
+.weg svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; }
+
+.dazu { display: flex; gap: 8px; margin-top: 22px; }
+.feld {
+  width: 100%; min-height: 46px; padding: 10px 12px; border-radius: 8px;
+  border: 0; box-shadow: inset 0 0 0 2px var(--linie); background: var(--blatt);
+}
+.feld:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--tinte); }
+textarea.feld { min-height: 120px; resize: vertical; line-height: 1.4; }
+
+/* ---------- Gerichte ---------- */
+
+.sortierung { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--blatt); border-radius: 8px; padding: 4px; margin-bottom: 14px; }
+.sortierung button { padding: 9px 4px; border-radius: 6px; text-align: center; font-weight: 500; font-size: 15px; color: var(--tinte-2); }
+.sortierung button[aria-pressed="true"] { background: var(--fuell); color: #fff; font-weight: 600; }
+.gerichte { display: grid; gap: 8px; }
+.g-zeile { display: flex; align-items: center; gap: 12px; width: 100%; background: var(--blatt); border-radius: 8px; padding: 8px 12px 8px 8px; min-height: 68px; }
+.mal { flex: none; width: 52px; text-align: center; border-radius: 6px; background: var(--wand); padding: 4px 0 5px; }
+.mal .n { display: block; font: 700 27px/1 var(--anzeige); }
+.mal .x { display: block; font-size: 12px; color: var(--tinte-2); line-height: 1.1; }
+.raus .g-zeile { background: transparent; box-shadow: inset 0 0 0 2px var(--linie); }
+.raus .tz-name { color: var(--tinte-2); }
+.marke { display: inline-block; font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--wand); }
+.marke.rot { background: var(--rot); color: #fff; }
+
+/* ---------- Bogen (Detailansicht von unten) ---------- */
+
+.schleier { position: fixed; inset: 0; z-index: 20; background: rgba(20, 50, 60, 0.55); display: flex; align-items: flex-end; justify-content: center; }
+.bogen {
+  width: 100%; max-width: 600px; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--blatt); border-radius: 14px 14px 0 0;
+  padding: 0 18px calc(26px + env(safe-area-inset-bottom));
+  animation: hoch 0.22s ease-out;
+}
+@keyframes hoch { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bogen { animation: none; } }
+.bogen-kopf { position: sticky; top: 0; background: var(--blatt); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 0 10px; z-index: 1; }
+.bogen-kopf .ueber { font-size: 15px; color: var(--tinte-2); }
+.bogen-kopf h2 { font: 700 28px/1.08 var(--anzeige); text-wrap: balance; }
+.zu { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--wand); display: grid; place-items: center; }
+.zu svg { width: 20px; height: 20px; stroke: var(--tinte); stroke-width: 2.4; fill: none; stroke-linecap: round; }
+.bogen h3 { font: 700 21px/1.1 var(--anzeige); margin: 22px 0 8px; }
+.zutaten li { padding: 5px 0; border-bottom: 1px solid var(--wand); }
+.schritte { counter-reset: s; }
+.schritte li { counter-increment: s; position: relative; padding: 0 0 12px 38px; }
+.schritte li::before {
+  content: counter(s); position: absolute; left: 0; top: 0;
+  width: 27px; height: 27px; border-radius: 50%; background: var(--fuell); color: #fff;
+  font: 700 16px/27px var(--anzeige); text-align: center;
+}
+.kasten-text { background: var(--wand); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
+.kasten-text strong { display: block; }
+.werte { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+.werte div { background: var(--wand); border-radius: 8px; padding: 10px 6px; text-align: center; }
+.werte .n { display: block; font: 700 28px/1 var(--anzeige); }
+.werte .l { display: block; font-size: 13px; color: var(--tinte-2); margin-top: 3px; }
+.auswahl { display: grid; gap: 8px; }
+.auswahl .g-zeile { background: var(--wand); }
+.form { display: grid; gap: 14px; }
+.form label { display: grid; gap: 5px; font-weight: 600; font-size: 15px; }
+.form .zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form small { font-weight: 400; color: var(--tinte-2); }
+.fehler { color: var(--rot); font-weight: 600; }
+details summary { cursor: pointer; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; }
+.person-zeile { display: flex; align-items: center; gap: 10px; }
+.person-zeile .feld { flex: 1; min-width: 0; }
+.person-zeile .schalter { flex: none; font-size: 14px; }
+.feld:disabled { background: var(--wand); color: var(--tinte-2); }
+.person-zeile input[type="radio"] { width: 22px; height: 22px; accent-color: var(--tinte); flex: none; margin: 0; }
+
+/* ---------- Anmeldung, Auswahl der Person ---------- */
+
+.tor { max-width: 440px; margin: 0 auto; padding: calc(12vh + env(safe-area-inset-top)) 22px 40px; }
+.tor h1 { font: 700 44px/1 var(--anzeige); }
+.tor > p { color: var(--tinte-2); margin: 8px 0 22px; }
+.wer { display: grid; gap: 10px; }
+.wer button { display: flex; align-items: center; gap: 14px; background: var(--blatt); border-radius: 8px; padding: 12px 14px; font: 700 26px/1 var(--anzeige); }
+.wer .kreis { width: 44px; height: 44px; font-size: 24px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  z-index: 40; max-width: min(92vw, 520px); background: var(--fuell); color: #fff;
+  padding: 11px 16px; border-radius: 8px; font-weight: 500; font-size: 15px;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+#toast.sichtbar { opacity: 1; }
+
+@media (min-width: 640px) {
+  .rahmen { padding-top: 0; }
+  .kopf { border-radius: 0 0 10px 10px; }
+  .schleier { align-items: center; }
+  .bogen { border-radius: 14px; max-height: 86dvh; }
+}
+
+/* Brotbox und PIN */
+.brotbox .frage-klein { font: 700 19px/1.2 var(--anzeige); }
+.brotbox .frage { margin-top: 10px; }
+.kasten-text .frage { margin-top: 10px; font-weight: 600; }
+.kasten-text .runde { margin-bottom: 4px; }
+.brotbox-text { font-weight: 500; }
+div.g-zeile { cursor: default; }
+.pin { letter-spacing: 0.5em; font-size: 22px; max-width: 200px; }
+.pin-zeile { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Lieblingsgerichte, Rezeptformular, Auswertung */
+.marke.lieb { background: var(--gelb); color: var(--dunkel); }
+.haken-gross { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-weight: 600; }
+.haken-gross small { flex-basis: 100%; padding-left: 30px; }
+.inline-zahl { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.inline-zahl .feld { width: 76px; }
+textarea.export { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; margin-top: 8px; }
+
+/* Lieblingsgericht der Woche */
+.herz-karte { background: var(--blatt); border-radius: 8px; padding: 14px 14px 16px; margin: 0 0 22px; }
+.herz-karte .abschnitt { margin: 0 0 6px; }
+.herz-karte .frage { font-weight: 600; margin-bottom: 8px; }
+.herz-liste { display: grid; gap: 6px; }
+.herz-knopf { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 8px 12px; border-radius: 8px; background: var(--wand); }
+.herz-knopf .herz { width: 30px; height: 30px; flex: none; fill: none; stroke: var(--tinte-2); stroke-width: 1.6; stroke-linejoin: round; }
+.herz-knopf.an { background: var(--blatt); box-shadow: inset 0 0 0 2px var(--rot); }
+.herz-knopf.an .herz { fill: var(--rot); stroke: var(--rot); }
+.herz-knopf:active .herz { transform: scale(0.88); }
+.herz-runde { margin-top: 12px; flex-direction: column; gap: 6px; }
+.herz-runde li { align-items: flex-start; }
+.herz-runde li > span:nth-child(2) { flex: none; }
+.herz-runde .herz-wahl { flex: 1; min-width: 0; align-items: flex-start; }
+.herz-runde .herz-wahl .herz { margin-top: 3px; flex: none; }
+.herz-wahl { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.herz-wahl .herz, .herz-mini .herz { width: 15px; height: 15px; fill: var(--rot); stroke: none; display: inline-block; vertical-align: -2px; }
+.herz-mini { display: inline-flex; align-items: center; gap: 2px; color: var(--rot); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.herz-hinweis { margin: 0 0 18px; }
+
+/* Aufgaben und Bildschirmzeit */
+.tabs-innen { grid-template-columns: repeat(4, 1fr); }
+.tab { font-size: 12.5px; }
+.abschnitt.abstand { margin-top: 24px; }
+.meta.unter { margin: -4px 2px 10px; }
+.trenner { border: 0; border-top: 2px dashed var(--linie); margin: 28px 0 22px; }
+.konto { background: var(--fuell); color: #fff; border-radius: 10px; padding: 14px 16px 16px; margin-bottom: 20px; }
+.konto .meta { color: rgba(255, 255, 255, 0.82); margin-top: 6px; }
+.konto-zahl { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.konto-zahl .n { font: 700 56px/0.95 var(--anzeige); font-variant-numeric: tabular-nums; }
+.konto-zahl .l { font-weight: 600; }
+.konto.klein { background: var(--blatt); color: var(--tinte); margin-bottom: 0; }
+.konto.klein .meta { color: var(--tinte-2); }
+.konto.klein .konto-zahl .n { font-size: 40px; }
+.konto-kopf { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.konto-name { font: 700 22px/1 var(--anzeige); }
+.konten { display: grid; gap: 10px; }
+.konto .knopf.zweit { background: var(--blatt); }
+.chip { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--wand); color: var(--tinte); }
+.chip.warten { background: var(--gelb); }
+.chip.ja { background: var(--gruen); color: #fff; }
+.chip.nein { background: var(--rot); color: #fff; }
+.erledigt .chip { text-decoration: none; }
+.extra-zeile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 58px; width: 100%; }
+.extra-zeile .p-text { flex: 1; min-width: 0; }
+.knopf.klein { min-height: 38px; padding: 6px 12px; font-size: 15px; }
+.ja-nein { display: flex; gap: 6px; flex: none; }
+.bestaetigen .extra-zeile { flex-wrap: wrap; }
+.verlauf { background: var(--blatt); border-radius: 8px; padding: 4px 12px; }
+.verlauf li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--wand); flex-wrap: wrap; }
+.verlauf li:first-child { border-top: 0; }
+.verlauf li > span:first-child { font: 700 16px/1 var(--anzeige); width: 26px; color: var(--tinte-2); }
+.verlauf .v-text { flex: 1; min-width: 0; }
+.verlauf .chip { margin-top: 0; }
+.feldgruppe { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.feldgruppe legend { font-weight: 600; font-size: 15px; margin-bottom: 6px; padding: 0; }
+.feldgruppe legend small { font-weight: 400; color: var(--tinte-2); }
+.monate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.person-minuten { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 0 6px 32px; }
+.person-minuten label { font-size: 14px; }
+.person-minuten .feld { width: 80px; }
+@media (max-width: 380px) { .person-minuten { grid-template-columns: 1fr; } }
+.bestaetigen .ja-nein { flex-basis: 100%; padding-left: 36px; }
+.bestaetigen .ja-nein .knopf { flex: 1; max-width: 180px; }
+
+/* Termine, Abendessen, Vorrat, Wochenbilanz */
+.essenszeit { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-weight: 600; }
+.essenszeit .uhr { font: 700 26px/1 var(--anzeige); font-variant-numeric: tabular-nums; }
+.essenszeit .essen-notiz { flex-basis: 100%; font-weight: 400; color: var(--tinte-2); font-size: 15px; }
+.essenszeit.spaet .uhr { color: var(--rot); }
+.kasten-text.abend { margin-top: 12px; }
+.termine-tag { margin: 6px 0 2px; font-size: 15px; }
+.termine-tag li { padding: 2px 0; }
+.mitesser { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; }
+.m-name { font-weight: 600; min-width: 0; }
+.feld.klein { min-height: 40px; padding: 6px 8px; font-size: 15px; width: auto; }
+.feld.zeit { width: 104px; }
+@media (max-width: 400px) { .mitesser { grid-template-columns: auto 1fr; } .mitesser select, .mitesser .zeit { grid-column: 2; } }
+.mal .n.klein { font-size: 15px; line-height: 1.15; padding: 0 2px; }
+.monate.tage { grid-template-columns: repeat(7, 1fr); }
+@media (max-width: 400px) { .monate.tage { grid-template-columns: repeat(4, 1fr); } }
+.knopf.rot.breit { margin-top: 4px; }
+.leer-zeile .p-name { color: var(--rot); }
+.erinnerung { margin-top: 18px; }
+.bilanz { background: var(--blatt); border-radius: 8px; padding: 14px 14px 16px; margin-top: 22px; }
+.bilanz ul { display: grid; gap: 8px; margin-top: 4px; }
+.bilanz li { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; align-items: baseline; }
+.bilanz .b-l { color: var(--tinte-2); font-size: 15px; }
+.bilanz .b-w { font-weight: 600; min-width: 0; }
+@media (max-width: 400px) { .bilanz li { grid-template-columns: 1fr; gap: 0; } }
+
+/* Einkauf: wofür, nicht bekommen */
+.p-wofuer { display: block; font-size: 13px; color: var(--tinte-2); font-style: italic; }
+.fehlt-knopf { flex: none; align-self: center; margin-right: 8px; padding: 6px 10px; min-height: 36px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--tinte-2); background: var(--wand); }
+.fehlt-knopf[aria-pressed="true"] { background: var(--gelb); color: var(--dunkel); }
+.posten li.fehlt .p-name { color: var(--tinte-2); }
+.marke.warn { background: var(--gelb); color: var(--dunkel); }
+.fehlt-kasten { margin: 8px 0 4px; border-left: 4px solid var(--gelb); }
+.fehlt-kasten ul { margin-top: 6px; display: grid; gap: 4px; }
+.fehlt-kasten li { font-weight: 600; }
+.fehlt-kasten .p-wofuer { font-weight: 400; }
+/* Vorabend und Nährwerte */
+.vorabend { border-left: 4px solid var(--tinte); }
+.naehrwerte { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.naehrwerte th { text-align: left; font-weight: 500; padding: 7px 0; }
+.naehrwerte td { text-align: right; font-weight: 600; padding: 7px 0; white-space: nowrap; }
+.naehrwerte tr { border-top: 1px solid var(--wand); }
+.naehrwerte tr:first-child { border-top: 0; }
+.naehrwerte tr.davon th { padding-left: 14px; color: var(--tinte-2); font-weight: 400; }
+.naehrwerte tr.davon td { font-weight: 400; color: var(--tinte-2); }
+.werte.vier { grid-template-columns: repeat(4, 1fr); }
+.werte.vier div { background: var(--blatt); }
+.werte.vier .n { font-size: 24px; }
+.werte.vier small { font: 600 13px/1 var(--text, inherit); }
+.naehr-form { margin-top: 4px; }
+.naehr-form summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+/* Ohne Netz */
+.hinweis-offline { background: var(--fuell); color: #fff; text-align: center; padding: 8px 14px; font-size: 14px; }
+
+/* Ampel: Farbe plus Wort, damit sie auch ohne Farbsehen lesbar bleibt */
+.ampel { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 4px; }
+.ampel li { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 999px; background: var(--wand); font-size: 14px; font-weight: 600; }
+.ampel.woche { flex-direction: column; align-items: flex-start; margin-top: 12px; }
+.ampel.woche li { background: var(--blatt); border-radius: 10px; }
+.punkt { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--linie); }
+.ampel-gruen .punkt, .punkt.ampel-gruen { background: var(--gruen); }
+.ampel-gelb .punkt, .punkt.ampel-gelb { background: var(--gelb); }
+.ampel-rot .punkt, .punkt.ampel-rot { background: var(--rot); }
+.ampel-plus .punkt { background: var(--tinte); border-radius: 3px; }
+.ampel-hinweis { margin-bottom: 8px; }
+.ampel-mini { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+.ampel-mini .punkt { width: 10px; height: 10px; }
+.ampel-mini .plus { margin-left: 4px; font-size: 12px; font-weight: 600; color: var(--tinte-2); }
+
+/* Immer wieder */
+.posten.immer .abteilung-kopf { padding: 14px 4px 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tinte-2); background: none; border: 0; }
+.posten.immer li.auf-liste .p-menge { color: var(--gruen); font-weight: 600; }
+.immer-dazu { flex-wrap: wrap; }
+.immer-dazu .feld[name="label"] { flex: 1 1 180px; min-width: 0; }
+.immer-dazu select.feld { flex: 1 1 140px; min-width: 0; }
+
+/* Wochenplan mit Claude */
+.planer { margin-bottom: 20px; }
+.entwurf-kasten { margin-bottom: 14px; border-left: 4px solid var(--gruen); }
+.entwurf-kasten.laeuft { border-left-color: var(--gelb); }
+.entwurf-kasten.fehler { border-left-color: var(--rot); }
+.entwurf-tage { display: grid; gap: 10px; margin: 6px 0 10px; }
+.entwurf-tag { background: var(--wand); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.et-kopf { display: flex; align-items: center; gap: 8px; }
+.et-tag { font-weight: 700; }
+.et-gericht { font-weight: 600; }
+.entwurf-rezept { border-top: 1px solid var(--wand); padding: 8px 0; }
+.entwurf-rezept summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.entwurf-neu { margin-top: 18px; }
+.entwurf-neu summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.liste { display: grid; gap: 4px; margin-top: 6px; padding-left: 18px; list-style: disc; }
+.warn-text { color: var(--rot); }
+.et-tausch { display: grid; gap: 4px; font-size: 13px; color: var(--tinte-2); }
+
+/* Urlaub */
+.tag-zeile.urlaub .tz-name { color: var(--tinte-2); }
+.tag-zeile.urlaub .mini-blatt { opacity: 0.55; }
+.blatt.urlaub .gericht { color: var(--tinte-2); }
+
+/* Zwei Märkte in der Einkaufsliste */
+.markt { margin-top: 14px; }
+.markt-kopf { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 4px; padding: 8px 12px; border-radius: 8px; font-size: 1rem; }
+.markt-aldi .markt-kopf { background: var(--wand); color: var(--tinte); }
+.markt-lidl .markt-kopf { background: #fff4c2; color: #3a3000; border-left: 4px solid #e3b500; }
+.markt-name { font-weight: 700; }
+.markt-ort { font-weight: 400; font-size: 0.85rem; opacity: 0.8; }
+.markt-zahl { margin-left: auto; font-weight: 600; font-size: 0.85rem; }
+.markt-wahl { flex: 0 0 auto; width: auto; }
+
+/* Minuten erst nach den Grundaufgaben */
+.grund-zuerst { margin: 0 0 12px; }
+.bestaetigen li.gesperrt .p-name { opacity: 0.75; }
+
+/* Haushaltsbuch */
+.tabs-innen { grid-template-columns: repeat(5, 1fr); }
+.tab { font-size: 11.5px; }
+.inhalt > .monat { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.inhalt > .monat h2 { font-family: var(--anzeige); font-size: 24px; font-weight: 700; }
+.inhalt > .monat .pfeil { font-size: 28px; color: var(--tinte); }
+.inhalt > .monat .pfeil:disabled { opacity: 0.3; }
+.ausgaben-summe { background: var(--blatt); border-radius: 14px; padding: 16px; display: grid; gap: 4px; margin-bottom: 14px; }
+.ausgaben-summe .betrag { font-family: var(--anzeige); font-size: 40px; font-weight: 700; line-height: 1; }
+.budget { margin-top: 10px; display: grid; gap: 6px; }
+.budget-spur, .b-spur { display: block; height: 8px; border-radius: 4px; background: var(--wand); overflow: hidden; }
+.budget-spur span, .b-spur span { display: block; height: 100%; border-radius: 4px; background: var(--tinte); }
+.budget-gruen .budget-spur span { background: var(--gruen); }
+.budget-gelb .budget-spur span { background: var(--gelb); }
+.budget-rot .budget-spur span { background: var(--rot); }
+.foto-knopf { position: relative; overflow: hidden; cursor: pointer; }
+.foto-knopf input { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.ausgaben-balken { list-style: none; padding: 0; margin: 0; background: var(--blatt); border-radius: 14px; padding: 6px 14px; }
+.ausgaben-balken li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 9px 0; border-bottom: 1px solid var(--linie); }
+.ausgaben-balken li:last-child { border-bottom: 0; }
+.b-name { min-width: 0; }
+.b-wert { font-variant-numeric: tabular-nums; font-weight: 600; }
+.b-spur { grid-column: 1 / -1; height: 6px; }
+.beleg-betrag { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; padding-left: 10px; white-space: nowrap; }
+.beleg-posten { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.beleg-zeile { display: grid; grid-template-columns: minmax(0, 1fr) 84px 36px; gap: 6px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--linie); }
+.beleg-zeile select { grid-column: 1 / 3; }
+.beleg-zeile .weg { grid-row: 1; grid-column: 3; }
+.beleg-zeile .preis { text-align: right; }
+.beleg-roh { grid-column: 1 / -1; }
+.beleg-liste { list-style: none; padding: 0; margin: 0; }
+.beleg-liste li { display: flex; gap: 10px; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.haken-liste { display: grid; gap: 4px; }
+.warnung { color: var(--rot); }
+.lade-balken { height: 6px; border-radius: 3px; background: var(--wand); overflow: hidden; margin-top: 16px; }
+.lade-balken span { display: block; width: 35%; height: 100%; background: var(--tinte); border-radius: 3px; animation: lade 1.4s ease-in-out infinite; }
+@keyframes lade { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .lade-balken span { animation: none; width: 100%; opacity: 0.4; } }
+
+/* Zutaten übernehmen */
+.zutaten-foto { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 10px 0 4px; }
+.zutaten-foto .meta { flex: 1 1 200px; min-width: 0; }
+.zutaten-liste { display: grid; border-top: 1px solid var(--linie); }
+.zutat { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--linie); cursor: pointer; }
+.zutat input { width: 22px; height: 22px; margin: 0; accent-color: var(--tinte); }
+.z-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.z-name { font-weight: 600; }
+.z-menge { color: var(--tinte-2); }
+.z-warum { font-size: 13px; color: var(--tinte-2); font-style: italic; }
+
+/* Gäste */
+.gaeste { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 4px; font-weight: 600; }
+.gaeste input { width: 80px; text-align: center; }
+
+/* Preisgedächtnis */
+.preis-liste { list-style: none; padding: 0; margin: 0; }
+.preis-zeile { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--linie); }
+.preis-maerkte { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--tinte-2); font-variant-numeric: tabular-nums; }
+.preis-maerkte .guenstig { color: var(--gruen); font-weight: 600; }
+.preis-maerkte small { font-size: 12px; font-weight: 400; }
+/* Wunschessen */
+.wunsch .dazu { margin-top: 8px; }
+.wunsch p { margin: 6px 0 0; }
+
+/* Siri */
+.kopierfeld { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; margin: 10px 0; }
+.kopierfeld .k-label { grid-column: 1 / -1; font-weight: 600; font-size: 14px; }
+.kopierfeld input { font-family: ui-monospace, Menlo, monospace; font-size: 13px; min-width: 0; }
+.siri-schritte { margin: 16px 0 10px; }
+
+/* Kochmodus */
+.koch-start { margin: 12px 0 4px; }
+.koch-fortschritt { height: 6px; border-radius: 3px; background: var(--wand); overflow: hidden; margin: 4px 0 16px; }
+.koch-fortschritt span { display: block; height: 100%; background: var(--tinte); }
+.koch-inhalt { min-height: 40vh; }
+.koch-text { font-size: 24px; line-height: 1.45; margin: 0 0 18px; }
+.koch-zutaten .z-name { font-weight: 500; font-size: 18px; }
+.timer-knopf { margin: 0 8px 8px 0; }
+.koch-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: sticky; bottom: 0; background: var(--blatt); padding: 12px 0 calc(8px + env(safe-area-inset-bottom, 0px)); margin-top: 16px; }
+.koch-nav .knopf { width: 100%; font-size: 18px; padding-block: 14px; }
+.timer-leiste { display: grid; gap: 6px; margin-bottom: 12px; }
+.timer { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; gap: 10px; align-items: center; background: var(--wand); border-radius: 10px; padding: 6px 6px 6px 12px; }
+.timer .t-name { font-size: 14px; min-width: 0; }
+.timer .t-zeit { font-family: var(--anzeige); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer.fertig { background: var(--gelb); }
+
+/* Reihenfolge im Laden */
+.laufweg { list-style: none; padding: 0; margin: 0 0 14px; }
+.laufweg li { display: grid; grid-template-columns: 28px minmax(0, 1fr) 44px 44px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--linie); }
+.lw-nr { font-family: var(--anzeige); font-weight: 700; color: var(--tinte-2); text-align: center; }
+.laufweg .knopf { padding: 6px 0; min-width: 0; }
+
+/* Ersatz */
+.fehlt-kasten li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.fehlt-text { min-width: 0; }
+.fehlt-kasten .p-wofuer { display: block; }
+.tagesnotiz { border-left: 4px solid var(--gelb); }
+
+/* Jahresüberblick */
+.jahr-nav { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.jahr-liste { list-style: none; padding: 0; margin: 0 0 16px; }
+.jahr-liste li { display: grid; grid-template-columns: 34px minmax(0, 1fr) 62px 56px; gap: 8px; align-items: center; padding: 5px 0; font-variant-numeric: tabular-nums; }
+.jahr-liste li.zukunft { opacity: 0.4; }
+.j-monat { font-weight: 600; }
+.j-spur { position: relative; display: block; height: 14px; border-radius: 4px; background: var(--wand); }
+.j-spur span { display: block; height: 100%; border-radius: 4px; background: var(--tinte); }
+.j-spur span.ueber { background: var(--rot); }
+.j-spur i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--tinte-2); }
+.j-wert { text-align: right; font-weight: 600; }
+.j-bio { font-size: 12px; color: var(--gruen); text-align: right; }
+.ausgaben-balken small, .abteilung small { font-weight: 400; color: var(--tinte-2); }
+
+/* Hilfe */
+.kopf-knoepfe { display: flex; align-items: center; gap: 8px; }
+.hilfe-knopf { width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); color: inherit; font-weight: 700; font-size: 18px; display: grid; place-items: center; }
+.hilfe-knopf:focus-visible { outline-color: #fff; }
+.hilfe-punkt { border-bottom: 1px solid var(--linie); padding: 10px 0; }
+.hilfe-punkt summary { font-weight: 600; cursor: pointer; }
+.hilfe-punkt p { margin: 8px 0 2px; line-height: 1.5; }
+
+/* Festtage */
+.fest-kasten { border-left: 4px solid var(--rot); }
+.tabelle-rahmen { overflow-x: auto; margin-bottom: 12px; }
+table.mengen { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.mengen th, table.mengen td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--linie); vertical-align: top; }
+table.mengen th { font-weight: 600; color: var(--tinte-2); font-size: 13px; }
+
+/* Was mögen wir? */
+.moegen-zahlen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.moegen-zahlen div { background: var(--wand); border-radius: 10px; padding: 10px; display: grid; }
+.moegen-zahlen .n { font-family: var(--anzeige); font-size: 28px; font-weight: 700; line-height: 1; }
+.moegen-zahlen .l { font-size: 13px; color: var(--tinte-2); }
+.moegen-liste li { margin: 4px 0; }
+.moegen-person { border-bottom: 1px solid var(--linie); padding: 10px 0; }
+.mp-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.moegen-person p { margin: 6px 0 0; }
+.mp-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--tinte-2); margin-right: 4px; }
+
+/* Kosten */
+.kosten-stand { margin: -4px 2px 12px; }
+.kosten-zeile { margin-bottom: 8px; }
+/* Einkaufsmodus */
+.modus-start { margin-top: 10px; }
+.modus-leiste { position: sticky; top: calc(var(--kopf-h) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--fuell); color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 17px; }
+.modus-leiste .knopf { background: #fff; color: var(--dunkel); }
+.einkaufsmodus .haken-knopf { min-height: 68px; }
+.einkaufsmodus .p-name { font-size: 20px; }
+.einkaufsmodus .p-menge { font-size: 16px; }
+.einkaufsmodus .kasten { width: 34px; height: 34px; }
+.einkaufsmodus .kasten svg { width: 26px; height: 26px; }
+.einkaufsmodus .fehlt-knopf { min-height: 44px; font-size: 15px; }
+.einkaufsmodus .abteilung { font-size: 18px; }
+.sortierung { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sortierung button { font-size: 14px; padding-inline: 2px; }
+.einkaufsmodus .inhalt > .balken { margin: 0 0 14px; }
+
+/* Schnelles Mittagessen */
+.mittag-start { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 10px 0 16px; }
+.mittag-start .meta { flex: 1 1 160px; min-width: 0; }
+.fehlt-zutat { color: var(--tinte-2); }
+.mittag-vorschlag summary b { font-size: 17px; }
+
+/* Kacheln unter der Woche */
+.plan-kacheln { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 26px; }
+.plan-kachel { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; background: var(--blatt); border: 0; box-shadow: 0 1px 0 var(--linie); border-radius: 10px; padding: 12px 13px; min-height: 68px; color: inherit; font: inherit; cursor: pointer; }
+.plan-kachel .pk-titel { font-weight: 650; line-height: 1.25; }
+.plan-kachel .pk-meta { font-size: .86em; opacity: .72; line-height: 1.3; }
+/* Neues Rezept oben in Gerichte */
+.neu-rezept { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 18px; }
+/* Werkzeuge unter der Einkaufsliste */
+.werkzeuge { display: grid; gap: 12px; margin-top: 20px; }
+.w-gruppe { background: var(--blatt); border-radius: 10px; padding: 12px 14px; }
+.w-gruppe h3 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin: 0 0 8px; }
+.w-gruppe .meta { margin-top: 8px; }
+.w-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.kasten-warn { box-shadow: inset 4px 0 0 var(--rot); }
+.marke.saison { background: color-mix(in srgb, var(--gruen) 16%, var(--blatt)); color: var(--gruen); }
+ul.vorschau { list-style: none; padding: 0; margin: 0 0 6px; display: grid; gap: 6px; }
+ul.vorschau li { background: var(--blatt); border-radius: 8px; padding: 9px 12px; box-shadow: 0 1px 0 var(--linie); }
+ul.vorschau li.warn { box-shadow: inset 4px 0 0 var(--rot), 0 1px 0 var(--linie); color: var(--rot); font-weight: 600; }
+
+/* Wochenbonus der Kinder */
+.bonus-tage { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.bonus-tag { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--blatt); color: var(--tinte); box-shadow: inset 0 0 0 1.5px var(--linie); }
+.bonus-tag.ok { background: var(--gruen); color: #fff; box-shadow: none; }
+.bonus-tag.verpasst { background: color-mix(in srgb, var(--rot) 14%, var(--blatt)); color: var(--rot); box-shadow: inset 0 0 0 1.5px var(--rot); }
+.bonus-tag.offen { box-shadow: inset 0 0 0 2px var(--tinte); }
+.bonus-tag.frei { opacity: .45; }
+.bonus-tag.kommt { opacity: .7; }
+.tour-kosten { margin: -2px 2px 8px; }
+.bonus-kasten { margin-bottom: 18px; }
+details.klapp > summary { font-weight: 700; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+details.klapp > summary::-webkit-details-marker { display: none; }
+details.klapp > summary::after { content: ''; flex: none; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -4px 4px 0 0; opacity: .6; }
+details.klapp[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+details.klapp[open] > summary { margin-bottom: 6px; }
+details.klapp > summary { text-decoration: none; padding: 0; }
+.form .person-zeile .schalter { display: flex; flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
+/* Erklärung hinter dem „i“ */
+.abschnitt.mit-info { display: flex; align-items: center; gap: 8px; }
+.info-knopf { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font: italic 700 13px/1 Georgia, serif; color: var(--tinte-2); box-shadow: inset 0 0 0 1.5px var(--tinte-2); background: transparent; padding: 0; }
+.info-knopf[aria-expanded="true"] { background: var(--fuell); color: #fff; box-shadow: none; }
+.info-text { margin: -4px 2px 14px; }
+/* Haken in Formularen: Kästchen links neben dem Text, auch bei mehrzeiligen Erklärungen */
+/* Schalter mit Erklärung: Kästchen links, Erklärung unter dem Titel, auch außerhalb von Formularen. */
+label.schalter:has(small), .form label.schalter { display: block; position: relative; padding-left: 30px; font-weight: 500; }
+label.schalter:has(small) > input, .form label.schalter > input { position: absolute; left: 0; top: 1px; }
+label.schalter small { display: block; margin-top: 2px; font-weight: 400; color: var(--tinte-2); }
+.person-zeile .schalter, .form .person-zeile .schalter { padding-left: 0; }
+.person-zeile .schalter > input, .form .person-zeile .schalter > input { position: static; }
+/* Notizen fürs nächste Mal */
+.notiz-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.notiz-liste li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; align-items: start; }
+.notiz-text { grid-column: 1; }
+.notiz-meta { grid-column: 1; font-size: 13px; color: var(--tinte-2); }
+.notiz-weg { grid-column: 2; grid-row: 1 / span 2; width: 32px; height: 32px; display: grid; place-items: center; background: transparent; color: var(--tinte-2); }
+.notiz-weg svg { width: 16px; height: 16px; }
+details.notiz-neu { margin-top: 10px; }
+details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4px 0; }
+.notiz-form { margin-top: 6px; }
+.koch-notiz { margin-top: 18px; }
+.notiz-weg svg { stroke: currentColor; stroke-width: 2.4; fill: none; stroke-linecap: round; }
+/* Abstand, wenn eine Überschrift direkt auf einen Kasten folgt (zum Beispiel „Die Woche“ nach „Heute Abend für morgen“) */
+.kasten-text + .abschnitt, .kasten-text + h2, details.kasten-text + .abschnitt { margin-top: 26px; }
+/* Abhaken: Haken springt kurz auf, die Zeile blendet danach aus */
+@keyframes haken-auf { 0% { transform: scale(0.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes zeile-weg { 0%, 55% { opacity: 1; } 100% { opacity: 0.35; } }
+.gerade-abgehakt .kasten { animation: haken-auf 0.3s ease-out; }
+.gerade-abgehakt { animation: zeile-weg 0.65s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) { .gerade-abgehakt, .gerade-abgehakt .kasten { animation: none; } }
+/* Hinweis auf eine neue Version */
+.neue-version { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 45;
+  background: var(--fuell); color: #fff; border: 0; border-radius: 999px; padding: 12px 20px; font: 600 15px/1.2 var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); max-width: calc(100vw - 32px); }
+/* Packungsgrößen */
+.pack-wahl { display: grid !important; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; background: var(--blatt); border-radius: 10px; padding: 12px; box-shadow: 0 1px 0 var(--linie); font-weight: 400 !important; padding-left: 12px !important; }
+.form label.pack-wahl > input { position: static; margin-top: 2px; width: 20px; height: 20px; accent-color: var(--tinte); }
+.pack-wahl .pw-titel { display: block; font-weight: 650; }
+.pack-wahl .pw-text { display: block; font-size: 14px; color: var(--tinte-2); margin-top: 3px; }
+.pack-groesse { flex: 0 0 96px; }
+.fehlt-kasten li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Hinweis für die Kinder: offene Grundaufgaben */
+.aufgaben-hinweis { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
+  background: var(--blatt); color: inherit; font: inherit; box-shadow: inset 4px 0 0 var(--rot), 0 1px 0 var(--linie); cursor: pointer; }
+.ah-zahl { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--rot); color: #fff; font: 700 20px/1 var(--anzeige); }
+.ah-text { flex: 1; min-width: 0; }
+.ah-titel { display: block; font-weight: 700; }
+.ah-liste { display: block; font-size: 14px; color: var(--tinte-2); }
+.ah-pfeil { flex: none; font-size: 26px; color: var(--tinte-2); }
+
+/* Zustellstatus der Benachrichtigungen */
+.push-stand { margin-top: 8px; }
+.push-stand.warn { color: var(--rot); }
+
+/* Tagesaufgaben der Kinder: deutlich abgesetzt von den Wochenaufgaben */
+.pflicht { border: 2px solid var(--rot); border-radius: 14px; padding: 10px 10px 4px; margin-bottom: 6px; }
+.pflicht.fertig { border-color: var(--gruen); }
+.pflicht-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 2px 4px 8px; }
+.pflicht-kopf strong { font-size: 1.05rem; }
+.pflicht-kopf span { font-size: .85rem; font-weight: 600; color: var(--rot); }
+.pflicht.fertig .pflicht-kopf span { color: var(--gruen); }
+.pflicht .posten { margin: 0; }
+
+/* Kinder: alles erledigt */
+.aufgaben-hinweis.fertig { box-shadow: inset 4px 0 0 var(--gruen), 0 1px 0 var(--linie); }
+.aufgaben-hinweis.fertig .ah-zahl { background: var(--gruen); }
+.aufgaben-hinweis.fertig .ah-zahl svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Uhrzeiten der Erinnerungen */
+.erinnerung-form { display: grid; gap: 10px; }
+.erinnerung-form .feld-titel { font-size: 16px; }
+.erinnerung-form .zeiten { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.erinnerung-form .knopfreihe { margin: 0; }
+
+/* Zustellprotokoll */
+.zustellung { margin-top: 10px; }
+.zustellung ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.zustellung li { display: grid; grid-template-columns: 6.6em 1fr; gap: 2px 10px; font-size: 14px; }
+.zustellung .z-zeit { color: var(--tinte-2); font-variant-numeric: tabular-nums; }
+.zustellung .z-titel { min-width: 0; overflow-wrap: anywhere; }
+.zustellung .z-ergebnis { grid-column: 2; font-size: 13px; color: var(--gruen); }
+.zustellung .z-ergebnis.warn { color: var(--rot); }

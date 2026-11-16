@@ -1,0 +1,9 @@
+# Die App besteht nur aus statischen Dateien, ein Build ist nicht nötig.
+[build]
+  publish = "."
+
+# Der Service Worker muss immer frisch geladen werden, sonst greifen Änderungen erst spät.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

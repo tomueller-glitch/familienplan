@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F5466"/><stop offset="1" stop-color="#0E2A33"/></linearGradient></defs>
+  <rect width="1024" height="1024" fill="url(#g)"/>
+  <!-- Haus aus Besteck: Dach als Linie, Gabel und Messer als Wände -->
+  <path d="M232 478 L512 238 L792 478" fill="none" stroke="#FFF6EC" stroke-width="70" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Gabel -->
+  <g fill="#FFF6EC">
+    <rect x="372" y="440" width="22" height="130" rx="11"/><rect x="414" y="440" width="22" height="130" rx="11"/><rect x="456" y="440" width="22" height="130" rx="11"/>
+    <path d="M372 550 h106 v20 a53 53 0 0 1 -32 48 v176 a21 21 0 0 1 -42 0 v-176 a53 53 0 0 1 -32 -48z"/>
+    <!-- Messer -->
+    <path d="M590 440 c60 20 76 110 60 190 h-28 v164 a21 21 0 0 1 -42 0 v-334 a20 20 0 0 1 10 -20z"/>
+  </g>
+</svg>

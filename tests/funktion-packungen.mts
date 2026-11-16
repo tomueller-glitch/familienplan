@@ -1,0 +1,10 @@
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
+const m = await import(ROOT + '/supabase/functions/push/index.ts');
+const p = m.planPrompt({ rules: { ...m.DEFAULT_RULES }, ctx: null, offers: '', week: '2026-11-23', wish: '', extra: { packungen: ['Putenbrustfilet: 400 g'] } }) as any;
+const t = JSON.stringify(p);
+console.log('Packungen im Plan:', t.includes('Putenbrustfilet: 400 g'), 'Regel:', t.includes('Plane mit ganzen Packungen'));
+const sch = m.receiptSchema(['Sonstiges']) as any;
+console.log('Kassenzettel mit Packung:', sch.properties.posten.items.required.includes('packung'));
+const r = m.parseReceipt({ content: [{ type: 'text', text: JSON.stringify({ markt: 'Aldi Süd', datum: '2026-11-14', summe: 3, hinweis: '', posten: [{ text: 'PUTENBR.FIL. 400G', name: 'Putenbrustfilet', preis: 4.99, kategorie: 'Sonstiges', packung: '400 g' }] }) }] }, ['Sonstiges']);
+console.log('Gelesen:', r.posten[0].packung);
