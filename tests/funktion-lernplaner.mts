@@ -1,4 +1,4 @@
-import { lernMessages, lpFromRows, berlin } from '../supabase/functions/push/index.ts';
+import { lernMessages, lpFromRows, berlin, lpSchoolEnd } from '../supabase/functions/push/index.ts';
 const persons=[{id:'p1',name:'Papa',adult:true},{id:'p2',name:'Mama',adult:true},{id:'p3',name:'Jonas',adult:false},{id:'p4',name:'Lena',adult:false}];
 const day='2026-11-17'; // Dienstag
 const rows=[
@@ -18,3 +18,9 @@ for(const t of ['16:30','16:35','18:30','19:05','19:45','12:00']){const m=lernMe
 const sun=Date.parse('2026-11-22T17:10:00+01:00');console.log('So',lernMessages(lp,persons,sun).map(x=>x.key));
 console.log('Ferien',lernMessages(lp,persons,Date.parse('2026-12-28T16:40:00+01:00')).map(x=>x.key));
 console.log('aus',lernMessages(lpFromRows([{id:'settings',coll:'settings',data:{pushOn:false}}]),persons,at('16:30')).length);
+
+// Schulschluss aus dem Stundenplan: Di bis zur 9. Stunde (15:15), Anpfiff also 16:15.
+const tt={times:[['08:00','08:45'],['08:45','09:30'],['09:45','10:30'],['10:30','11:15'],['11:30','12:15'],['12:15','13:00'],['13:00','13:45'],['13:45','14:30'],['14:30','15:15']],ab:true,refWeek:'2026-11-16',refType:'B',A:{},B:{2:['L','M','Ins','E','Sp','Sp','','Blas','Blas']}};
+console.log('Schulschluss Di', lpSchoolEnd(tt,'2026-11-17'), 'Di A-Woche (Rückfall auf B)', lpSchoolEnd(tt,'2026-11-24'), 'Mo leer', lpSchoolEnd(tt,'2026-11-16'));
+const lp2=lpFromRows([...rows,{id:'timetable',coll:'timetable',data:tt}]);
+console.log('16:15', lernMessages(lp2,persons,at('16:15')).filter(x=>x.key.startsWith('lp-anpfiff')).length, '16:30 schon vorbei?', lernMessages(lp2,persons,at('17:05')).filter(x=>x.key.startsWith('lp-anpfiff')).length);

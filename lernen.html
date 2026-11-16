@@ -155,6 +155,10 @@ let S,ui={tab:'heute',day:0,fb:null,fbDur:'ok',fbFeel:'mittel',unlocked:false,ad
 
 /* ===== Claude ===== */
 let SAMPLE=null;
+// Ferien und Feiertage aus dem Familienplan (js/logic.js). Fehlt die Datei, gelten nur die Wochenenden.
+let CAL=null;
+try{import('./js/logic.js').then(m=>{CAL=m;if(S)render()}).catch(()=>{})}catch(e){}
+function freeReason(d){if(!isWeekday(d))return null;try{return CAL?CAL.schoolFree(iso(d)):null}catch(e){return null}}
 if(!REMOTE){try{if(window.claude&&window.claude.use)window.claude.use('sample').then(s=>{SAMPLE=s;render()}).catch(()=>{})}catch(e){}}
 const AI_OK=()=>(REMOTE&&authOk&&!!sb)||!!SAMPLE;
 function blobToB64(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({type:b.type||'image/jpeg',data:String(r.result).split(',')[1]});r.onerror=rej;r.readAsDataURL(b)})}
@@ -185,8 +189,8 @@ function aiError(e){
 /* ===== Datenmodell ===== */
 const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
-const ONE=['settings','pace','schoolEnd','running','meta','model','report'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable'];
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -200,6 +204,7 @@ function migrate(x){
   if(typeof x.settings.theme!=='number')x.settings.theme=0;
   x.schoolEnd=Object.assign({1:'13:00',2:'15:30',3:'13:00',4:'13:00',5:'12:15'},x.schoolEnd);
   x.model=Object.assign({cap:75,prep:{}},x.model);
+  if(x.settings.holidaysFree===undefined)x.settings.holidaysFree=true;
   return x;
 }
 function defaults(){
@@ -366,10 +371,26 @@ function applyResult(e,feel,prep){
   m.prep[e.subject]=Math.round(Math.min(1.6,Math.max(.7,f))*100)/100;
 }
 
+/* ===== Stundenplan ===== */
+const TT_SUBJ=['Deutsch','Mathe','Englisch','Latein','Natur und Technik','Biologie','Physik','Geschichte','Geographie','Wirtschaft','Religion/Ethik','Musik','Kunst','Sport','Intensivierung','Bläserklasse','Sonstiges'];
+const TT_SHORT={Deutsch:'D',Mathe:'M',Englisch:'E',Latein:'L','Natur und Technik':'NuT',Biologie:'B',Physik:'Ph',Geschichte:'G',Geographie:'Geo',Wirtschaft:'WR','Religion/Ethik':'Rel',Musik:'Mu',Kunst:'Ku',Sport:'Sp',Intensivierung:'Ins','Bläserklasse':'Blas',Sonstiges:'?'};
+Object.assign(COL,{Sport:'#5F5E5A',Intensivierung:'#B4B2A9','Bläserklasse':'#D4537E'});
+const TT_TIMES=[['08:00','08:45'],['08:45','09:30'],['09:45','10:30'],['10:30','11:15'],['11:30','12:15'],['12:15','13:00'],['13:00','13:45'],['13:45','14:30'],['14:30','15:15'],['15:15','16:00'],['16:00','16:45']];
+// Vorschlag aus dem Schulmanager-Screenshot vom 16.11.2026 (KW 47, B-Woche). Mittwoch war Buß- und Bettag und fehlt.
+const TT_SUGGEST={week:'2026-11-16',type:'B',days:{1:['Geschichte','Deutsch','Deutsch','Latein','Natur und Technik','Geschichte'],2:['Latein','Mathe','Intensivierung','Englisch','Sport','Sport','','Bläserklasse','Bläserklasse'],3:[],4:['Latein','Latein','Mathe','Natur und Technik','Englisch','Musik','','Kunst','Kunst'],5:['Deutsch','Geographie','Musik','Englisch','Mathe']}};
+function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-n+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7)}
+function ttNew(){return{times:TT_TIMES.map(x=>x.slice()),timesOk:false,ab:true,refWeek:iso(monday(today())),refType:'B',A:{},B:{}}}
+function ttFilled(p){return!!p&&[1,2,3,4,5].some(w=>(p[w]||[]).some(Boolean))}
+function weekType(d){const tt=S.timetable;if(!tt||!tt.ab)return'A';const diffW=Math.round((monday(d)-parse(tt.refWeek))/(7*864e5));return Math.abs(diffW)%2===0?tt.refType:(tt.refType==='A'?'B':'A')}
+// Plan für einen Tag. Ist eine der beiden Wochen noch leer, gilt die andere.
+function lessonsOn(d){const tt=S.timetable;if(!tt||!isWeekday(d))return[];const t=weekType(d);let p=tt[t];if(!ttFilled(p))p=tt[t==='A'?'B':'A'];const w=d.getDay();let l=(p&&p[w])||[];if(!l.some(Boolean)&&tt.ab){const o=tt[t==='A'?'B':'A'];if(o&&o[w])l=o[w]}return l}
+function schoolEndMin(d){const l=lessonsOn(d),tt=S.timetable;let last=-1;l.forEach((x,i)=>{if(x)last=i});if(last<0||!tt)return null;const tm=tt.times[last];return tm?toMin(tm[1]):null}
+function nextLesson(subject){if(!S.timetable)return schoolDayIn(1);for(let i=1;i<=21;i++){const d=addDays(today(),i);if(!isWeekday(d)||freeReason(d))continue;if(lessonsOn(d).includes(subject))return iso(d)}return schoolDayIn(1)}
+
 /* ===== Planung ===== */
 function apptsFor(d){const di=iso(d),wd=d.getDay();return S.appts.filter(a=>+a.weekday===wd).concat(S.oneoffs.filter(a=>a.date===di)).sort((a,b)=>a.start.localeCompare(b.start))}
-function isFree(d){return d.getDay()===0&&S.settings.sundayFree}
-function dayStart(d){return isWeekday(d)?toMin(S.schoolEnd[d.getDay()]||'13:00')+(+S.settings.afterSchool):toMin(S.settings.weekendStart)}
+function isFree(d){return(d.getDay()===0&&S.settings.sundayFree)||(S.settings.holidaysFree!==false&&!!freeReason(d))}
+function dayStart(d){if(!isWeekday(d)||freeReason(d))return toMin(S.settings.weekendStart);const e=schoolEndMin(d);return(e!=null?e:toMin(S.schoolEnd[d.getDay()]||'13:00'))+(+S.settings.afterSchool)}
 function windowsFor(d,isToday){
   const st=S.settings,appts=apptsFor(d);
   if(isFree(d))return{wins:[],appts,free:true};
@@ -439,9 +460,10 @@ function checkDayWin(){
   if(!day.items.length&&!day.over.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;award(PTS.win,'Tagessieg!')}
 }
 function weekInfo(){
-  const m=monday(today()),days=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
-  const won=days.filter(d=>S.wins[d]).length,goal=+S.settings.winGoal||4,left=days.filter(d=>d>=T&&!S.wins[d]).length;
-  return{key:iso(m),days,won,goal,left,prize:won>=goal,possible:won+left>=goal,redeemed:S.prizes[iso(m)]==='eingelöst'};
+  const m=monday(today()),all=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
+  const days=all.filter(d=>!isFree(parse(d)));
+  const won=days.filter(d=>S.wins[d]).length,goal=Math.max(1,Math.min(days.length,Math.round((+S.settings.winGoal||4)*days.length/5))),left=days.filter(d=>d>=T&&!S.wins[d]).length;
+  return{key:iso(m),days:all,won,goal,left,prize:won>=goal,possible:won+left>=goal,redeemed:S.prizes[iso(m)]==='eingelöst'};
 }
 function badges(){
   const wins=Object.keys(S.wins).filter(d=>S.wins[d]).sort();
@@ -531,7 +553,7 @@ Wenn du keine Hausaufgaben erkennst: {"hausaufgaben":[]}`;
     const all=arr.filter(x=>x&&(x.aufgabe||x.title)),kept=all.filter(x=>!known(x)||x.gestellt===T),hidden=all.length-kept.length;
     const items=kept.map(x=>{
       const subject=matchSubject(x.fach||x.subject),title=String(x.aufgabe||x.title).trim();
-      let due=isoRe.test(x.abgabe||'')?x.abgabe:schoolDayIn(1);if(due<=T)due=schoolDayIn(1);
+      let due=isoRe.test(x.abgabe||'')?x.abgabe:nextLesson(subject);if(due<=T)due=nextLesson(subject);
       let est=Math.round(+x.minuten||20);est=Math.min(90,Math.max(5,Math.round(est/5)*5));
       const dup=isDup(subject,title,due),unclear=!known(x);
       return{subject,title,due,est,dup,unclear,on:!dup&&!unclear};
@@ -631,9 +653,9 @@ function renderTaskCard(t,P,segs){
 const subjOpts=sel=>SUBJ.map(s=>`<option ${s===sel?'selected':''}>${s}</option>`).join('');
 function haForm(){
   return `<form data-form="ha" class="card"><h2>Hausaufgabe eintragen</h2>
-  <label>Fach<select name="subject">${subjOpts()}</select></label>
+  <label>Fach<select name="subject" data-due="1">${subjOpts()}</select></label>
   <label>Was ist zu tun?<input name="title" required placeholder="Buch S. 88 Nr. 3"></label>
-  <div class="g2"><label>Abgabe am<input type="date" name="due" required value="${schoolDayIn(1)}" min="${iso(today())}"></label>
+  <div class="g2"><label>Abgabe am${S.timetable?' (nächste Stunde)':''}<input type="date" name="due" required value="${nextLesson(SUBJ[0])}" min="${iso(today())}"></label>
   <label>Geschätzte Dauer<select name="est">${[5,10,15,20,25,30,40,45,60,75,90].map(m=>`<option value="${m}" ${m===20?'selected':''}>${m} Min.</option>`).join('')}</select></label></div>
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
 }
@@ -674,7 +696,7 @@ function scoreboard(){
   else prize='Diese Woche reicht es nicht mehr für die Siegprämie. Am Montag beginnt ein neues Spiel.';
   return `<div class="card"><div class="score"><div><div class="sub">Tore heute</div><div class="n">${goalsOn(T)}</div></div>
   <div style="text-align:right"><div class="sub">${esc(L.name)}</div><div style="font-weight:600">${L.n} Tore</div></div></div>
-  <div class="wk">${w.days.map((d,i)=>`<div class="${S.wins[d]?'won':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<br>${S.wins[d]?'Sieg':d<T?'·':'&nbsp;'}</div>`).join('')}</div>
+  <div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d));return `<div class="${S.wins[d]?'won':fr?'':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<br>${S.wins[d]?'Sieg':fr?'frei':d<T?'·':'&nbsp;'}</div>`}).join('')}</div>
   <div class="sub" style="margin-top:8px">${prize}</div></div>`;
 }
 function reviewCards(){
@@ -720,7 +742,7 @@ function renderFocus(plan){
     if(rest.length)h+=`<div class="card"><h2>Danach (${rest.length})</h2>`+rest.map(x=>`<div class="li"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}<br><span class="sub">${esc(x.t.subject)} · ${x.P} Min.</span></span><button class="btn sm" data-act="focus" data-id="${x.t.id}">Zuerst</button></div>`).join('')+`</div>`;
   }else if(!day.free){
     h+=`<div class="card" style="text-align:center">${S.wins[T]?'<div class="big">Tagessieg!</div><div class="sub">Alles geschafft. Stark gespielt!</div>':checksDone(T)?'<div class="big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>':'<div class="sub">Nur noch der Kabinen-Check, dann ist der Tag gewonnen.</div>'}</div>`;
-  }else h+=`<div class="card">Sonntag ist lernfrei. Genieß den Tag!</div>`;
+  }else h+=`<div class="card">${esc(freeReason(today())||'Sonntag')}: heute ist lernfrei. Genieß den Tag!</div>`;
   const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T);
   if(doneToday.length)h+=`<div class="card"><h2>Erledigt</h2>`+doneToday.map(t=>`<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="muted">(${t.actual} Min.)</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</div>`;
   h+=`<div class="row" style="margin-top:6px"><button class="btn" data-act="full">Ganzen Tag mit Uhrzeiten zeigen</button></div>`;
@@ -735,7 +757,7 @@ function renderHeute(plan){
   const up=S.exams.filter(e=>e.date>=T&&diff(T,e.date)<=14).sort((a,b)=>a.date.localeCompare(b.date));
   if(up.length)h+=`<div class="chips">`+up.map(e=>{const n=diff(T,e.date);return `<span class="chip ${n<=3?'wa':''}"><span class="dot" style="background:${col(e.subject)}"></span>${esc(e.subject)} ${esc(e.type)}: ${n===0?'heute':n===1?'morgen':'in '+n+' Tagen'}</span>`}).join('')+`</div>`;
   h+=msgBox();
-  if(day.free)h+=`<div class="card">Sonntag ist lernfrei. Genieß den Tag!</div>`;
+  if(day.free)h+=`<div class="card">${esc(freeReason(parse(day.date))||'Sonntag')}: lernfrei.</div>`;
   const ent=day.appts.map(a=>({s:toMin(a.start),h:`<div class="item appt"><div class="grow"><div class="tt">${esc(a.title)}</div><div class="time">${a.start} bis ${a.end}</div></div></div>`}))
     .concat(day.items.map(it=>({s:it.segs[0][0],h:renderTaskCard(it.t,it.P,it.segs)})));
   ent.sort((a,b)=>a.s-b.s);h+=ent.map(e=>e.h).join('');
@@ -776,8 +798,63 @@ function renderPokale(){
   <div class="sub" style="margin-top:8px">Wochenspiel: ${S.settings.winGoal} Tagessiege von Montag bis Freitag gewinnen das Spiel. Siegprämie: ${S.settings.bedtimeMin} Min. länger aufbleiben am Freitag und Samstag.</div></div>`;
   return h;
 }
+function renderStundenplan(){
+  const tt=S.timetable;
+  let h=`<div class="row" style="margin-top:12px"><button class="btn" data-act="sub" data-v="">Zurück</button></div>`+msgBox();
+  if(!tt){
+    return h+`<div class="card"><h2>Stundenplan</h2><div class="sub">Aus deinem Screenshot vom 16.11. habe ich die B-Woche schon vorbereitet. Der Mittwoch fehlt, weil Buß- und Bettag war.</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="ttsuggest">Vorschlag übernehmen</button><button class="btn" data-act="ttempty">Leer anfangen</button></div></div>`;
+  }
+  const t=ui.ttType||weekType(today()),wd=ui.ttDay||1,p=tt[t]||{},l=p[wd]||[];
+  const thisType=weekType(today());
+  h+=`<div class="card"><h2>Stundenplan</h2>`;
+  if(tt.ab)h+=`<div class="sub" style="margin-bottom:8px">Diese Woche ist ${thisType}-Woche.${ttFilled(tt[t==='A'?'B':'A'])?'':' Die '+(t==='A'?'B':'A')+'-Woche ist noch leer, solange gilt dieser Plan für beide.'}</div>
+    <div class="row" style="margin-bottom:8px">${['A','B'].map(x=>`<button class="btn ${t===x?'on':''}" data-act="tttype" data-v="${x}">${x}-Woche</button>`).join('')}</div>`;
+  h+=`<div class="days" style="padding-top:4px">${[1,2,3,4,5].map(w=>{const e=(()=>{const ls=(p[w]||[]);let last=-1;ls.forEach((x,i)=>{if(x)last=i});return last<0?null:toMin(tt.times[last][1])})();return `<button class="day ${w===wd?'on':''}" data-act="ttday" data-v="${w}">${WD[w]}<small>${e!=null?'bis '+hm(e):'leer'}</small></button>`}).join('')}</div>`;
+  h+=tt.times.map((tm,i)=>`<div class="li"><span style="width:76px" class="sub"><b style="color:var(--tx)">${i+1}.</b> ${tm[0]}</span><select data-tt="${i}" style="flex:1;margin:0">${['',...TT_SUBJ].map(x=>`<option value="${esc(x)}" ${x===(l[i]||'')?'selected':''}>${x?esc(x):'frei'}</option>`).join('')}</select></div>`).join('');
+  const lastI=(()=>{let last=-1;l.forEach((x,i)=>{if(x)last=i});return last})();
+  h+=`<div class="note ${lastI<0?'warn':'okn'}">${lastI<0?WDL[wd]+': noch keine Stunden eingetragen.':'Schulschluss am '+WDL[wd]+': '+tt.times[lastI][1]+' Uhr, Lernen ab '+hm(toMin(tt.times[lastI][1])+(+S.settings.afterSchool))+' Uhr.'}</div>
+  <div class="sub">Einträge werden sofort gespeichert. Vertretungen und Ausfälle nicht eintragen, nur den regulären Plan.</div></div>`;
+  if(AI_OK())h+=`<div class="card"><h2>Aus Screenshot übernehmen</h2><div class="sub">Screenshot der Wochenansicht im Schulmanager. A- oder B-Woche erkennt die App an der Überschrift. Feiertage überschreiben nichts.</div>
+    <input type="file" id="ttfile" accept="image/*" style="margin-top:10px"><div class="row" style="margin-top:10px"><button class="btn primary" data-act="ttscan">${ui.busy==='tt'?'Moment …':'Einlesen'}</button></div></div>`;
+  h+=`<form data-form="tt" class="card"><h2>Einstellungen zum Stundenplan</h2>
+  ${tt.timesOk?'':'<div class="note warn">Die Uhrzeiten der Stunden sind Beispielwerte. Bitte einmal mit eurer Schule abgleichen und speichern.</div>'}
+  <label style="color:var(--tx)"><input type="checkbox" name="ab" ${tt.ab?'checked':''}>A- und B-Woche wechseln sich ab</label>
+  <label>Diese Woche ist<select name="ref"><option value="A" ${thisType==='A'?'selected':''}>A-Woche</option><option value="B" ${thisType==='B'?'selected':''}>B-Woche</option></select></label>
+  <div class="sub" style="margin-top:12px">Uhrzeiten der Stunden</div>
+  ${tt.times.map((tm,i)=>`<div class="g2" style="grid-template-columns:40px minmax(0,1fr) minmax(0,1fr);display:grid;gap:8px;align-items:end"><b style="padding-bottom:10px">${i+1}.</b><label>Beginn<input type="time" name="s${i}" value="${tm[0]}"></label><label>Ende<input type="time" name="e${i}" value="${tm[1]}"></label></div>`).join('')}
+  <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
+  return h;
+}
+async function scanTimetable(){
+  const inp=document.getElementById('ttfile'),files=[...((inp&&inp.files)||[])];
+  if(!files.length){ui.msg='Bitte zuerst einen Screenshot auswählen.';ui.msgType='err';render();return}
+  ui.busy='tt';render();
+  try{
+    const imgs=await Promise.all(files.slice(0,2).map(shrink));
+    const res=await aiJSON(`Das ist ein Screenshot der Stundenplan-Wochenansicht aus Schulmanager Online (7. Klasse, Gymnasium in Bayern).
+Lies den regulären Stundenplan ab. Zeilen sind die Stunden 1 bis 11, Spalten Montag bis Freitag.
+- Jede Zelle: genau eines dieser Fächer, sonst "": ${TT_SUBJ.join(', ')}. Kürzel: D Deutsch, M Mathe, E Englisch, L Latein, NuT Natur und Technik, B Biologie, Ph Physik, G Geschichte, Geo Geographie, WR Wirtschaft, K/Ev/Eth Religion/Ethik, Mu Musik, Ku Kunst, Sm/Sw/Sp Sport, Ins Intensivierung, Blas Bläserklasse.
+- Durchgestrichene, ausgefallene oder vertretene Stunden zählen wie normaler Unterricht im ursprünglichen Fach. Lehrerkürzel und Räume ignorieren.
+- Ist an einem Tag gar kein regulärer Unterricht zu sehen (Feiertag, Ferien, ganztags grau), setze den Tag auf null.
+- "woche": "A" oder "B", wenn A-Woche oder B-Woche auf dem Bild steht, sonst "".
+- "montag": Datum des Montags als JJJJ-MM-TT, wenn erkennbar, sonst "".
+Antworte nur mit JSON: {"woche":"B","montag":"2026-11-16","tage":{"1":["Geschichte","Deutsch",""],"2":[...],"3":null,"4":[...],"5":[...]}}`,imgs);
+    const tt=S.timetable||ttNew(),typ=/^[AB]$/.test(res.woche||'')?res.woche:(ui.ttType||weekType(today()));
+    if(/^[AB]$/.test(res.woche||'')&&/^\d{4}-\d{2}-\d{2}$/.test(res.montag||'')){tt.refWeek=iso(monday(parse(res.montag)));tt.refType=res.woche;tt.ab=true}
+    const plan=Object.assign({},tt[typ]);let n=0;
+    for(const w of [1,2,3,4,5]){const day=res.tage&&res.tage[String(w)];if(!Array.isArray(day))continue;
+      const clean=day.slice(0,tt.times.length).map(x=>TT_SUBJ.includes(x)?x:(x?'Sonstiges':''));while(clean.length&&!clean[clean.length-1])clean.pop();
+      if(clean.length){plan[w]=clean;n++}}
+    tt[typ]=plan;S.timetable=tt;ui.ttType=typ;save();
+    ui.msg=n?`${typ}-Woche übernommen (${n} Tage). Bitte kurz prüfen.`:'Auf dem Screenshot war kein Stundenplan zu erkennen.';ui.msgType=n?'okn':'err';
+  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+  ui.busy=null;render();
+}
+
 function renderEltern(plan){
   if(!ui.unlocked)return `<form data-form="pin" class="card"><h2>Elternbereich</h2><label>PIN<input name="pin" type="password" inputmode="numeric" required autocomplete="off"></label><div class="row" style="margin-top:12px"><button class="btn primary">Öffnen</button></div></form>`+msgBox();
+  if(ui.sub==='plan')return renderStundenplan();
   const T=iso(today()),st=S.settings,w=weekInfo(),sd=startDelay();
   const doneT=S.tasks.filter(t=>t.done&&t.doneAt===T),openT=plan[0].items.length+plan[0].over.length;
   const wk=S.tasks.filter(t=>t.done&&t.doneAt>iso(addDays(today(),-7)));
@@ -789,6 +866,8 @@ function renderEltern(plan){
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
   </div>`;
+  h+=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Stundenplan</h2><button class="btn primary" data-act="sub" data-v="plan">${S.timetable?'Bearbeiten':'Eintragen'}</button></div>
+  <div class="sub" style="margin-top:6px">${S.timetable?'Schulschluss diese Woche: '+[1,2,3,4,5].map(w=>{const d=addDays(monday(today()),w-1),fr=freeReason(d),e=schoolEndMin(d);return WD[w]+' '+(fr?'frei':e!=null?hm(e):'?')}).join(' · ')+(S.timetable.ab?' ('+weekType(today())+'-Woche)':''):'Noch kein Stundenplan. Daraus berechnet der Lernplaner den Schulschluss und das Abgabedatum von Hausaufgaben.'}</div></div>`;
   h+=`<div class="card"><h2>Wochenspiel</h2><div>${w.won} von ${w.goal} Tagessiegen</div>
   <div class="sub">${w.prize?(w.redeemed?'Siegprämie ist eingelöst.':`Gewonnen: Freitag und Samstag je ${st.bedtimeMin} Min. länger aufbleiben.`):w.possible?'Noch offen.':'Diese Woche nicht mehr erreichbar.'}</div>
   ${w.prize&&!w.redeemed?`<div class="row" style="margin-top:10px"><button class="btn" data-act="redeem">Als eingelöst markieren</button></div>`:''}</div>`;
@@ -835,11 +914,12 @@ function renderEltern(plan){
   <div class="row" style="margin-top:12px"><button class="btn">Termin hinzufügen</button></div></form>
   <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei (Fahrt, Umziehen, Essen).</div></div>`;
   h+=`<form data-form="settings" class="card"><h2>Einstellungen</h2>
-  <div class="sub">Schulschluss</div><div class="g5">${[1,2,3,4,5].map(w=>`<label>${WD[w]}<input type="time" name="se${w}" value="${S.schoolEnd[w]||'13:00'}"></label>`).join('')}</div>
+  <div class="sub">Schulschluss: kommt aus dem Stundenplan</div>
   <div class="g2"><label>Pause nach der Schule (Min.)<input type="number" name="afterSchool" min="0" max="180" value="${st.afterSchool}"></label><label>Spätestens fertig um<input type="time" name="latest" value="${st.latest}"></label></div>
   <div class="g2"><label>Am Samstag ab<input type="time" name="weekendStart" value="${st.weekendStart}"></label><label>Puffer um Termine (Min.)<input type="number" name="buffer" min="0" max="90" value="${st.buffer}"></label></div>
   <div class="g2"><label>Längster Lernblock (Min.)<input type="number" name="blockMax" min="10" max="60" value="${st.blockMax}"></label><label>Pause zwischen Blöcken (Min.)<input type="number" name="pause" min="0" max="20" value="${st.pause}"></label></div>
   <label style="color:var(--tx)"><input type="checkbox" name="sundayFree" ${st.sundayFree?'checked':''}>Sonntag lernfrei</label>
+  <label style="color:var(--tx)"><input type="checkbox" name="holidaysFree" ${st.holidaysFree!==false?'checked':''}>Ferien und Feiertage lernfrei</label>
   <div class="sub" style="margin-top:14px">Ludus Latinus</div>
   <label style="color:var(--tx)"><input type="checkbox" name="ludusOn" ${st.ludusOn?'checked':''}>Jeden Lerntag fest einplanen</label>
   <div class="g2"><label>Dauer (Min.)<input type="number" name="ludusMin" min="5" max="60" value="${st.ludusMin}"></label><label>Link zur App (optional)<input name="ludusUrl" type="url" value="${esc(st.ludusUrl)}" placeholder="https://…"></label></div>
@@ -880,7 +960,7 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=b.dataset.id;
   const t=id&&S.tasks.find(x=>x.id===id);
   switch(a){
-    case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;window.scrollTo(0,0);break;
+    case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;ui.sub='';window.scrollTo(0,0);break;
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
     case'focus':ui.focus=id;ui.fb=null;window.scrollTo(0,0);break;
@@ -914,7 +994,13 @@ document.addEventListener('click',e=>{
     case'helpdone':S.help=S.help.filter(x=>x.id!==id);save();break;
     case'redeem':S.prizes[weekInfo().key]='eingelöst';save();break;
     case'theme':S.settings.theme=+b.dataset.i;save();break;
-    case'lock':ui.unlocked=false;break;
+    case'lock':ui.unlocked=false;ui.sub='';break;
+    case'sub':ui.sub=b.dataset.v;window.scrollTo(0,0);break;
+    case'ttsuggest':{const tt=ttNew();tt.refWeek=TT_SUGGEST.week;tt.refType=TT_SUGGEST.type;tt.B=JSON.parse(JSON.stringify(TT_SUGGEST.days));S.timetable=tt;ui.ttType='B';ui.ttDay=3;save();ui.msg='Übernommen. Bitte noch den Mittwoch eintragen und die Uhrzeiten prüfen.';ui.msgType='okn';break}
+    case'ttempty':S.timetable=ttNew();save();break;
+    case'tttype':ui.ttType=b.dataset.v;break;
+    case'ttday':ui.ttDay=+b.dataset.v;break;
+    case'ttscan':if(!ui.busy)scanTimetable();return;
     case'scanopen':ui.scanOpen=true;ui.addHA=false;break;
     case'scancancel':ui.scan={status:'idle'};ui.scanOpen=false;break;
     case'scanrun':runScan();return;
@@ -928,6 +1014,10 @@ document.addEventListener('submit',e=>{
   const f=e.target;if(!f.dataset.form)return;e.preventDefault();
   const v=Object.fromEntries(new FormData(f));
   switch(f.dataset.form){
+    case'tt':{const tt=Object.assign({},S.timetable||ttNew());
+      tt.times=tt.times.map((tm,i)=>[v['s'+i]||tm[0],v['e'+i]||tm[1]]);tt.timesOk=true;
+      tt.ab=!!v.ab;tt.refWeek=iso(monday(today()));tt.refType=v.ref==='A'?'A':'B';
+      S.timetable=tt;ui.msg='Stundenplan-Einstellungen gespeichert.';ui.msgType='okn';break}
     case'pin':if(v.pin===S.settings.pin)ui.unlocked=true;else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'ha':if(!v.title.trim())return;addHA(v.subject,v.title.trim(),v.due,v.est);ui.addHA=false;ui.msg='Hausaufgabe gespeichert und eingeplant.';break;
     case'scanok':{
@@ -945,9 +1035,9 @@ document.addEventListener('submit',e=>{
       else S.appts.push({id:uid(),title:v.title,weekday:+v.when.slice(1),start:v.start,end:v.end});
       ui.msg='Termin gespeichert.';break;
     case'settings':{
-      const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);[1,2,3,4,5].forEach(w=>{if(v['se'+w])se[w]=v['se'+w]});
+      const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);
       st.afterSchool=+v.afterSchool||0;st.latest=v.latest||st.latest;st.weekendStart=v.weekendStart||st.weekendStart;
-      st.buffer=+v.buffer||0;st.blockMax=Math.max(10,+v.blockMax||15);st.pause=+v.pause||0;st.sundayFree=!!v.sundayFree;
+      st.buffer=+v.buffer||0;st.blockMax=Math.max(10,+v.blockMax||15);st.pause=+v.pause||0;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
       st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
       st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
       if(v.pin&&v.pin.trim())st.pin=v.pin.trim();
@@ -957,6 +1047,16 @@ document.addEventListener('submit',e=>{
       ui.msg='Einstellungen gespeichert.';ui.msgType='okn';break}
   }
   save();render();
+});
+
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.matches&&el.matches('select[data-tt]')){
+    const tt=S.timetable;if(!tt)return;const t=ui.ttType||weekType(today()),wd=ui.ttDay||1,i=+el.dataset.tt;
+    const plan=Object.assign({},tt[t]),l=(plan[wd]||[]).slice();while(l.length<=i)l.push('');l[i]=el.value;while(l.length&&!l[l.length-1])l.pop();
+    plan[wd]=l;tt[t]=plan;save();render();return;
+  }
+  if(el.matches&&el.matches('select[data-due]')){const f=el.closest('form'),d=f&&f.querySelector('input[name=due]');if(d)d.value=nextLesson(el.value)}
 });
 
 setInterval(()=>{document.querySelectorAll('[data-elapsed]').forEach(el=>el.textContent=Math.round((Date.now()-+el.dataset.elapsed)/60000))},15000);

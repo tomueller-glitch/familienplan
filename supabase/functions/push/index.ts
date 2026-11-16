@@ -1855,12 +1855,12 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
    ====================================================================== */
 
 export type LpData = {
-  settings: Row; schoolEnd: Row; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
+  settings: Row; schoolEnd: Row; timetable: Row | null; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
   wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
 };
 
 export function lpFromRows(rows: Row[]): LpData {
-  const d: LpData = { settings: {}, schoolEnd: {}, open: [], done: [], exams: [], help: [], wins: {}, kick: {}, meets: {} };
+  const d: LpData = { settings: {}, schoolEnd: {}, timetable: null, open: [], done: [], exams: [], help: [], wins: {}, kick: {}, meets: {} };
   const seen = new Set<string>();
   for (const r of rows) {
     if (seen.has(r.id)) continue;
@@ -1869,6 +1869,7 @@ export function lpFromRows(rows: Row[]): LpData {
     if (v == null) continue;
     if (r.coll === 'settings') d.settings = v;
     else if (r.coll === 'schoolEnd') d.schoolEnd = v;
+    else if (r.coll === 'timetable') d.timetable = v;
     else if (r.coll === 'task') (v.done ? d.done : d.open).push(v);
     else if (r.coll === 'exam') d.exams.push(v);
     else if (r.coll === 'help') d.help.push(v);
@@ -1880,6 +1881,26 @@ export function lpFromRows(rows: Row[]): LpData {
 }
 
 const hmMin = (t: unknown, fallback: number) => { const m = String(t ?? '').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : fallback; };
+
+// Schulschluss aus dem Stundenplan des Lernplaners (gleiche Regeln wie in lernen.html), sonst null.
+export function lpSchoolEnd(tt: Row | null, day: string): number | null {
+  if (!tt || !Array.isArray(tt.times)) return null;
+  const wd = wdOf(day) + 1;
+  if (wd > 5) return null;
+  const filled = (p: Row | undefined) => !!p && [1, 2, 3, 4, 5].some((w) => (p[w] || []).some(Boolean));
+  let type = 'A';
+  if (tt.ab && tt.refWeek) {
+    const weeks = Math.round((Date.parse(`${mondayOf(day)}T00:00:00Z`) - Date.parse(`${mondayOf(String(tt.refWeek))}T00:00:00Z`)) / (7 * DAY));
+    type = Math.abs(weeks) % 2 === 0 ? tt.refType : (tt.refType === 'A' ? 'B' : 'A');
+  }
+  const other = type === 'A' ? 'B' : 'A';
+  const plan = filled(tt[type]) ? tt[type] : tt[other];
+  let lessons: string[] = (plan && plan[wd]) || [];
+  if (!lessons.some(Boolean) && tt.ab && tt[other] && tt[other][wd]) lessons = tt[other][wd];
+  let last = -1;
+  lessons.forEach((x, i) => { if (x) last = i; });
+  return last >= 0 && tt.times[last] ? hmMin(tt.times[last][1], 13 * 60) : null;
+}
 
 export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
   const out: Due[] = [];
@@ -1902,7 +1923,8 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
   const doneToday = lp.done.filter((t) => t.doneAt === day);
   const active = schoolDay(day) || (wd === 5 && openToday.some((t) => t.kind === 'lern'));
   const latest = hmMin(st.latest, 19 * 60 + 30);
-  const start = wd < 5 ? hmMin(lp.schoolEnd[String(wd + 1)], 13 * 60) + (Number(st.afterSchool) || 0) : hmMin(st.weekendStart, 10 * 60);
+  const end = lpSchoolEnd(lp.timetable, day);
+  const start = wd < 5 ? (end ?? hmMin(lp.schoolEnd[String(wd + 1)], 13 * 60)) + (Number(st.afterSchool) || 0) : hmMin(st.weekendStart, 10 * 60);
   const names = (xs: Row[]) => xs.slice(0, 4).map((t) => (t.kind === 'daily' ? 'Ludus Latinus' : `${t.subject}: ${t.title}`)).join(', ') + (xs.length > 4 ? ` und ${xs.length - 4} weitere` : '');
   const anzahl = (n: number) => (n === 1 ? 'eine Aufgabe' : `${n} Aufgaben`);
 
@@ -1966,7 +1988,7 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
 async function loadLern(store: Store, today: string): Promise<LpData> {
   const base = 'lp_data?select=id,coll,data&deleted=is.false';
   const [a, b, c, d] = await Promise.all([
-    store.get(`${base}&coll=in.(settings,schoolEnd,exam,help,meet)`),
+    store.get(`${base}&coll=in.(settings,schoolEnd,timetable,exam,help,meet)`),
     store.get(`${base}&coll=eq.task&data->>done=eq.false`),
     store.get(`${base}&coll=eq.task&data->>doneAt=eq.${today}`),
     store.get(`${base}&coll=in.(win,kick)&data->>k=gte.${addDays(mondayOf(today), -7)}`),
