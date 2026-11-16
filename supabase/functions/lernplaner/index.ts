@@ -39,19 +39,40 @@ Deno.serve(async (req) => {
   ];
   // Mit web: true darf Claude im Lehrplan und bei den Schulbuchverlagen nachsehen (Websuche der Claude-API).
   const web = body.web === true;
-  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4,
-    allowed_domains: ['lehrplanplus.bayern.de', 'isb.bayern.de', 'km.bayern.de', 'ccbuchner.de', 'klett.de', 'cornelsen.de', 'westermann.de'] }];
-  const ask = (withWeb: boolean) => fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: Deno.env.get('LERNPLANER_MODEL') || 'claude-sonnet-5-5', max_tokens: withWeb ? 4000 : 2000,
-      messages: [{ role: 'user', content }], ...(withWeb ? { tools } : {}) }),
-  });
-  let r = await ask(web);
-  // Steht die Websuche nicht zur Verfügung, ohne sie noch einmal versuchen.
-  if (web && !r.ok && r.status !== 429) r = await ask(false);
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) return json({ error: j?.error?.message || 'Fehler bei der Claude-API' }, r.status === 429 ? 429 : 502);
-  const text = (j.content || []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('');
-  return json({ text });
+  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3,
+    allowed_domains: ['lehrplanplus.bayern.de', 'isb.bayern.de', 'ccbuchner.de', 'klett.de', 'cornelsen.de', 'westermann.de'] }];
+  type Block = { type: string; text?: string };
+  const call = async (withWeb: boolean) => {
+    const messages: { role: string; content: unknown }[] = [{ role: 'user', content }];
+    let last: { ok: boolean; status: number; j: Record<string, any> } = { ok: false, status: 0, j: {} };
+    // Die Websuche kann mit "pause_turn" unterbrechen; dann einfach weiterlaufen lassen.
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: Deno.env.get('LERNPLANER_MODEL') || 'claude-sonnet-5-5', max_tokens: withWeb ? 4000 : 2000,
+          messages, ...(withWeb ? { tools } : {}) }),
+      });
+      const j = await r.json().catch(() => ({}));
+      last = { ok: r.ok, status: r.status, j };
+      if (!r.ok || j.stop_reason !== 'pause_turn') break;
+      messages.push({ role: 'assistant', content: j.content });
+    }
+    return last;
+  };
+  let res = await call(web);
+  // Klappt es mit Websuche nicht, ohne sie noch einmal versuchen.
+  if (web && !res.ok && res.status !== 429) res = await call(false);
+  if (!res.ok) {
+    const msg = res.j?.error?.message || `Claude-API antwortet mit ${res.status}`;
+    console.error('lernplaner', res.status, msg);
+    return json({ error: msg }, res.status === 429 ? 429 : 502);
+  }
+  // Nur den Text nach dem letzten Suchergebnis zurückgeben: dort steht die eigentliche Antwort.
+  const blocks: Block[] = res.j.content || [];
+  let from = 0;
+  blocks.forEach((b, i) => { if (b.type !== 'text') from = i + 1; });
+  const text = blocks.slice(from).filter((b) => b.type === 'text').map((b) => b.text || '').join('')
+    || blocks.filter((b) => b.type === 'text').map((b) => b.text || '').join('');
+  return json({ text, stop: res.j.stop_reason || null });
 });

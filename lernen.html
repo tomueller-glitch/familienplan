@@ -299,7 +299,8 @@ async function aiText(prompt,images,opt){
   if(REMOTE){
     const imgs=await Promise.all(images.map(blobToB64));
     const{data,error}=await sb.functions.invoke('lernplaner',{body:{prompt,images:imgs,web:!!opt.web}});
-    if(error){const st=error.context&&error.context.status;throw{code:st===429?'rate_limited':'error'}}
+    if(error){const st=error.context&&error.context.status;let msg='';try{const j=await error.context.json();msg=(j&&j.error)||''}catch(e){}
+      throw{code:st===429?'rate_limited':'error',msg:msg||(st?'Status '+st:String(error.message||''))}}
     return(data&&data.text)||'';
   }
   if(!SAMPLE)throw{code:'not_granted'};
@@ -314,7 +315,8 @@ function aiError(e){
   const c=e&&e.code;
   if(c==='not_granted'){SAMPLE=null;return'Claude ist hier nicht verfügbar.'}
   if(c==='rate_limited')return'Gerade zu viele Anfragen. Bitte in ein paar Minuten noch einmal versuchen.';
-  return'Das hat nicht geklappt. Bitte noch einmal versuchen.';
+  if(c==='parse')return'Claude hat keine verwertbare Antwort geliefert. Bitte noch einmal versuchen.';
+  return'Das hat nicht geklappt. Bitte noch einmal versuchen.'+(e&&e.msg?' Grund: '+String(e.msg).slice(0,160):'');
 }
 
 /* ===== Datenmodell ===== */
@@ -746,12 +748,14 @@ Schritt 3, Lernschritte: Plane ${ts.length} Lerneinheiten in dieser Reihenfolge 
 Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Aufgaben ohne Lösung lösen, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Jede Einheit beginnt mit 2 bis 3 Minuten Abfragen vom letzten Mal. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
 Jeder Auftrag ist ein kurzer Satz (höchstens 90 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Aufgabe aus dem Lehrwerk. Einfache Sprache, keine Gedankenstriche.
 Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem Satz","schwerpunkte":["..."],"schritte":["...","..."]}`;
-    const res=await aiJSON(prompt,null,{web:true});
+    // Erst mit Lehrplan-Suche; klappt das nicht, ohne Suche aus Claudes eigenem Wissen.
+    let res,noWeb=false;
+    try{res=await aiJSON(prompt,null,{web:true})}catch(e){if(e&&e.code==='rate_limited')throw e;noWeb=true;res=await aiJSON(prompt.replace('Prüfe im LehrplanPLUS','Ordne nach deinem Wissen über den LehrplanPLUS ein'))}
     const steps=(res&&res.schritte)||(Array.isArray(res)?res:[]);
     ts.forEach((t,i)=>{if(!t.sheet&&steps[i]&&String(steps[i]).trim())t.title=String(steps[i]).trim().slice(0,120)});
     if(res&&res.lehrplan)ex.lp=String(res.lehrplan).slice(0,300);
     if(res&&Array.isArray(res.schwerpunkte))ex.focus=res.schwerpunkte.map(x=>String(x).trim().slice(0,80)).filter(Boolean).slice(0,4);
-    ui.msg='Thema mit Lehrplan und Lehrwerk abgeglichen. Die Lernschritte sind jetzt konkreter und lassen sich unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
+    ui.msg=(noWeb?'Die Lehrplan-Suche war gerade nicht erreichbar, Claude hat aus eigenem Wissen eingeordnet. ':'')+'Thema mit Lehrplan und Lehrwerk abgeglichen. Die Lernschritte sind jetzt konkreter und lassen sich unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
   }catch(e){ui.msg=aiError(e);ui.msgType='err'}
   ui.busy=null;render();
 }
