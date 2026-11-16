@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lernplaner">
+<meta name="theme-color" content="#F5C400">
+<link rel="manifest" href="lernen.webmanifest">
+<link rel="apple-touch-icon" href="icons/lernen-180.png">
+<script src="js/config.js"></script>
+<title>Lernplaner</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1f1e1c;--tx2:#6b6a65;--bd:rgba(0,0,0,.12);--ac:#185FA5;--acbg:#E6F1FB;--ok:#3B6D11;--okbg:#EAF3DE;--wa:#854F0B;--wabg:#FAEEDA;--er:#A32D2D;--erbg:#FCEBEB;--soft:#efeee9;--fill:#F5C400;--on:#111;--stripe:#111}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1b1a;--card:#262624;--tx:#eceae4;--tx2:#a5a39c;--bd:rgba(255,255,255,.14);--ac:#85B7EB;--acbg:#0C447C;--ok:#C0DD97;--okbg:#27500A;--wa:#FAC775;--wabg:#633806;--er:#F7C1C1;--erbg:#791F1F;--soft:#31312e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;background:var(--bg);z-index:2;padding:14px 16px 0;max-width:560px;margin:0 auto}
+.band{height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,var(--fill) 0 28px,var(--stripe) 28px 56px);margin-top:10px}
+main{max-width:560px;margin:0 auto;padding:4px 16px 80px}
+h1{font-size:20px;font-weight:600;margin:0}
+h2{font-size:16px;font-weight:600;margin:0 0 10px}
+.sub{color:var(--tx2);font-size:13px}
+.tabs{display:flex;border-bottom:1px solid var(--bd)}
+.tab{flex:1;padding:10px 0;border:0;background:none;color:var(--tx2);font:inherit;font-size:14px;border-bottom:3px solid transparent;cursor:pointer}
+.tab.on{color:var(--tx);border-color:var(--tx);font-weight:600}
+.sync{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px;background:var(--tx2);vertical-align:1px}
+.sync.ok{background:#639922}.sync.err{background:#E24B4A}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin:12px 0}
+.days{display:flex;gap:6px;overflow-x:auto;padding:12px 0 4px}
+.day{flex:0 0 auto;border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:6px 10px;font:inherit;font-size:13px;color:var(--tx);text-align:center;cursor:pointer;min-width:54px;line-height:1.3}
+.day.on{background:var(--fill);color:var(--on);border-color:var(--fill)}
+.day small{display:block;font-size:11px;opacity:.8}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--soft);display:inline-block}
+.chip.wa{background:var(--wabg);color:var(--wa)}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.er{background:var(--erbg);color:var(--er)}
+.item{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--bd);border-left:5px solid var(--c,#888);border-radius:12px;padding:12px;margin:8px 0}
+.item.appt{background:var(--soft);border-left-color:var(--tx2)}
+.grow{flex:1;min-width:0}
+.tt{font-weight:600}
+.meta{font-size:13px;color:var(--tx2)}
+.time{font-size:13px;margin-top:2px}
+.chk{width:30px;height:30px;border-radius:8px;border:2px solid var(--bd);background:var(--card);flex-shrink:0;cursor:pointer}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:9px;padding:7px 12px;font-size:14px;text-decoration:none;display:inline-block}
+.btn.sm{padding:4px 9px;font-size:13px}
+.btn.primary{background:var(--fill);border-color:var(--stripe);color:var(--on)}
+.btn.big{font-size:17px;padding:12px 18px;font-weight:600}
+.btn.on{background:var(--acbg);border-color:var(--ac);color:var(--ac)}
+.btn.danger{color:var(--er)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fb{margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)}
+.fb .q{font-size:14px;margin:8px 0 6px}
+label{display:block;font-size:13px;color:var(--tx2);margin:8px 0 0}
+input,select,textarea{display:block;width:100%;max-width:100%;min-width:0;font:inherit;font-size:16px;padding:8px 10px;margin-top:3px;border:1px solid var(--bd);border-radius:9px;background:var(--card);color:var(--tx)}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-height:42px;text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
+input[type=checkbox]{display:inline;width:auto;min-height:0;margin-right:6px}
+.g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.g2>label,.g5>label{min-width:0}
+@media (max-width:480px){.g2{grid-template-columns:minmax(0,1fr);gap:0}.g5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.note{font-size:13px;padding:8px 12px;border-radius:10px;background:var(--acbg);color:var(--ac);margin:10px 0}
+.warn{background:var(--wabg);color:var(--wa)}.err{background:var(--erbg);color:var(--er)}.okn{background:var(--okbg);color:var(--ok)}
+.li{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--bd);font-size:14px;flex-wrap:wrap}
+.li:first-of-type{border-top:0}
+.bar{height:10px;background:var(--soft);border-radius:5px;overflow:hidden;margin:6px 0}
+.bar div{height:100%;background:var(--fill)}
+.bar div.full{background:#BA7517}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;flex-shrink:0}
+.muted{color:var(--tx2)}
+.big{font-size:22px;font-weight:600}
+.score{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.score .n{font-size:28px;font-weight:700;line-height:1}
+.wk{display:flex;gap:6px;margin-top:10px}
+.wk div{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:8px;background:var(--soft);color:var(--tx2)}
+.wk div.won{background:var(--okbg);color:var(--ok);font-weight:600}
+.wk div.lost{background:var(--erbg);color:var(--er)}
+.wk div.now{outline:2px solid var(--tx)}
+.focus{border:2px solid var(--c);border-left-width:8px}
+.focus .label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--c);text-transform:uppercase}
+.focus .ft{font-size:21px;font-weight:700;margin:4px 0}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.badge{border:1px solid var(--bd);border-radius:12px;padding:10px;font-size:13px}
+.badge.off{opacity:.45}
+.badge b{display:block;font-size:14px}
+.jer{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;font-size:11px;text-align:center;background:none;border:0;color:var(--tx);padding:4px}
+.jer .sh{width:56px;height:56px;border-radius:12px 12px 8px 8px;border:3px solid transparent;background:repeating-linear-gradient(90deg,var(--m) 0 10px,var(--s) 10px 14px)}
+.jer.on .sh{border-color:var(--tx)}
+.jer.lock{opacity:.3;cursor:default}
+pre.rep{white-space:pre-wrap;font:inherit;font-size:14px;margin:0}
+#toast{position:fixed;left:50%;top:90px;transform:translateX(-50%);background:var(--fill);color:var(--on);border:2px solid var(--stripe);padding:14px 26px;border-radius:16px;font-weight:700;font-size:22px;text-align:center;z-index:9;animation:pop 2.4s ease forwards;pointer-events:none}
+#toast small{display:block;font-size:13px;font-weight:500}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,10px) scale(.8)}12%{opacity:1;transform:translate(-50%,0) scale(1.08)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row" style="justify-content:space-between"><h1>Mein Lerntag</h1><span class="sub"><span id="today"></span><span class="sync" id="sync" title=""></span></span></div>
+  <div class="sub" style="margin-top:2px"><a href="index.html" style="color:inherit">Zum Familienplan</a></div>
+  <div class="band"></div>
+  <nav class="tabs">
+    <button class="tab" data-act="tab" data-v="heute">Heute</button>
+    <button class="tab" data-act="tab" data-v="woche">Woche</button>
+    <button class="tab" data-act="tab" data-v="pokale">Pokale</button>
+    <button class="tab" data-act="tab" data-v="eltern">Eltern</button>
+  </nav>
+</header>
+<main id="app"></main>
+<script>
+/* ===== Konfiguration: kommt aus js/config.js der Familien-App ===== */
+const FCFG=window.ESSENSPLAN_CONFIG||{};
+const REMOTE=!!(FCFG.supabaseUrl&&FCFG.supabaseKey);
+let sb=null,authOk=true,kids=[];
+const CACHE_KEY=REMOTE?'lernplaner-web-v1':'lernplaner-v1';
+
+const SUBJ=['Mathe','Deutsch','Englisch','Latein','Biologie','Physik','Natur und Technik','Geschichte','Geographie','Wirtschaft','Religion/Ethik','Musik','Kunst','Sonstiges'];
+const COL={Mathe:'#378ADD',Deutsch:'#D85A30',Englisch:'#1D9E75',Latein:'#7F77DD',Biologie:'#639922',Physik:'#BA7517','Natur und Technik':'#97C459',Geschichte:'#993C1D',Geographie:'#0F6E56',Wirtschaft:'#5F5E5A','Religion/Ethik':'#534AB7',Musik:'#D4537E',Kunst:'#ED93B1',Sonstiges:'#888780'};
+const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const WDL=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+const EXAM={'Schulaufgabe':[[-8,30],[-6,30],[-4,30],[-3,30],[-2,35],[-1,20]],'Kurzarbeit':[[-4,20],[-2,25],[-1,15]],'Ex / Test':[[-3,20],[-2,20],[-1,15]],'Referat':[[-10,30],[-7,30],[-4,30],[-2,30],[-1,20]]};
+const LIGA=[['Kreisliga',0],['Bezirksliga',40],['Bezirksoberliga',100],['Landesliga',180],['Bayernliga',280],['3. Liga',400],['2. Bundesliga',550],['1. Bundesliga',750],['Europapokal',1000]];
+const THEMES=[
+  {n:'Coburg Heim',d:'gelb-schwarz',m:'#F5C400',on:'#111111',s:'#111111',lvl:0},
+  {n:'Blau',d:'',m:'#185FA5',on:'#ffffff',s:'#ffffff',lvl:1},
+  {n:'Rot',d:'',m:'#B3261E',on:'#ffffff',s:'#ffffff',lvl:2},
+  {n:'Grün',d:'',m:'#2E7D32',on:'#ffffff',s:'#ffffff',lvl:3},
+  {n:'Orange',d:'',m:'#C4520F',on:'#ffffff',s:'#111111',lvl:4},
+  {n:'Coburg Auswärts',d:'schwarz-gelb',m:'#111111',on:'#F5C400',s:'#F5C400',lvl:5},
+  {n:'Lila',d:'',m:'#6A3FB5',on:'#ffffff',s:'#ffffff',lvl:6},
+  {n:'Kiel',d:'schwarz-weiß',m:'#111111',on:'#ffffff',s:'#ffffff',lvl:7},
+  {n:'Gold',d:'Europapokal',m:'#9A7B0A',on:'#ffffff',s:'#111111',lvl:8}];
+const PTS={task:2,check:1,kick:1,fair:1,win:3,review:1,meet:3};
+const CHECKS=[['latein','Latein'],['englisch','Englisch']];
+
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+const toMin=s=>{const[h,m]=String(s).split(':').map(Number);return h*60+(m||0)};
+const hm=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+const r5=m=>Math.max(5,Math.round(m/5)*5);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=s=>{const d=parse(s);return WD[d.getDay()]+', '+d.getDate()+'.'+(d.getMonth()+1)+'.'};
+const diff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+const col=s=>COL[s]||'#888780';
+const nowMin=()=>{const n=new Date();return n.getHours()*60+n.getMinutes()};
+const isWeekday=d=>d.getDay()>=1&&d.getDay()<=5;
+function schoolDayIn(n){let d=addDays(today(),n);while(!isWeekday(d))d=addDays(d,1);return iso(d)}
+function monday(d){const x=new Date(d);return addDays(x,-((x.getDay()+6)%7))}
+
+let S,ui={tab:'heute',day:0,fb:null,fbDur:'ok',fbFeel:'mittel',unlocked:false,addHA:false,msg:'',msgType:'',scanOpen:false,scan:{status:'idle'},focus:null,full:false,edit:null,busy:null,rv:{},sync:REMOTE?'':'local'};
+
+/* ===== Claude ===== */
+let SAMPLE=null;
+if(!REMOTE){try{if(window.claude&&window.claude.use)window.claude.use('sample').then(s=>{SAMPLE=s;render()}).catch(()=>{})}catch(e){}}
+const AI_OK=()=>(REMOTE&&authOk&&!!sb)||!!SAMPLE;
+function blobToB64(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res({type:b.type||'image/jpeg',data:String(r.result).split(',')[1]});r.onerror=rej;r.readAsDataURL(b)})}
+function parseJSON(t){if(t&&typeof t==='object')return t;const s=String(t||''),a=s.indexOf('{'),b=s.lastIndexOf('}');if(a<0||b<a)throw{code:'parse'};return JSON.parse(s.slice(a,b+1))}
+async function aiText(prompt,images){
+  images=images||[];
+  if(REMOTE){
+    const imgs=await Promise.all(images.map(blobToB64));
+    const{data,error}=await sb.functions.invoke('lernplaner',{body:{prompt,images:imgs}});
+    if(error){const st=error.context&&error.context.status;throw{code:st===429?'rate_limited':'error'}}
+    return(data&&data.text)||'';
+  }
+  if(!SAMPLE)throw{code:'not_granted'};
+  const res=await SAMPLE(prompt,images.length?{images,modelTier:'default'}:{modelTier:'default'});
+  return res.text||'';
+}
+async function aiJSON(prompt,images){
+  if(!REMOTE&&SAMPLE&&SAMPLE.json)return SAMPLE.json(prompt,(images&&images.length)?{images,modelTier:'default'}:{modelTier:'default'});
+  return parseJSON(await aiText(prompt,images));
+}
+function aiError(e){
+  const c=e&&e.code;
+  if(c==='not_granted'){SAMPLE=null;return'Claude ist hier nicht verfügbar.'}
+  if(c==='rate_limited')return'Gerade zu viele Anfragen. Bitte in ein paar Minuten noch einmal versuchen.';
+  return'Das hat nicht geklappt. Bitte noch einmal versuchen.';
+}
+
+/* ===== Datenmodell ===== */
+const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result'};
+const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
+const ONE=['settings','pace','schoolEnd','running','meta','model','report'];
+function blank(){return{settings:{},pace:{},schoolEnd:{},running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+function migrate(x){
+  const b=blank();
+  Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
+  if(x.v===1||x.v===2){ // alter Prototyp
+    if(x.sample!==undefined)x.meta.sample=x.sample;
+    x.tasks.forEach(t=>{if(t.kind==='lern')t.title=String(t.title).replace(/^(Lernen|Wiederholen): /,'')});
+    x.goals.forEach(g=>{if(!g.id)g.id=uid()});
+    delete x.v;delete x.sample;
+  }
+  x.settings=Object.assign({pin:'1234',afterSchool:60,latest:'19:30',weekendStart:'10:00',buffer:30,blockMax:15,pause:5,sundayFree:true,ludusOn:true,ludusMin:15,ludusUrl:'',checksOn:true,winGoal:4,bedtimeMin:30,theme:0},x.settings);
+  if(typeof x.settings.theme!=='number')x.settings.theme=0;
+  x.schoolEnd=Object.assign({1:'13:00',2:'15:30',3:'13:00',4:'13:00',5:'12:15'},x.schoolEnd);
+  x.model=Object.assign({cap:75,prep:{}},x.model);
+  return x;
+}
+function defaults(){
+  const s=migrate(blank());
+  s.appts=[{id:uid(),title:'Handballtraining',weekday:2,start:'17:00',end:'18:30'},{id:uid(),title:'Handballtraining',weekday:4,start:'17:00',end:'18:30'}];
+  s.meta={setup:false};
+  return s;
+}
+function seed(){
+  S=defaults();S.meta={sample:true,setup:false};
+  addHA('Mathe','Buch S. 88 Nr. 3 und 4',schoolDayIn(1),20);
+  addHA('Englisch','Workbook S. 42',schoolDayIn(1),15);
+  addHA('Deutsch','Inhaltsangabe zu Ende schreiben',schoolDayIn(3),30);
+  addExam('Latein','Ex / Test',schoolDayIn(3),'Vokabeln Lektion 38');
+  addExam('Mathe','Schulaufgabe',schoolDayIn(7),'Terme und Gleichungen');
+  return S;
+}
+function records(){
+  const r={};
+  for(const[k,c]of Object.entries(ARR))S[k].forEach(o=>{r[c+':'+o.id]={coll:c,data:o}});
+  for(const[k,c]of Object.entries(MAP))Object.entries(S[k]).forEach(([d,v])=>{r[c+':'+d]={coll:c,data:{k:d,v}}});
+  ONE.forEach(k=>{r[k]={coll:k,data:S[k]===undefined?null:S[k]}});
+  return r;
+}
+function fromRecords(r){
+  const s=blank();
+  Object.values(r).forEach(({coll,data})=>{
+    const a=Object.entries(ARR).find(x=>x[1]===coll);if(a){if(data)s[a[0]].push(data);return}
+    const m=Object.entries(MAP).find(x=>x[1]===coll);if(m){if(data)s[m[0]][data.k]=data.v;return}
+    if(ONE.includes(coll))s[coll]=data;
+  });
+  return migrate(s);
+}
+
+/* ===== Speicher und Sync ===== */
+let synced={},syncedColl={},lastPull=null,pushT=null,pushing=false;
+function writeCache(){try{localStorage.setItem(CACHE_KEY,JSON.stringify(REMOTE?{S,synced,syncedColl,lastPull}:S))}catch(e){}}
+function readCache(){try{const x=JSON.parse(localStorage.getItem(CACHE_KEY));if(!x)return null;if(REMOTE){synced=x.synced||{};syncedColl=x.syncedColl||{};lastPull=x.lastPull||null;return migrate(x.S)}return migrate(x)}catch(e){return null}}
+function save(){writeCache();if(REMOTE){clearTimeout(pushT);pushT=setTimeout(push,500)}}
+async function push(){
+  if(!REMOTE||!sb||!authOk)return;
+  if(pushing){clearTimeout(pushT);pushT=setTimeout(push,800);return}
+  pushing=true;
+  try{
+    const local=records(),up=[];
+    for(const id in local){const j=JSON.stringify(local[id].data);if(synced[id]!==j)up.push({id,coll:local[id].coll,data:local[id].data,deleted:false})}
+    for(const id in synced)if(!local[id])up.push({id,coll:syncedColl[id]||'x',data:null,deleted:true});
+    for(let i=0;i<up.length;i+=200){
+      const part=up.slice(i,i+200);
+      const{error}=await sb.from('lp_data').upsert(part,{onConflict:'id'});if(error)throw error;
+      part.forEach(u=>{if(u.deleted){delete synced[u.id];delete syncedColl[u.id]}else{synced[u.id]=JSON.stringify(u.data);syncedColl[u.id]=u.coll}});
+    }
+    ui.sync='ok';
+  }catch(e){ui.sync='err';console.warn(e)}
+  pushing=false;writeCache();syncDot();
+}
+async function pull(full,fresh){
+  if(!REMOTE||!sb)return false;
+  const rows=[];
+  for(let off=0;;off+=1000){
+    let q=sb.from('lp_data').select('id,coll,data,deleted,updated_at').order('updated_at',{ascending:true}).order('id',{ascending:true});
+    if(full)q=q.eq('deleted',false);
+    else if(lastPull)q=q.gt('updated_at',new Date(new Date(lastPull).getTime()-5000).toISOString());
+    const{data,error}=await q.range(off,off+999);if(error)throw error;
+    rows.push(...data);if(data.length<1000)break;
+  }
+  const local=records();
+  const dirty=new Set(fresh&&rows.length?[]:Object.keys(local).filter(id=>JSON.stringify(local[id].data)!==synced[id]));
+  if(!fresh)Object.keys(synced).forEach(id=>{if(!local[id])dirty.add(id)});
+  let base,changed=false;
+  if(full){
+    base={};dirty.forEach(id=>{if(local[id])base[id]=local[id]});
+    const seen=new Set(rows.map(r=>r.id));
+    Object.keys(synced).forEach(id=>{if(!seen.has(id)&&!dirty.has(id)){delete synced[id];delete syncedColl[id]}});
+    changed=true;
+  }else base=local;
+  rows.forEach(r=>{
+    if(!lastPull||r.updated_at>lastPull)lastPull=r.updated_at;
+    if(dirty.has(r.id))return;
+    if(r.deleted){if(base[r.id]){delete base[r.id];changed=true}delete synced[r.id];delete syncedColl[r.id];return}
+    const j=JSON.stringify(r.data);
+    if(!base[r.id]||JSON.stringify(base[r.id].data)!==j)changed=true;
+    base[r.id]={coll:r.coll,data:r.data};synced[r.id]=j;syncedColl[r.id]=r.coll;
+  });
+  if(changed)S=fromRecords(base);
+  ui.sync='ok';writeCache();
+  return changed;
+}
+function syncDot(){const el=document.getElementById('sync');if(!el)return;el.className='sync '+(ui.sync||'');el.title=ui.sync==='ok'?'synchronisiert':ui.sync==='err'?'keine Verbindung, Änderungen werden später übertragen':REMOTE?'':'nur auf diesem Gerät gespeichert'}
+
+/* ===== Aufgaben ===== */
+function addHA(subject,title,due,est){S.tasks.push({id:uid(),kind:'ha',subject,title,due,est:+est,done:false,created:iso(today())})}
+const LANG=['Latein','Englisch','Deutsch'];
+function stepTitles(subject,type,n){
+  if(type==='Referat'){const r=['Material sammeln: 3 gute Quellen finden und Stichpunkte machen','Gliederung schreiben: Einleitung, 3 Hauptpunkte, Schluss','Plakat oder Folien gestalten','Vortrag einmal laut für dich üben, Zeit stoppen','Generalprobe: Vortrag vor Mama oder Papa halten'];return Array.from({length:n},(_,i)=>r[Math.round(i*(r.length-1)/Math.max(1,n-1))])}
+  const g=LANG.includes(subject)
+    ?['Überblick: Vokabeln und Grammatik im Buch markieren','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik: 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen']
+    :['Überblick: Hefteinträge lesen und die 5 wichtigsten Punkte aufschreiben','Üben: 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Lernkarten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Lernkarten durchgehen, Tasche packen'];
+  if(n===1)return[g[5]];
+  return Array.from({length:n},(_,i)=>i===n-1?g[5]:n<=3?g[[1,4][i]]:g[Math.round(i*4/(n-2))]);
+}
+function dayLimit(d){const c=+S.model.cap||75;return d.getDay()===6?Math.round(c*.7):c}
+function loadMap(){const m={};simulate().forEach(d=>{m[d.date]=d.used+d.over.reduce((a,o)=>a+o.P,0)});return m}
+function addExam(subject,type,date,topic){
+  const id=uid(),t0=iso(today()),prep=Math.min(1.6,Math.max(.7,+(S.model.prep[subject]||1)));
+  const plan=(EXAM[type]||EXAM['Ex / Test']).slice();
+  if(prep>=1.25&&type!=='Referat')plan.unshift([type==='Schulaufgabe'?-10:-5,20]);
+  const load=loadMap(),want=[],free=d=>d.getDay()===0&&S.settings.sundayFree;
+  plan.forEach(([off,min])=>{
+    let d=addDays(parse(date),off);if(free(d))d=addDays(d,-1);
+    let di=iso(d);if(di<t0)di=t0;if(di>=date)return;
+    want.push({di,min:r5(min*prep)});
+  });
+  S.exams.push({id,subject,type,date,topic});
+  const byDay={},ld=d=>load[iso(d)]||0;
+  want.sort((a,b)=>b.di.localeCompare(a.di)).forEach(({di,min})=>{
+    const all=[0,-1,-2,-3].map(k=>addDays(parse(di),k)).filter(d=>iso(d)>=t0&&iso(d)<date&&!free(d));
+    const unused=all.filter(d=>!byDay[iso(d)]);
+    let pick=unused.find(d=>ld(d)+min<=dayLimit(d))||unused.sort((a,b)=>ld(a)-ld(b))[0]||all.sort((a,b)=>ld(a)-ld(b))[0]||parse(di<t0?t0:di);
+    const pi=iso(pick);byDay[pi]=(byDay[pi]||0)+min;load[pi]=ld(pick)+min;
+  });
+  const keys=Object.keys(byDay).sort(),titles=stepTitles(subject,type,keys.length);
+  keys.forEach((di,i)=>S.tasks.push({id:uid(),kind:'lern',examId:id,subject,title:titles[i],date:di,est:Math.min(byDay[di],60),part:i+1,parts:keys.length,done:false}));
+  return id;
+}
+function ensureDaily(){
+  const T=iso(today()),st=S.settings;let ch=false;
+  const n0=S.tasks.length;S.tasks=S.tasks.filter(t=>!(t.kind==='daily'&&!t.done&&(!st.ludusOn||t.date<T)));if(S.tasks.length!==n0)ch=true;
+  if(st.ludusOn)for(let i=0;i<14;i++){const d=addDays(today(),i);if(isFree(d))continue;const di=iso(d),id='ludus-'+di;
+    const ex=S.tasks.find(t=>t.id===id);
+    if(ex){if(!ex.done&&ex.est!==(+st.ludusMin||15)){ex.est=+st.ludusMin||15;ch=true}continue}
+    S.tasks.push({id,kind:'daily',subject:'Latein',title:'Ludus Latinus',date:di,est:+st.ludusMin||15,fixed:true,done:false});ch=true;
+  }
+  return ch;
+}
+
+/* ===== Lernendes Modell ===== */
+const paceKey=t=>t.subject+'|'+t.kind;
+function factor(t){const p=S.pace;let f=1;
+  if(p[paceKey(t)]&&p[paceKey(t)].n>=2)f=p[paceKey(t)].f;else if(p[t.subject]&&p[t.subject].n>=2)f=p[t.subject].f;else if(p._all)f=p._all.f;
+  return Math.min(1.5,Math.max(.6,f))}
+const planMin=t=>t.fixed?+t.est:r5(t.est*factor(t));
+function learn(k,r){r=Math.min(3,Math.max(.4,r));const p=S.pace[k]||{f:1,n:0};p.f=p.n===0?(p.f+r)/2:p.f*.7+r*.3;p.n++;S.pace[k]=p}
+function evaluateDays(){
+  const T=iso(today()),m=S.model;let ch=false;
+  Object.keys(S.days).sort().forEach(d=>{const r=S.days[d];if(d>=T||r.eval)return;
+    const dd=parse(d);ch=true;r.eval=true;if(!isWeekday(dd))return;
+    const done=S.tasks.filter(t=>t.done&&t.doneAt===d).reduce((a,t)=>a+(t.planned||0),0),won=!!S.wins[d];
+    r.done=done;r.won=won;
+    if(r.planned>0){
+      if(won&&r.planned>=m.cap*.9){m.cap=Math.min(150,m.cap+5);r.capChange=5}
+      else if(!won&&r.planned>=m.cap*.8&&done<r.planned){m.cap=Math.max(40,m.cap-5);r.capChange=-5}
+    }
+  });
+  return ch;
+}
+function startDelay(){
+  const xs=Object.keys(S.kick).filter(d=>d<iso(today())&&diff(d,iso(today()))<=21&&isWeekday(parse(d))).map(d=>toMin(S.kick[d])-dayStart(parse(d))).sort((a,b)=>a-b);
+  return xs.length>=4?{n:xs.length,med:xs[Math.floor(xs.length/2)]}:null;
+}
+function applyResult(e,feel,prep){
+  const m=S.model;let f=+(m.prep[e.subject]||1);
+  if(prep==='zuwenig')f*=1.2;else if(feel==='schlecht')f*=1.1;else if(prep==='zuviel'&&feel==='gut')f*=.9;
+  m.prep[e.subject]=Math.round(Math.min(1.6,Math.max(.7,f))*100)/100;
+}
+
+/* ===== Planung ===== */
+function apptsFor(d){const di=iso(d),wd=d.getDay();return S.appts.filter(a=>+a.weekday===wd).concat(S.oneoffs.filter(a=>a.date===di)).sort((a,b)=>a.start.localeCompare(b.start))}
+function isFree(d){return d.getDay()===0&&S.settings.sundayFree}
+function dayStart(d){return isWeekday(d)?toMin(S.schoolEnd[d.getDay()]||'13:00')+(+S.settings.afterSchool):toMin(S.settings.weekendStart)}
+function windowsFor(d,isToday){
+  const st=S.settings,appts=apptsFor(d);
+  if(isFree(d))return{wins:[],appts,free:true};
+  let start=dayStart(d);const end=toMin(st.latest);
+  if(isToday)start=Math.max(start,Math.ceil(nowMin()/5)*5);
+  let wins=start<end?[[start,end]]:[];
+  appts.forEach(a=>{const a0=toMin(a.start)-st.buffer,a1=toMin(a.end)+st.buffer;
+    wins=wins.flatMap(([s,e])=>{const o=[];if(a0>s)o.push([s,Math.min(e,a0)]);if(a1<e)o.push([Math.max(s,a1),e]);return o}).filter(([s,e])=>e-s>=10)});
+  return{wins,appts,free:false};
+}
+function alloc(cap,P){
+  const bm=+S.settings.blockMax,pz=+S.settings.pause,c=cap.map(w=>w.slice()),segs=[];let rem=P;
+  for(const w of c){while(rem>0&&w[1]-w[0]>=Math.min(rem,10)){const len=Math.min(rem,bm,w[1]-w[0]);segs.push([w[0],w[0]+len]);w[0]=Math.min(w[1],w[0]+len+pz);rem-=len}if(rem<=0)break}
+  if(rem>0)return null;cap.splice(0,cap.length,...c.filter(w=>w[1]-w[0]>0));return segs;
+}
+function simulate(){
+  const t0=today(),T=iso(t0),out=[],placed=new Set(),exD={};
+  S.exams.forEach(e=>exD[e.id]=e.date);
+  const open=S.tasks.filter(t=>!t.done&&!(t.examId&&(exD[t.examId]||'')<=T));
+  const byDue=(a,b)=>a.due.localeCompare(b.due);
+  const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).reduce((a,t)=>a+(t.planned||0),0);
+  for(let i=0;i<14;i++){
+    const d=addDays(t0,i),di=iso(d);
+    let nx=addDays(d,1);if(isFree(nx))nx=addDays(nx,1);const nextWork=iso(nx);
+    const{wins,appts,free}=windowsFor(d,i===0),cap=wins.map(w=>w.slice()),lim=dayLimit(d),base=i===0?doneToday:0;
+    const day={date:di,appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim};
+    const ha=open.filter(t=>t.kind==='ha'&&!placed.has(t.id));
+    const urgent=ha.filter(t=>t.due<=nextWork).sort(byDue);
+    const daily=open.filter(t=>t.kind==='daily'&&t.date===di);
+    const lern=open.filter(t=>t.kind==='lern'&&!placed.has(t.id)&&t.date<=di).sort((a,b)=>(exD[a.examId]||'').localeCompare(exD[b.examId]||''));
+    const rest=ha.filter(t=>t.due>nextWork).sort(byDue);
+    const place=(t,must)=>{const P=planMin(t);
+      if(!must&&base+day.used+P>lim)return;
+      const segs=alloc(cap,P);
+      if(segs){day.items.push({t,segs,P});day.used+=P;placed.add(t.id)}
+      else if(must){day.over.push({t,P});placed.add(t.id)}};
+    urgent.forEach(t=>place(t,true));
+    daily.forEach(t=>place(t,true));
+    lern.forEach(t=>place(t,exD[t.examId]<=nextWork||t.date<di));
+    rest.forEach(t=>place(t,false));
+    day.items.sort((a,b)=>a.segs[0][0]-b.segs[0][0]);
+    out.push(day);
+  }
+  return out;
+}
+function queueOf(day){
+  const q=day.items.map(i=>({t:i.t,P:i.P,segs:i.segs})).concat(day.over.map(o=>({t:o.t,P:o.P,segs:null,over:true})));
+  q.sort((a,b)=>((b.t.kind==='daily')-(a.t.kind==='daily'))||((a.segs?a.segs[0][0]:9999)-(b.segs?b.segs[0][0]:9999)));
+  return q;
+}
+
+/* ===== Punkte und Siege ===== */
+const totalGoals=()=>S.goals.reduce((a,g)=>a+g.n,0);
+const goalsOn=di=>S.goals.filter(g=>g.date===di).reduce((a,g)=>a+g.n,0);
+function liga(){const n=totalGoals();let i=0;LIGA.forEach((l,k)=>{if(n>=l[1])i=k});return{i,name:LIGA[i][0],n,next:LIGA[i+1]}}
+let toastQ=null;
+function award(n,why,taskId){
+  const before=liga().i;
+  S.goals.push({id:uid(),date:iso(today()),n,why,taskId:taskId||null});
+  toastQ=toastQ?{n:toastQ.n+n,why:toastQ.why+' · '+why}:{n,why};
+  const L=liga();if(L.i>before){const th=THEMES.find(x=>x.lvl===L.i);ui.msg='Aufstieg in die '+L.name+'!'+(th?' Neues Trikot freigeschaltet: '+th.n+'.':'');ui.msgType='okn'}
+}
+function checksDone(di){if(!S.settings.checksOn)return true;const c=S.checks[di]||{};return CHECKS.every(([k])=>c[k])}
+function checkDayWin(){
+  const T=iso(today());if(S.wins[T])return;
+  const day=simulate()[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
+  if(!day.items.length&&!day.over.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;award(PTS.win,'Tagessieg!')}
+}
+function weekInfo(){
+  const m=monday(today()),days=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
+  const won=days.filter(d=>S.wins[d]).length,goal=+S.settings.winGoal||4,left=days.filter(d=>d>=T&&!S.wins[d]).length;
+  return{key:iso(m),days,won,goal,left,prize:won>=goal,possible:won+left>=goal,redeemed:S.prizes[iso(m)]==='eingelöst'};
+}
+function badges(){
+  const wins=Object.keys(S.wins).filter(d=>S.wins[d]).sort();
+  let streak=0,best=0,prev=null;
+  wins.forEach(d=>{let p=addDays(parse(d),-1);while(!isWeekday(p))p=addDays(p,-1);streak=(prev===iso(p))?streak+1:1;best=Math.max(best,streak);prev=d});
+  const cnt=w=>S.goals.filter(g=>g.why===w).length;
+  const weeks={};wins.forEach(d=>{if(isWeekday(parse(d))){const k=iso(monday(parse(d)));weeks[k]=(weeks[k]||0)+1}});
+  const exDone=S.exams.some(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return ts.length&&ts.every(t=>t.done)});
+  return[
+    ['Erster Sieg','Einen Tagessieg geholt',wins.length>=1],
+    ['Siegesserie','3 Tagessiege hintereinander',best>=3],
+    ['Wochensieger','Ein Wochenspiel gewonnen',Object.values(weeks).some(n=>n>=(+S.settings.winGoal||4))],
+    ['Pünktlicher Anpfiff','10-mal pünktlich angefangen',cnt('Pünktlicher Anpfiff')>=10],
+    ['Fairplay','5-mal ehrlich gesagt, dass es schwer war',cnt('Fairplay')>=5],
+    ['Ludus-Profi','10-mal Ludus Latinus gespielt',S.tasks.filter(t=>t.kind==='daily'&&t.done).length>=10],
+    ['Kabinen-Chef','An 7 Tagen den Vokabel-Check gemacht',Object.keys(S.checks).filter(d=>CHECKS.every(([k])=>S.checks[d][k])).length>=7],
+    ['Gut vorbereitet','Alle Lerneinheiten vor einer Prüfung geschafft',exDone],
+    ['Taktiker','3 Mannschaftsbesprechungen gemacht',Object.keys(S.meets).length>=3],
+    ['Torjäger','100 Tore insgesamt',totalGoals()>=100],
+    ['Bundesliga-Profi','Die 1. Bundesliga erreicht',liga().i>=7]
+  ];
+}
+
+/* ===== Aktionen ===== */
+function finish(id){
+  const t=S.tasks.find(x=>x.id===id);if(!t)return;
+  const P=planMin(t);let actual;
+  if(S.running&&S.running.id===id){actual=Math.max(1,Math.round((Date.now()-S.running.at)/60000));S.running=null}
+  else actual=Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]));
+  if(!t.fixed){const r=actual/t.est;learn(paceKey(t),r);learn(t.subject,r);learn('_all',r)}
+  Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel});
+  award(PTS.task,'Tor!',t.id);
+  if(ui.fbFeel==='schwer'){
+    award(PTS.fair,'Fairplay',t.id);
+    S.help.push({id:uid(),date:iso(today()),subject:t.subject,title:t.title});
+    if(t.examId){const nx=S.tasks.filter(x=>x.examId===t.examId&&!x.done).sort((a,b)=>a.date.localeCompare(b.date))[0];if(nx)nx.together=true}
+    ui.msg='Danke für deine ehrliche Antwort. Mama oder Papa bekommen Bescheid und helfen dir beim nächsten Mal.';
+  }
+  if(ui.focus===id)ui.focus=null;
+  ui.fb=null;checkDayWin();save();
+}
+function answerCheck(k,ok){
+  const T=iso(today()),c=Object.assign({},S.checks[T]||{});if(c[k])return;
+  c[k]=ok?'ok':'nach';S.checks[T]=c;
+  const lab=(CHECKS.find(x=>x[0]===k)||[])[1];
+  award(PTS.check,'Kabinen-Check');
+  if(!ok)S.tasks.push({id:uid(),kind:'ha',subject:lab,title:'Vokabelkasten '+lab+' nachtragen',due:schoolDayIn(1),est:10,done:false,created:T});
+  checkDayWin();save();
+}
+function pendingReviews(){
+  const T=iso(today());
+  return S.exams.filter(e=>!S.results.some(r=>r.examId===e.id)&&(e.date<T||(e.date===T&&nowMin()>=dayStart(today()))) &&diff(e.date,T)<=14);
+}
+
+/* ===== Screenshot und Lehrwerke ===== */
+const ABBR={m:'Mathe',d:'Deutsch',e:'Englisch',l:'Latein',b:'Biologie',bio:'Biologie',ph:'Physik',nut:'Natur und Technik',g:'Geschichte',geo:'Geographie',wr:'Wirtschaft',ev:'Religion/Ethik',k:'Religion/Ethik',eth:'Religion/Ethik',reli:'Religion/Ethik',mu:'Musik',ku:'Kunst'};
+function matchSubject(s){const x=String(s||'').trim().toLowerCase();if(!x)return'Sonstiges';
+  const hit=SUBJ.find(n=>n.toLowerCase()===x)||SUBJ.find(n=>x.includes(n.toLowerCase())||n.toLowerCase().startsWith(x));
+  return hit||ABBR[x.replace(/[^a-zäöü]/g,'')]||'Sonstiges'}
+const normT=s=>String(s).toLowerCase().replace(/\s+/g,' ').trim();
+const isDup=(sub,title,due)=>S.tasks.some(t=>t.kind==='ha'&&t.subject===sub&&t.due===due&&normT(t.title)===normT(title));
+function shrink(file){return new Promise(res=>{
+  const url=URL.createObjectURL(file),img=new Image();
+  img.onload=()=>{const k=Math.min(1,2000/Math.max(img.width,img.height)),c=document.createElement('canvas');
+    c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(url);c.toBlob(b=>res(b||file),'image/jpeg',.85)};
+  img.onerror=()=>{URL.revokeObjectURL(url);res(file)};img.src=url;
+})}
+async function runScan(){
+  const inp=document.getElementById('scanfile'),files=[...((inp&&inp.files)||[])];
+  if(!files.length){ui.scan={status:'idle',err:'Bitte zuerst einen Screenshot auswählen.'};render();return}
+  ui.scan={status:'reading'};render();
+  try{
+    const imgs=await Promise.all(files.slice(0,4).map(shrink)),t0=today(),T=iso(t0);
+    const prompt=`Du liest Hausaufgaben aus Screenshots von Schulmanager Online (Bereich Klassenbuch oder Hausaufgaben). Der Schüler geht in die 7. Klasse eines bayerischen Gymnasiums.
+Heute ist ${WDL[t0.getDay()]}, der ${T}. Datumsangaben ohne Jahr gehören zum laufenden Schuljahr. Angaben wie "morgen" beziehen sich auf heute.
+Steht kein Abgabedatum da, nimm den nächsten Schultag: ${schoolDayIn(1)}.
+Ordne jede Aufgabe genau einem dieser Fächer zu: ${SUBJ.join(', ')}. Kürzel wie M, D, E, L, B, Ph, NuT, G, Geo, WR, Ev, K, Eth, Mu, Ku bitte entsprechend zuordnen.
+Gib für jede Aufgabe unter "gestellt" das Datum der Stunde an, in der sie aufgegeben wurde, also das Datum, unter dem sie im Schulmanager steht (YYYY-MM-DD). Ist das nicht erkennbar, setze "gestellt" auf null.
+Lass reine Unterrichtsinhalte ohne Auftrag weg. Formuliere die Aufgabe kurz und konkret, so wie sie im Screenshot steht (Seiten, Nummern übernehmen).
+Schätze für jede Aufgabe die Dauer in Minuten für ein Kind dieses Alters, zwischen 5 und 90.
+Antworte nur mit JSON in genau dieser Form: {"hausaufgaben":[{"fach":"Mathe","aufgabe":"Buch S. 88 Nr. 3 und 4","gestellt":"YYYY-MM-DD","abgabe":"YYYY-MM-DD","minuten":20}]}
+Wenn du keine Hausaufgaben erkennst: {"hausaufgaben":[]}`;
+    const res=await aiJSON(prompt,imgs);
+    const arr=Array.isArray(res)?res:((res&&res.hausaufgaben)||[]);
+    const isoRe=/^\d{4}-\d{2}-\d{2}$/,known=x=>isoRe.test(x.gestellt||'');
+    const all=arr.filter(x=>x&&(x.aufgabe||x.title)),kept=all.filter(x=>!known(x)||x.gestellt===T),hidden=all.length-kept.length;
+    const items=kept.map(x=>{
+      const subject=matchSubject(x.fach||x.subject),title=String(x.aufgabe||x.title).trim();
+      let due=isoRe.test(x.abgabe||'')?x.abgabe:schoolDayIn(1);if(due<=T)due=schoolDayIn(1);
+      let est=Math.round(+x.minuten||20);est=Math.min(90,Math.max(5,Math.round(est/5)*5));
+      const dup=isDup(subject,title,due),unclear=!known(x);
+      return{subject,title,due,est,dup,unclear,on:!dup&&!unclear};
+    });
+    ui.scan=items.length?{status:'review',items,hidden}:{status:'idle',err:hidden?`Auf dem Screenshot stehen nur Hausaufgaben von früheren Tagen (${hidden}). Von heute ist nichts dabei.`:'Auf dem Screenshot habe ich keine Hausaufgaben gefunden. Ist die Hausaufgaben-Seite zu sehen?'};
+  }catch(e){ui.scan={status:'idle',err:aiError(e)}}
+  render();
+}
+function bookFor(subject){return S.books.find(b=>b.subject===subject)}
+function bookContext(subject){const b=bookFor(subject);if(!b)return'';
+  return `\nLehrwerk: ${b.title}${b.isbn?' (ISBN '+b.isbn+')':''}. Die Klasse ist aktuell bei: ${b.chapter||'unbekannt'}.${b.toc?'\nInhaltsverzeichnis (Auszug):\n'+String(b.toc).slice(0,3000):''}`}
+async function refineExam(id){
+  const ex=S.exams.find(e=>e.id===id);if(!ex||!AI_OK())return;
+  const ts=S.tasks.filter(t=>t.examId===id&&!t.done).sort((a,b)=>a.date.localeCompare(b.date));if(!ts.length)return;
+  const pastRes=S.results.filter(r=>r.subject===ex.subject).slice(-3).map(r=>`${r.type}: lief ${r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}`).join('; ');
+  ui.busy=id;render();
+  try{
+    const prompt=`Ein Schüler der 7. Klasse an einem bayerischen Gymnasium bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Was drankommt: ${ex.topic||'nicht angegeben'}.${bookContext(ex.subject)}
+Ihm fällt es schwer, sich zu motivieren, und Auswendiglernen fällt ihm schwer. Er lernt gut mit konkreten, kleinen Aufträgen und aktivem Abfragen statt bloßem Durchlesen.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
+Plane ${ts.length} Lerneinheiten, in dieser Reihenfolge und mit diesen Längen: ${ts.map((t,i)=>`${i+1}. ${fmt(t.date)}, ${planMin(t)} Minuten`).join('; ')}.
+Gib für jede Einheit einen konkreten Auftrag in einem kurzen Satz (höchstens 90 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Grammatikthema aus dem Lehrwerk. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung. Einfache Sprache, keine Gedankenstriche.
+Antworte nur mit JSON: {"schritte":["...","..."]}`;
+    const res=await aiJSON(prompt);
+    const steps=(res&&res.schritte)||(Array.isArray(res)?res:[]);
+    ts.forEach((t,i)=>{if(steps[i]&&String(steps[i]).trim())t.title=String(steps[i]).trim().slice(0,120)});
+    ui.msg='Die Lernschritte sind jetzt konkreter. Du kannst jeden Schritt unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
+  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+  ui.busy=null;render();
+}
+async function scanToc(id){
+  const b=S.books.find(x=>x.id===id),inp=document.getElementById('toc-'+id),files=[...((inp&&inp.files)||[])];
+  if(!b)return;if(!files.length){ui.msg='Bitte zuerst ein Foto vom Inhaltsverzeichnis auswählen.';ui.msgType='err';render();return}
+  ui.busy='toc-'+id;render();
+  try{
+    const imgs=await Promise.all(files.slice(0,4).map(shrink));
+    const txt=await aiText(`Das sind Fotos vom Inhaltsverzeichnis des Schulbuchs "${b.title}" (${b.subject}). Schreibe das Inhaltsverzeichnis kompakt ab: eine Zeile pro Lektion oder Kapitel mit Nummer, Titel, Seite und, falls erkennbar, den Grammatik- oder Themenschwerpunkten. Nur die Liste, keine Einleitung.`,imgs);
+    b.toc=((b.toc?b.toc+'\n':'')+txt.trim()).slice(0,8000);ui.msg='Inhaltsverzeichnis gespeichert.';ui.msgType='okn';save();
+  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+  ui.busy=null;render();
+}
+function reportStats(){
+  const T=iso(today()),lines=[];
+  for(let i=14;i>=1;i--){const d=addDays(today(),-i),di=iso(d);if(isFree(d))continue;
+    const done=S.tasks.filter(t=>t.done&&t.doneAt===di),r=S.days[di]||{};
+    if(!r.planned&&!done.length&&!S.kick[di])continue;
+    lines.push(`${WD[d.getDay()]} ${di}: geplant ${r.planned||0} Min., erledigt ${done.length} Aufgaben (${done.reduce((a,t)=>a+(t.actual||0),0)} Min.), ${S.wins[di]?'Tagessieg':'kein Tagessieg'}, Anpfiff ${S.kick[di]?S.kick[di]+' (geplanter Start '+hm(dayStart(d))+')':'nicht gedrückt'}, schwer markiert: ${done.filter(t=>t.feel==='schwer').map(t=>t.subject).join(', ')||'nichts'}`)}
+  const pace=Object.entries(S.pace).filter(([k])=>k.includes('|')).map(([k,p])=>`${k.replace('|',' ').replace('ha','Hausaufgaben').replace('lern','Lernen')}: Faktor ${p.f.toFixed(2)} aus ${p.n}`).join('; ');
+  const res=S.results.slice(-6).map(r=>`${r.subject} ${r.type}: ${r.feel}, Vorbereitung ${r.prep}${r.grade?', Note '+r.grade:''}`).join('; ');
+  return `Letzte 14 Tage:\n${lines.join('\n')||'noch keine Daten'}\nArbeitstempo (tatsächlich geteilt durch geschätzt): ${pace||'noch keine Daten'}\nPrüfungsrückblicke: ${res||'keine'}\nGelernte Tageskapazität an Schultagen: ${S.model.cap} Min.\nVorbereitungsfaktoren: ${JSON.stringify(S.model.prep)}\nOffene Hilfe-Wünsche: ${S.help.length}\nEinstellungen: Pause nach der Schule ${S.settings.afterSchool} Min., Lernblöcke ${S.settings.blockMax} Min., Ludus Latinus ${S.settings.ludusOn?S.settings.ludusMin+' Min. täglich':'aus'}.`;
+}
+async function makeReport(){
+  if(!AI_OK())return;ui.busy='report';render();
+  try{
+    const txt=await aiText(`Du bist eine erfahrene Lerncoachin und schreibst Eltern einen kurzen Wochenbericht über ihren 12-jährigen Sohn (7. Klasse Gymnasium, Bayern). Er tut sich schwer mit Motivation und Struktur, spielt Handball und reagiert gut auf Belohnungen. Die App plant seine Nachmittage, er hakt Aufgaben ab und gibt Rückmeldung.
+Daten:\n${reportStats()}
+Schreibe auf Deutsch, sachlich und freundlich, höchstens 170 Wörter, ohne Gedankenstriche und ohne Floskeln:
+1. Was gut läuft (konkret, mit Zahlen).
+2. Wo es hakt (Tage, Uhrzeiten, Fächer).
+3. Zwei konkrete Vorschläge für die nächste Woche, die die Eltern in der App oder im Alltag umsetzen können.
+Wenn es noch zu wenig Daten gibt, sag das kurz und nenne, worauf die Eltern in den nächsten Tagen achten sollten.`);
+    S.report={date:iso(today()),text:txt.trim()};save();
+  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+  ui.busy=null;render();
+}
+
+/* ===== Anzeige-Bausteine ===== */
+function examOf(t){return S.exams.find(x=>x.id===t.examId)}
+function taskMeta(t){
+  if(t.kind==='daily')return 'Latein · jeden Tag zum Aufwärmen';
+  if(t.kind==='ha')return `${esc(t.subject)} · Hausaufgabe bis ${fmt(t.due)}`;
+  const e=examOf(t);
+  return `${esc(t.subject)} · Schritt ${t.part||''}${t.parts?' von '+t.parts:''} für ${e?esc(e.type)+' am '+fmt(e.date)+(e.topic?' ('+esc(e.topic)+')':''):'die Prüfung'}`;
+}
+function timeLine(segs,P){return `${segs.map(x=>hm(x[0])).join(' und ')} · ${P} Min.${segs.length>1?` in ${segs.length} Blöcken mit Pause`:''}`}
+function fbPanel(t,P){
+  const run=S.running&&S.running.id===t.id,measured=run?Math.max(1,Math.round((Date.now()-S.running.at)/60000)):null;
+  const b=(act,v,l,cur)=>`<button class="btn sm ${cur===v?'on':''}" data-act="${act}" data-v="${v}">${l}</button>`;
+  return `<div class="fb">`+(measured?`<div class="q">Gemessen: ${measured} Min. (geplant ${P})</div>`:
+    `<div class="q">Wie lange hat es gedauert? Geplant waren ${P} Min.</div><div class="row">${b('fbdur','kurz','Kürzer',ui.fbDur)}${b('fbdur','ok','Ungefähr so',ui.fbDur)}${b('fbdur','lang','Länger',ui.fbDur)}</div>`)+
+    `<div class="q">Wie schwer war es?</div><div class="row">${b('fbfeel','leicht','Leicht',ui.fbFeel)}${b('fbfeel','mittel','Mittel',ui.fbFeel)}${b('fbfeel','schwer','Schwer',ui.fbFeel)}</div>
+    <div class="sub" style="margin-top:6px">Ehrlich sein lohnt sich: Für „Schwer“ gibt es ein Fairplay-Tor und Hilfe beim nächsten Mal.</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="fbsave">Erledigt</button><button class="btn" data-act="fbcancel">Abbrechen</button></div></div>`;
+}
+function timerRow(t){
+  const run=S.running&&S.running.id===t.id;
+  return run?`<div class="row" style="margin-top:10px"><span class="chip wa">läuft seit <span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</span><button class="btn primary" data-act="check" data-id="${t.id}">Fertig</button></div>`
+    :`<div class="row" style="margin-top:10px"><button class="btn primary" data-act="start" data-id="${t.id}">Start</button><button class="btn" data-act="check" data-id="${t.id}">Schon erledigt</button></div>`;
+}
+function renderTaskCard(t,P,segs){
+  let h=`<div class="item" style="--c:${col(t.subject)}">
+    <button class="chk" data-act="check" data-id="${t.id}" aria-label="Abhaken"></button>
+    <div class="grow"><div class="tt">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
+    <div class="time">${segs?timeLine(segs,P):P+' Min.'}</div>${t.together?'<span class="chip wa" style="margin-top:6px">Zusammen mit Mama oder Papa</span>':''}`;
+  if(ui.fb===t.id)h+=fbPanel(t,P);
+  return h+`</div></div>`;
+}
+const subjOpts=sel=>SUBJ.map(s=>`<option ${s===sel?'selected':''}>${s}</option>`).join('');
+function haForm(){
+  return `<form data-form="ha" class="card"><h2>Hausaufgabe eintragen</h2>
+  <label>Fach<select name="subject">${subjOpts()}</select></label>
+  <label>Was ist zu tun?<input name="title" required placeholder="Buch S. 88 Nr. 3"></label>
+  <div class="g2"><label>Abgabe am<input type="date" name="due" required value="${schoolDayIn(1)}" min="${iso(today())}"></label>
+  <label>Geschätzte Dauer<select name="est">${[5,10,15,20,25,30,40,45,60,75,90].map(m=>`<option value="${m}" ${m===20?'selected':''}>${m} Min.</option>`).join('')}</select></label></div>
+  <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
+}
+function scanCard(){
+  if(!AI_OK())return'';
+  const sc=ui.scan;
+  if(sc.status==='reading')return `<div class="card"><h2>Hausaufgaben aus Screenshot</h2><div class="muted">Screenshot wird gelesen, das dauert ein paar Sekunden.</div></div>`;
+  if(sc.status==='review'){
+    const opt=(list,cur,f)=>list.map(v=>`<option value="${v}" ${v==cur?'selected':''}>${f?f(v):v}</option>`).join('');
+    return `<form data-form="scanok" class="card"><h2>Gefundene Hausaufgaben</h2><div class="sub">Nur Hausaufgaben von heute. Bitte kurz prüfen, nur angehakte werden übernommen.${sc.hidden?` ${sc.hidden} ältere Einträge wurden ausgeblendet.`:''}</div>`+
+    sc.items.map((it,i)=>`<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px">
+      <label style="color:var(--tx)"><input type="checkbox" name="on${i}" ${it.on?'checked':''}>${it.dup?'Schon eingetragen: ':it.unclear?'Datum nicht erkennbar, bitte prüfen: ':''}<b>${esc(it.subject)}</b></label>
+      <label>Aufgabe<input name="t${i}" value="${esc(it.title)}"></label>
+      <div class="g2"><label>Fach<select name="s${i}">${opt(SUBJ,it.subject)}</select></label><label>Abgabe<input type="date" name="d${i}" value="${it.due}" min="${iso(today())}"></label></div>
+      <label>Geschätzte Dauer<select name="m${i}">${opt([5,10,15,20,25,30,40,45,60,75,90],it.est,m=>m+' Min.')}</select></label></div>`).join('')+
+    `<div class="row" style="margin-top:12px"><button class="btn primary">Übernehmen</button><button type="button" class="btn" data-act="scancancel">Verwerfen</button></div></form>`;
+  }
+  return `<div class="card"><h2>Hausaufgaben aus Screenshot</h2>
+  <div class="sub">Im Schulmanager die Hausaufgaben öffnen, Screenshot machen und hier auswählen. Bis zu vier Bilder auf einmal.</div>
+  <input type="file" id="scanfile" accept="image/*" multiple style="margin-top:10px">
+  ${sc.err?`<div class="note err">${esc(sc.err)}</div>`:''}
+  <div class="row" style="margin-top:10px"><button class="btn primary" data-act="scanrun">Auslesen</button></div></div>`;
+}
+function msgBox(){if(!ui.msg)return'';const h=`<div class="note ${ui.msgType||''}">${esc(ui.msg)}</div>`;ui.msg='';ui.msgType='';return h}
+function addButtons(){
+  let h=ui.scanOpen||ui.scan.status!=='idle'?scanCard():'';
+  h+=ui.addHA?haForm():'';
+  h+=`<div class="row" style="margin-top:14px">${ui.addHA?'':'<button class="btn" data-act="toggleha">+ Hausaufgabe eintragen</button>'}${AI_OK()&&!ui.scanOpen&&ui.scan.status==='idle'?'<button class="btn" data-act="scanopen">Screenshot auslesen</button>':''}</div>`;
+  return h;
+}
+
+/* ===== Seiten ===== */
+function scoreboard(){
+  const T=iso(today()),w=weekInfo(),L=liga(),bt=+S.settings.bedtimeMin||30;
+  let prize;
+  if(w.prize)prize=w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Wochenspiel gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`;
+  else if(w.possible)prize=`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''} bis zur Siegprämie: ${bt} Min. länger aufbleiben am Freitag und Samstag.`;
+  else prize='Diese Woche reicht es nicht mehr für die Siegprämie. Am Montag beginnt ein neues Spiel.';
+  return `<div class="card"><div class="score"><div><div class="sub">Tore heute</div><div class="n">${goalsOn(T)}</div></div>
+  <div style="text-align:right"><div class="sub">${esc(L.name)}</div><div style="font-weight:600">${L.n} Tore</div></div></div>
+  <div class="wk">${w.days.map((d,i)=>`<div class="${S.wins[d]?'won':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<br>${S.wins[d]?'Sieg':d<T?'·':'&nbsp;'}</div>`).join('')}</div>
+  <div class="sub" style="margin-top:8px">${prize}</div></div>`;
+}
+function reviewCards(){
+  return pendingReviews().map(e=>{const r=ui.rv[e.id]||{};
+    const b=(k,v,l)=>`<button class="btn sm ${r[k]===v?'on':''}" data-act="rv" data-id="${e.id}" data-k="${k}" data-v="${v}">${l}</button>`;
+    return `<div class="card" style="--c:${col(e.subject)}"><h2>Spielanalyse: ${esc(e.subject)} ${esc(e.type)}</h2>
+    <div class="q" style="font-size:14px;margin-bottom:6px">Wie lief es?</div><div class="row">${b('feel','gut','Gut')}${b('feel','mittel','Ging so')}${b('feel','schlecht','Nicht gut')}</div>
+    <div class="q" style="font-size:14px;margin:10px 0 6px">Hat die Vorbereitung gereicht?</div><div class="row">${b('prep','zuwenig','Zu wenig')}${b('prep','passt','Passte')}${b('prep','zuviel','Mehr als nötig')}</div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="rvsave" data-id="${e.id}">Speichern</button></div>
+    <div class="sub" style="margin-top:6px">Damit plant die App die nächste Prüfung in ${esc(e.subject)} besser.</div></div>`}).join('');
+}
+function meetCard(){
+  const d=today();if(!(d.getDay()===0||d.getDay()===6))return'';
+  const key=iso(monday(addDays(d,d.getDay()===0?1:2)));if(S.meets[key])return'';
+  return `<div class="card"><h2>Mannschaftsbesprechung</h2><div class="sub">Schaut euch zusammen die nächste Woche an: Prüfungen, Training, volle Tage. Was soll anders laufen als diese Woche?</div>
+  <div class="row" style="margin-top:10px"><button class="btn" data-act="tab" data-v="woche">Woche ansehen</button><button class="btn primary" data-act="meet" data-k="${key}">Besprechung gemacht</button></div></div>`;
+}
+function renderFocus(plan){
+  const T=iso(today()),day=plan[0],q=queueOf(day);
+  let h=scoreboard();
+  if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
+  else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich (PIN 1234) Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
+  h+=msgBox()+reviewCards()+meetCard();
+  const hasWork=q.length>0;
+  if(hasWork&&!S.kick[T]){
+    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
+    h+=`<div class="card" style="text-align:center"><div class="big">Bereit für den Anpfiff?</div>
+    <div class="sub" style="margin:4px 0 12px">${dl&&nowMin()<=dl?`Wenn du bis ${hm(dl)} anfängst, gibt es ein Extra-Tor.`:'Heute stehen '+q.length+' Aufgaben an. Los geht’s!'}</div>
+    <button class="btn primary big" data-act="kick">Anpfiff</button></div>`;
+  }
+  if(S.settings.checksOn&&!checksDone(T)&&!day.free){
+    const c=S.checks[T]||{};
+    h+=`<div class="card"><h2>Kabinen-Check</h2>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} auf dem aktuellen Stand?</span>${c[k]?`<span class="chip ${c[k]==='ok'?'ok':'wa'}">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn sm" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn sm" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
+  }
+  if(hasWork){
+    const cur=q.find(x=>x.t.id===ui.focus)||q[0],t=cur.t;
+    h+=`<div class="card focus" style="--c:${col(t.subject)}"><div class="label">${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}</div>
+      <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
+      <div class="chips"><span class="chip">${cur.P} Min.</span>${cur.segs?`<span class="chip">geplant ab ${hm(cur.segs[0][0])}</span>`:''}${t.together?'<span class="chip wa">Zusammen mit Mama oder Papa</span>':''}${cur.over?'<span class="chip er">passt eigentlich nicht mehr in den Tag</span>':''}</div>
+      ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:10px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
+      ${ui.fb===t.id?fbPanel(t,cur.P):timerRow(t)}</div>`;
+    const rest=q.filter(x=>x!==cur);
+    if(rest.length)h+=`<div class="card"><h2>Danach (${rest.length})</h2>`+rest.map(x=>`<div class="li"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}<br><span class="sub">${esc(x.t.subject)} · ${x.P} Min.</span></span><button class="btn sm" data-act="focus" data-id="${x.t.id}">Zuerst</button></div>`).join('')+`</div>`;
+  }else if(!day.free){
+    h+=`<div class="card" style="text-align:center">${S.wins[T]?'<div class="big">Tagessieg!</div><div class="sub">Alles geschafft. Stark gespielt!</div>':checksDone(T)?'<div class="big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>':'<div class="sub">Nur noch der Kabinen-Check, dann ist der Tag gewonnen.</div>'}</div>`;
+  }else h+=`<div class="card">Sonntag ist lernfrei. Genieß den Tag!</div>`;
+  const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T);
+  if(doneToday.length)h+=`<div class="card"><h2>Erledigt</h2>`+doneToday.map(t=>`<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="muted">(${t.actual} Min.)</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</div>`;
+  h+=`<div class="row" style="margin-top:6px"><button class="btn" data-act="full">Ganzen Tag mit Uhrzeiten zeigen</button></div>`;
+  return h+addButtons();
+}
+function renderHeute(plan){
+  if(ui.day===0&&!ui.full)return renderFocus(plan);
+  const day=plan[ui.day],isToday=ui.day===0,T=iso(today());
+  let h=`<div class="days">`+plan.slice(0,7).map((d,i)=>{const dd=parse(d.date),n=d.items.length+d.over.length;
+    return `<button class="day ${i===ui.day?'on':''}" data-act="day" data-i="${i}">${i===0?'Heute':WD[dd.getDay()]}<small>${dd.getDate()}.${dd.getMonth()+1}. · ${n}</small></button>`}).join('')+`</div>`;
+  if(isToday)h+=`<div class="row" style="margin-top:8px"><button class="btn" data-act="full">Zurück zu „Jetzt dran“</button></div>`;
+  const up=S.exams.filter(e=>e.date>=T&&diff(T,e.date)<=14).sort((a,b)=>a.date.localeCompare(b.date));
+  if(up.length)h+=`<div class="chips">`+up.map(e=>{const n=diff(T,e.date);return `<span class="chip ${n<=3?'wa':''}"><span class="dot" style="background:${col(e.subject)}"></span>${esc(e.subject)} ${esc(e.type)}: ${n===0?'heute':n===1?'morgen':'in '+n+' Tagen'}</span>`}).join('')+`</div>`;
+  h+=msgBox();
+  if(day.free)h+=`<div class="card">Sonntag ist lernfrei. Genieß den Tag!</div>`;
+  const ent=day.appts.map(a=>({s:toMin(a.start),h:`<div class="item appt"><div class="grow"><div class="tt">${esc(a.title)}</div><div class="time">${a.start} bis ${a.end}</div></div></div>`}))
+    .concat(day.items.map(it=>({s:it.segs[0][0],h:renderTaskCard(it.t,it.P,it.segs)})));
+  ent.sort((a,b)=>a.s-b.s);h+=ent.map(e=>e.h).join('');
+  if(!day.free&&!day.items.length&&!day.over.length)h+=`<div class="card muted">Für diesen Tag ist nichts geplant.</div>`;
+  if(day.over.length)h+=`<div class="note warn">Das passt nicht mehr in den Tag. Sprich mit Mama oder Papa, was zuerst dran ist.</div>`+day.over.map(o=>renderTaskCard(o.t,o.P,null)).join('');
+  return h+(isToday?addButtons():'');
+}
+function renderWoche(plan){
+  return plan.slice(0,7).map((d,i)=>{const dd=parse(d.date);
+    const pct=d.lim?Math.min(100,Math.round(d.used/d.lim*100)):0;
+    const ex=S.exams.filter(e=>e.date===d.date);
+    return `<div class="card"><div class="row" style="justify-content:space-between"><b>${i===0?'Heute':WDL[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}.</b><span class="sub">${d.free?'frei':d.used+' Min. Lernzeit'}</span></div>
+    ${d.free?'':`<div class="bar"><div class="${pct>90?'full':''}" style="width:${pct}%"></div></div>`}
+    ${ex.map(e=>`<div class="chip wa" style="margin:4px 0">${esc(e.subject)} ${esc(e.type)}</div>`).join('')}
+    ${d.appts.map(a=>`<div class="li muted">${a.start} ${esc(a.title)}</div>`).join('')}
+    ${d.items.map(it=>`<div class="li"><span class="dot" style="background:${col(it.t.subject)}"></span><span class="grow">${esc(it.t.subject)}: ${esc(it.t.title)}</span><span class="sub">${it.P} Min.</span></div>`).join('')}
+    ${d.over.map(o=>`<div class="li" style="color:var(--er)"><span class="grow">Passt nicht: ${esc(o.t.subject)}, ${esc(o.t.title)}</span><span>${o.P} Min.</span></div>`).join('')}
+    </div>`}).join('');
+}
+function renderPokale(){
+  const L=liga(),b=badges();
+  const pct=L.next?Math.round((L.n-LIGA[L.i][1])/(L.next[1]-LIGA[L.i][1])*100):100;
+  const nextJ=THEMES.find(t=>t.lvl>L.i);
+  let h=msgBox()+`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
+  <div class="bar"><div style="width:${pct}%"></div></div>
+  <div class="sub">${L.next?`Noch ${L.next[1]-L.n} Tore bis zum Aufstieg in die ${esc(L.next[0])}.`:'Ganz oben angekommen!'}${nextJ?` Nächstes Trikot: ${esc(nextJ.n)} in der ${esc(LIGA[nextJ.lvl][0])}.`:''}</div></div>`;
+  h+=`<div class="card"><h2>Trikots</h2><div class="sub" style="margin-bottom:10px">Mit jedem Aufstieg kommt ein neues Trikot dazu. Das Kiel-Trikot gibt es in der 1. Bundesliga.</div><div class="row">`+
+    THEMES.map((th,i)=>{const ok=L.i>=th.lvl;return `<button class="jer ${S.settings.theme===i?'on':''} ${ok?'':'lock'}" ${ok?`data-act="theme" data-i="${i}"`:'disabled'} style="--m:${th.m};--s:${th.s}"><span class="sh"></span><span>${esc(th.n)}${th.d?'<br>'+esc(th.d):''}${ok?'':'<br>ab '+esc(LIGA[th.lvl][0])}</span></button>`}).join('')+`</div></div>`;
+  h+=`<div class="card"><h2>Abzeichen</h2><div class="badges">`+b.map(([n,d,ok])=>`<div class="badge ${ok?'':'off'}"><b>${n}</b>${d}</div>`).join('')+`</div></div>`;
+  h+=`<div class="card"><h2>So gibt es Tore</h2>
+  <div class="li"><span class="grow">Aufgabe erledigt</span><b>${PTS.task}</b></div>
+  <div class="li"><span class="grow">Kabinen-Check beantwortet (je Fach)</span><b>${PTS.check}</b></div>
+  <div class="li"><span class="grow">Pünktlicher Anpfiff</span><b>${PTS.kick}</b></div>
+  <div class="li"><span class="grow">Fairplay: ehrlich „schwer“ gesagt</span><b>${PTS.fair}</b></div>
+  <div class="li"><span class="grow">Tagessieg: alles für heute geschafft</span><b>${PTS.win}</b></div>
+  <div class="li"><span class="grow">Spielanalyse nach einer Prüfung</span><b>${PTS.review}</b></div>
+  <div class="li"><span class="grow">Mannschaftsbesprechung am Wochenende</span><b>${PTS.meet}</b></div>
+  <div class="sub" style="margin-top:8px">Wochenspiel: ${S.settings.winGoal} Tagessiege von Montag bis Freitag gewinnen das Spiel. Siegprämie: ${S.settings.bedtimeMin} Min. länger aufbleiben am Freitag und Samstag.</div></div>`;
+  return h;
+}
+function renderEltern(plan){
+  if(!ui.unlocked)return `<form data-form="pin" class="card"><h2>Elternbereich</h2><label>PIN<input name="pin" type="password" inputmode="numeric" required autocomplete="off"></label><div class="row" style="margin-top:12px"><button class="btn primary">Öffnen</button></div></form>`+msgBox();
+  const T=iso(today()),st=S.settings,w=weekInfo(),sd=startDelay();
+  const doneT=S.tasks.filter(t=>t.done&&t.doneAt===T),openT=plan[0].items.length+plan[0].over.length;
+  const wk=S.tasks.filter(t=>t.done&&t.doneAt>iso(addDays(today(),-7)));
+  const overdue=S.tasks.filter(t=>!t.done&&t.kind==='ha'&&t.due<=T);
+  const tight=plan.slice(0,7).filter(d=>d.over.length);
+  let h=msgBox();
+  h+=`<div class="card"><h2>Stand</h2>
+  <div class="g2"><div><div class="sub">Heute erledigt</div><div class="big">${doneT.length} von ${doneT.length+openT}</div><div class="sub">${S.kick[T]?'Anpfiff um '+S.kick[T]:'Noch nicht angefangen'}</div></div><div><div class="sub">Letzte 7 Tage</div><div class="big">${wk.length} Aufgaben</div><div class="sub">${wk.reduce((a,t)=>a+(t.actual||0),0)} Min. gelernt</div></div></div>
+  ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
+  ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
+  </div>`;
+  h+=`<div class="card"><h2>Wochenspiel</h2><div>${w.won} von ${w.goal} Tagessiegen</div>
+  <div class="sub">${w.prize?(w.redeemed?'Siegprämie ist eingelöst.':`Gewonnen: Freitag und Samstag je ${st.bedtimeMin} Min. länger aufbleiben.`):w.possible?'Noch offen.':'Diese Woche nicht mehr erreichbar.'}</div>
+  ${w.prize&&!w.redeemed?`<div class="row" style="margin-top:10px"><button class="btn" data-act="redeem">Als eingelöst markieren</button></div>`:''}</div>`;
+  h+=`<div class="card"><h2>Braucht Hilfe</h2>${S.help.length?S.help.map(x=>`<div class="li"><span class="dot" style="background:${col(x.subject)}"></span><span class="grow">${fmt(x.date)}: ${esc(x.subject)}, ${esc(x.title)}<br><span class="sub">als schwer markiert</span></span><button class="btn sm" data-act="helpdone" data-id="${x.id}">Besprochen</button></div>`).join(''):'<div class="muted">Nichts offen.</div>'}</div>`;
+  // Was die App gelernt hat
+  const subs=Object.keys(S.pace).filter(k=>k!=='_all'&&!k.includes('|'));
+  h+=`<div class="card"><h2>Was die App gelernt hat</h2>
+  <div class="li"><span class="grow">Gut machbare Lernzeit an Schultagen</span><b>${S.model.cap} Min.</b></div>
+  <div class="sub">Startwert 75 Min. Steigt nach gewonnenen vollen Tagen, sinkt nach verlorenen. Mehr wird nur eingeplant, wenn es sonst nicht geht.</div>
+  ${subs.map(k=>{const p=S.pace[k],pct=Math.round((p.f-1)*100);return `<div class="li"><span class="dot" style="background:${col(k)}"></span><span class="grow">Tempo ${esc(k)}</span><span>${pct>5?'braucht etwa '+pct+' % länger':pct<-5?'ist etwa '+(-pct)+' % schneller':'passt zur Schätzung'}</span><span class="sub">&nbsp;(${p.n}×)</span></div>`}).join('')}
+  ${Object.entries(S.model.prep).map(([k,f])=>`<div class="li"><span class="dot" style="background:${col(k)}"></span><span class="grow">Vorbereitung ${esc(k)}</span><span>${f>1.04?Math.round((f-1)*100)+' % mehr Lernzeit':f<.96?Math.round((1-f)*100)+' % weniger Lernzeit':'Standard'}</span></div>`).join('')}
+  ${sd&&sd.med>20?`<div class="note warn">Er fängt meist etwa ${sd.med} Min. später an als geplant (letzte ${sd.n} Schultage). Vielleicht die Pause nach der Schule verlängern, damit der Plan realistischer wird.</div>`:''}
+  ${sd&&sd.med<=20?`<div class="sub" style="margin-top:6px">Startzeit: meist ${sd.med<=0?'pünktlich':'etwa '+sd.med+' Min. nach Plan'}.</div>`:''}
+  </div>`;
+  if(AI_OK())h+=`<div class="card"><h2>Trainerbericht</h2>${S.report?`<div class="sub" style="margin-bottom:6px">vom ${fmt(S.report.date)}</div><pre class="rep">${esc(S.report.text)}</pre>`:'<div class="sub">Claude wertet die letzten 14 Tage aus und macht Vorschläge für die nächste Woche.</div>'}
+  <div class="row" style="margin-top:10px"><button class="btn" data-act="report">${ui.busy==='report'?'Moment …':S.report?'Neu erstellen':'Bericht erstellen'}</button></div></div>`;
+  h+=scanCard()+haForm();
+  h+=`<form data-form="exam" class="card"><h2>Prüfung eintragen</h2>
+  <div class="g2"><label>Fach<select name="subject">${subjOpts()}</select></label>
+  <label>Art<select name="type">${Object.keys(EXAM).map(k=>`<option>${k}</option>`).join('')}</select></label></div>
+  <div class="g2"><label>Datum<input type="date" name="date" required min="${iso(addDays(today(),1))}"></label><label>Was kommt dran?<input name="topic" placeholder="Lektion 38, S. 40 bis 52"></label></div>
+  <div class="sub" style="margin-top:8px">Die Lernzeit wird auf die Tage davor verteilt, möglichst auf Tage mit wenig anderem. Jede Einheit bekommt einen konkreten Auftrag.${AI_OK()?' Claude passt die Aufträge danach an Thema und Lehrwerk an.':''}</div>
+  <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
+  const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
+  h+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt</span></span>${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm danger" data-act="delexam" data-id="${e.id}">Löschen</button></div>`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
+  const open=S.tasks.filter(t=>!t.done&&t.kind!=='daily').sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
+  h+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
+    `<form data-form="edit" data-id="${t.id}" style="padding:8px 0;border-top:1px solid var(--bd)"><label>Auftrag<input name="title" value="${esc(t.title)}" required></label><div class="row" style="margin-top:8px"><button class="btn sm primary">Speichern</button><button type="button" class="btn sm" data-act="editx">Abbrechen</button></div></form>`:
+    `<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.subject)}: ${esc(t.title)}<br><span class="sub">${t.kind==='ha'?'bis '+fmt(t.due):'am '+fmt(t.date)} · geschätzt ${t.est} Min., geplant ${planMin(t)} Min.</span></span><button class="btn sm" data-act="edit" data-id="${t.id}">Ändern</button><button class="btn sm" data-act="est" data-v="-5" data-id="${t.id}" aria-label="5 Minuten weniger">−5</button><button class="btn sm" data-act="est" data-v="5" data-id="${t.id}" aria-label="5 Minuten mehr">+5</button>${t.kind==='ha'?`<button class="btn sm danger" data-act="del" data-id="${t.id}">Löschen</button>`:''}</div>`).join(''):'<div class="muted">Alles erledigt.</div>'}</div>`;
+  h+=`<div class="card"><h2>Lehrwerke</h2><div class="sub">Mit Buch, aktueller Lektion und Inhaltsverzeichnis kann Claude die Lernschritte vor Prüfungen genau auf euer Buch abstimmen.</div>
+  ${S.books.map(b=>`<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><div class="row"><span class="dot" style="background:${col(b.subject)}"></span><b class="grow">${esc(b.subject)}: ${esc(b.title)}</b><button class="btn sm danger" data-act="delbook" data-id="${b.id}">Löschen</button></div>
+    <div class="sub">${b.isbn?'ISBN '+esc(b.isbn)+' · ':''}${b.toc?'Inhaltsverzeichnis gespeichert ('+String(b.toc).split('\n').length+' Zeilen)':'noch kein Inhaltsverzeichnis'}</div>
+    <form data-form="chapter" data-id="${b.id}" class="row" style="margin-top:6px"><input name="chapter" value="${esc(b.chapter||'')}" placeholder="Aktuell: Lektion 41" style="flex:1"><button class="btn sm">Speichern</button></form>
+    ${AI_OK()?`<div class="row" style="margin-top:6px"><input type="file" id="toc-${b.id}" accept="image/*" multiple style="flex:1"><button class="btn sm" data-act="toc" data-id="${b.id}">${ui.busy==='toc-'+b.id?'Moment …':'Inhaltsverzeichnis lesen'}</button></div>`:''}</div>`).join('')}
+  <form data-form="book" style="margin-top:12px;border-top:1px solid var(--bd);padding-top:8px"><div class="g2"><label>Fach<select name="subject">${subjOpts()}</select></label><label>Titel<input name="title" required placeholder="Campus C2 neu, Ausgabe Bayern"></label></div>
+  <div class="g2"><label>ISBN (optional)<input name="isbn" inputmode="numeric"></label><label>Aktuelle Lektion<input name="chapter" placeholder="Lektion 41"></label></div>
+  <div class="row" style="margin-top:10px"><button class="btn">Lehrwerk hinzufügen</button></div></form></div>`;
+  const all=S.appts.map(a=>({...a,lab:'jeden '+WDL[a.weekday]})).concat(S.oneoffs.filter(a=>a.date>=T).map(a=>({...a,lab:fmt(a.date)})));
+  h+=`<div class="card"><h2>Feste Termine</h2>${all.map(a=>`<div class="li"><span class="grow">${esc(a.title)}<br><span class="sub">${a.lab}, ${a.start} bis ${a.end}</span></span><button class="btn sm danger" data-act="delappt" data-id="${a.id}">Löschen</button></div>`).join('')||'<div class="muted">Keine Termine.</div>'}
+  <form data-form="appt" style="margin-top:10px"><label>Was<input name="title" required placeholder="Handballtraining"></label>
+  <div class="g2"><label>Wann<select name="when">${[1,2,3,4,5,6,0].map(w=>`<option value="w${w}">jeden ${WDL[w]}</option>`).join('')}<option value="once">einmalig</option></select></label><label>Datum (nur bei einmalig)<input type="date" name="date"></label></div>
+  <div class="g2"><label>Beginn<input type="time" name="start" required value="17:00"></label><label>Ende<input type="time" name="end" required value="18:30"></label></div>
+  <div class="row" style="margin-top:12px"><button class="btn">Termin hinzufügen</button></div></form>
+  <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei (Fahrt, Umziehen, Essen).</div></div>`;
+  h+=`<form data-form="settings" class="card"><h2>Einstellungen</h2>
+  <div class="sub">Schulschluss</div><div class="g5">${[1,2,3,4,5].map(w=>`<label>${WD[w]}<input type="time" name="se${w}" value="${S.schoolEnd[w]||'13:00'}"></label>`).join('')}</div>
+  <div class="g2"><label>Pause nach der Schule (Min.)<input type="number" name="afterSchool" min="0" max="180" value="${st.afterSchool}"></label><label>Spätestens fertig um<input type="time" name="latest" value="${st.latest}"></label></div>
+  <div class="g2"><label>Am Samstag ab<input type="time" name="weekendStart" value="${st.weekendStart}"></label><label>Puffer um Termine (Min.)<input type="number" name="buffer" min="0" max="90" value="${st.buffer}"></label></div>
+  <div class="g2"><label>Längster Lernblock (Min.)<input type="number" name="blockMax" min="10" max="60" value="${st.blockMax}"></label><label>Pause zwischen Blöcken (Min.)<input type="number" name="pause" min="0" max="20" value="${st.pause}"></label></div>
+  <label style="color:var(--tx)"><input type="checkbox" name="sundayFree" ${st.sundayFree?'checked':''}>Sonntag lernfrei</label>
+  <div class="sub" style="margin-top:14px">Ludus Latinus</div>
+  <label style="color:var(--tx)"><input type="checkbox" name="ludusOn" ${st.ludusOn?'checked':''}>Jeden Lerntag fest einplanen</label>
+  <div class="g2"><label>Dauer (Min.)<input type="number" name="ludusMin" min="5" max="60" value="${st.ludusMin}"></label><label>Link zur App (optional)<input name="ludusUrl" type="url" value="${esc(st.ludusUrl)}" placeholder="https://…"></label></div>
+  <label style="color:var(--tx)"><input type="checkbox" name="checksOn" ${st.checksOn?'checked':''}>Täglicher Vokabelkasten-Check (Latein und Englisch)</label>
+  ${REMOTE?`<div class="sub" style="margin-top:14px">Push-Nachrichten</div>
+  <label style="color:var(--tx)"><input type="checkbox" name="pushOn" ${st.pushOn!==false?'checked':''}>Erinnerungen aufs Handy</label>
+  <div class="sub">Kind: Anpfiff zur Startzeit, Endspurt eine Stunde vor Schluss, Abend vor einer Prüfung. Eltern: Stand am Abend, sofort Bescheid bei „schwer“, gewonnenes Wochenspiel. Sonntags die Mannschaftsbesprechung. Nicht an Ferientagen. Dafür müssen im Familienplan auf den Handys die Benachrichtigungen eingeschaltet sein.</div>`:''}
+  <div class="sub" style="margin-top:14px">Wochenspiel</div>
+  <div class="g2"><label>Tagessiege für die Siegprämie<input type="number" name="winGoal" min="1" max="5" value="${st.winGoal}"></label><label>Länger aufbleiben (Min.)<input type="number" name="bedtimeMin" min="5" max="120" value="${st.bedtimeMin}"></label></div>
+  ${REMOTE&&kids.length?`<label>Für wen ist der Lernplaner? (Karte im Familienplan)<select name="kidId"><option value="">bitte wählen</option>${kids.map(k=>`<option value="${esc(k.id)}" ${st.kidId===k.id?'selected':''}>${esc(k.name)}</option>`).join('')}</select></label>`:''}
+  <label>Neue PIN (leer lassen zum Behalten)<input name="pin" inputmode="numeric" autocomplete="off"></label>
+  <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
+  h+=`<div class="card"><h2>Daten</h2><div class="row">${S.meta.sample?'<button class="btn danger" data-act="clearsample">Beispieldaten löschen</button>':''}<button class="btn" data-act="lock">Elternbereich schließen</button></div>
+  <div class="sub" style="margin-top:8px">${REMOTE?'Alles wird in der Datenbank des Familienplans gespeichert und auf allen Geräten abgeglichen. Den Stand seht ihr auch im Familienplan unter „Aufgaben“.':'Diese Version speichert nur in diesem Browser.'}</div></div>`;
+  return h;
+}
+
+/* ===== Rendern ===== */
+function render(){
+  let ch=ensureDaily();
+  if(evaluateDays())ch=true;
+  const plan=simulate(),T=iso(today());
+  if(!plan[0].free){const tot=plan[0].used+plan[0].over.reduce((a,o)=>a+o.P,0)+S.tasks.filter(t=>t.done&&t.doneAt===T).reduce((a,t)=>a+(t.planned||0),0);
+    const cur=S.days[T]||{};if(!cur.planned||tot>cur.planned){S.days[T]=Object.assign({},cur,{planned:tot});ch=true}}
+  if(ch)save();
+  const th=THEMES[S.settings.theme]||THEMES[0],rs=document.documentElement.style;
+  rs.setProperty('--fill',th.m);rs.setProperty('--on',th.on);rs.setProperty('--stripe',th.s);
+  document.getElementById('today').textContent=WDL[today().getDay()]+', '+today().getDate()+'.'+(today().getMonth()+1)+'.';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===ui.tab));
+  document.getElementById('app').innerHTML=ui.tab==='heute'?renderHeute(plan):ui.tab==='woche'?renderWoche(plan):ui.tab==='pokale'?renderPokale():renderEltern(plan);
+  syncDot();
+  if(toastQ){const old=document.getElementById('toast');if(old)old.remove();
+    const d=document.createElement('div');d.id='toast';d.innerHTML=`+${toastQ.n} ${toastQ.n===1?'Tor':'Tore'}<small>${esc(toastQ.why)}</small>`;
+    document.body.appendChild(d);setTimeout(()=>d.remove(),2500);toastQ=null}
+}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=b.dataset.id;
+  const t=id&&S.tasks.find(x=>x.id===id);
+  switch(a){
+    case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;window.scrollTo(0,0);break;
+    case'day':ui.day=+b.dataset.i;ui.fb=null;break;
+    case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
+    case'focus':ui.focus=id;ui.fb=null;window.scrollTo(0,0);break;
+    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins;S.kick[T]=hm(nowMin());if(w.length&&nowMin()<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
+    case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
+    case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
+    case'fbdur':ui.fbDur=b.dataset.v;break;
+    case'fbfeel':ui.fbFeel=b.dataset.v;break;
+    case'fbsave':finish(ui.fb);break;
+    case'fbcancel':ui.fb=null;break;
+    case'start':S.running={id,at:Date.now()};if(!S.kick[iso(today())])S.kick[iso(today())]=hm(nowMin());save();break;
+    case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d]){delete S.wins[d];S.goals=S.goals.filter(g=>!(g.date===d&&g.why==='Tagessieg!'))}save()}break;
+    case'rv':ui.rv[id]=Object.assign({},ui.rv[id],{[b.dataset.k]:b.dataset.v});break;
+    case'rvsave':{const r=ui.rv[id]||{},e=S.exams.find(x=>x.id===id);if(!e)break;
+      if(!r.feel||!r.prep){ui.msg='Bitte beide Fragen beantworten.';ui.msgType='err';break}
+      S.results.push({id:uid(),examId:id,subject:e.subject,type:e.type,date:e.date,feel:r.feel,prep:r.prep});
+      applyResult(e,r.feel,r.prep);award(PTS.review,'Spielanalyse');delete ui.rv[id];save();break}
+    case'meet':S.meets[b.dataset.k]=iso(today());award(PTS.meet,'Mannschaftsbesprechung');save();break;
+    case'toggleha':ui.addHA=!ui.addHA;ui.scanOpen=false;break;
+    case'del':S.tasks=S.tasks.filter(x=>x.id!==id);save();break;
+    case'est':if(t){t.est=Math.max(5,Math.min(120,t.est+(+b.dataset.v)));save()}break;
+    case'edit':ui.edit=id;break;
+    case'editx':ui.edit=null;break;
+    case'grade':ui.edit='g-'+id;break;
+    case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks=S.tasks.filter(x=>x.examId!==id);save();break;
+    case'refine':if(!ui.busy)refineExam(id);return;
+    case'toc':if(!ui.busy)scanToc(id);return;
+    case'report':if(!ui.busy)makeReport();return;
+    case'delbook':S.books=S.books.filter(x=>x.id!==id);save();break;
+    case'delappt':S.appts=S.appts.filter(x=>x.id!==id);S.oneoffs=S.oneoffs.filter(x=>x.id!==id);save();break;
+    case'helpdone':S.help=S.help.filter(x=>x.id!==id);save();break;
+    case'redeem':S.prizes[weekInfo().key]='eingelöst';save();break;
+    case'theme':S.settings.theme=+b.dataset.i;save();break;
+    case'lock':ui.unlocked=false;break;
+    case'scanopen':ui.scanOpen=true;ui.addHA=false;break;
+    case'scancancel':ui.scan={status:'idle'};ui.scanOpen=false;break;
+    case'scanrun':runScan();return;
+    case'clearsample':{const keep={settings:S.settings,schoolEnd:S.schoolEnd,appts:S.appts,oneoffs:S.oneoffs,books:S.books};S=Object.assign(migrate(blank()),keep);S.meta={sample:false,setup:true};save();ui.msg='Beispieldaten gelöscht. Termine und Einstellungen bleiben erhalten, bitte prüfen.';break}
+    default:return;
+  }
+  render();
+});
+
+document.addEventListener('submit',e=>{
+  const f=e.target;if(!f.dataset.form)return;e.preventDefault();
+  const v=Object.fromEntries(new FormData(f));
+  switch(f.dataset.form){
+    case'pin':if(v.pin===S.settings.pin)ui.unlocked=true;else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
+    case'ha':if(!v.title.trim())return;addHA(v.subject,v.title.trim(),v.due,v.est);ui.addHA=false;ui.msg='Hausaufgabe gespeichert und eingeplant.';break;
+    case'scanok':{
+      let n=0;(ui.scan.items||[]).forEach((it,i)=>{if(!v['on'+i])return;const title=(v['t'+i]||'').trim();if(!title)return;
+        const sub=v['s'+i]||it.subject,due=v['d'+i]||it.due;if(isDup(sub,title,due))return;addHA(sub,title,due,+v['m'+i]||it.est);n++});
+      ui.scan={status:'idle'};ui.scanOpen=false;ui.msg=n?`${n} Hausaufgabe${n>1?'n':''} übernommen und eingeplant.`:'Keine neuen Hausaufgaben übernommen.';break}
+    case'exam':{if(!v.date)return;const id=addExam(v.subject,v.type,v.date,v.topic.trim());ui.msg=`${v.subject} ${v.type} gespeichert. Die Lerneinheiten sind verteilt.`;ui.msgType='okn';save();if(AI_OK()){refineExam(id);return}break}
+    case'edit':{const t=S.tasks.find(x=>x.id===f.dataset.id);if(t&&v.title.trim())t.title=v.title.trim();ui.edit=null;break}
+    case'grade':{const r=S.results.find(x=>x.id===f.dataset.id);if(r)r.grade=String(v.grade).trim().slice(0,4);ui.edit=null;break}
+    case'book':S.books=S.books.filter(b=>b.subject!==v.subject);S.books.push({id:uid(),subject:v.subject,title:v.title.trim(),isbn:(v.isbn||'').replace(/[^0-9Xx-]/g,''),chapter:(v.chapter||'').trim(),toc:''});ui.msg='Lehrwerk gespeichert.';ui.msgType='okn';break;
+    case'chapter':{const b=S.books.find(x=>x.id===f.dataset.id);if(b)b.chapter=(v.chapter||'').trim();ui.msg='Aktuelle Lektion gespeichert.';ui.msgType='okn';break}
+    case'appt':
+      if(toMin(v.end)<=toMin(v.start)){ui.msg='Das Ende muss nach dem Beginn liegen.';ui.msgType='err';break}
+      if(v.when==='once'){if(!v.date){ui.msg='Für einen einmaligen Termin bitte ein Datum angeben.';ui.msgType='err';break}S.oneoffs.push({id:uid(),title:v.title,date:v.date,start:v.start,end:v.end})}
+      else S.appts.push({id:uid(),title:v.title,weekday:+v.when.slice(1),start:v.start,end:v.end});
+      ui.msg='Termin gespeichert.';break;
+    case'settings':{
+      const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);[1,2,3,4,5].forEach(w=>{if(v['se'+w])se[w]=v['se'+w]});
+      st.afterSchool=+v.afterSchool||0;st.latest=v.latest||st.latest;st.weekendStart=v.weekendStart||st.weekendStart;
+      st.buffer=+v.buffer||0;st.blockMax=Math.max(10,+v.blockMax||15);st.pause=+v.pause||0;st.sundayFree=!!v.sundayFree;
+      st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
+      st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
+      if(v.pin&&v.pin.trim())st.pin=v.pin.trim();
+      if(v.kidId!==undefined)st.kidId=v.kidId;
+      if(REMOTE)st.pushOn=!!v.pushOn;
+      S.settings=st;S.schoolEnd=se;S.meta=Object.assign({},S.meta,{setup:true});
+      ui.msg='Einstellungen gespeichert.';ui.msgType='okn';break}
+  }
+  save();render();
+});
+
+setInterval(()=>{document.querySelectorAll('[data-elapsed]').forEach(el=>el.textContent=Math.round((Date.now()-+el.dataset.elapsed)/60000))},15000);
+
+/* ===== Start ===== */
+async function init(){
+  const cached=readCache();
+  S=cached||(REMOTE?defaults():seed());
+  render();
+  if(!REMOTE){save();return}
+  try{
+    if(!window.supabase)await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';sc.onload=res;sc.onerror=rej;document.head.append(sc)});
+    sb=window.supabase.createClient(FCFG.supabaseUrl,FCFG.supabaseKey);
+    const{data}=await sb.auth.getSession();
+    if(!data||!data.session){authOk=false;if(!cached){document.getElementById('app').innerHTML='<div class="card"><h2>Bitte zuerst anmelden</h2><div class="sub">Der Lernplaner nutzt die Anmeldung des Familienplans. Öffne zuerst den Familienplan auf diesem Gerät und melde dich an.</div><div class="row" style="margin-top:12px"><a class="btn primary" href="index.html">Zum Familienplan</a></div></div>';return}}
+  }catch(e){ui.sync='err';console.warn(e)}
+  if(sb&&authOk){
+    try{await pull(true,!cached)}catch(e){ui.sync='err';console.warn(e)}
+    try{const{data}=await sb.from('ep_persons').select('id,name,adult').order('sort');kids=(data||[]).filter(p=>!p.adult)}catch(e){}
+  }
+  render();push();
+  const refresh=async()=>{if(ui.fb||ui.edit||document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
+    try{if(await pull(false))render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
+  setInterval(refresh,45000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
+}
+init();
+</script>
+</body>
+</html>

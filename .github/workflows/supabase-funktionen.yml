@@ -1,0 +1,33 @@
+# Veröffentlicht die Supabase-Funktionen automatisch, sobald sich ihr Code in GitHub ändert.
+# Voraussetzung: In GitHub unter Settings > Secrets and variables > Actions zwei Secrets anlegen:
+#   SUPABASE_ACCESS_TOKEN  persönlicher Zugangsschlüssel aus supabase.com/dashboard/account/tokens
+#   SUPABASE_PROJECT_REF   die Projekt-ID (der Teil vor .supabase.co in der Projekt-URL)
+# Fehlen die Secrets, passiert nichts. Dann die Funktionen wie bisher im Supabase-Dashboard einspielen.
+name: Supabase-Funktionen veröffentlichen
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/functions/**']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hinweis ohne Secrets
+        if: env.SUPABASE_ACCESS_TOKEN == '' || env.PROJECT_REF == ''
+        run: echo "Secrets fehlen. Die Funktionen bitte im Supabase-Dashboard von Hand einspielen."
+      - uses: supabase/setup-cli@v1
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.PROJECT_REF != ''
+        with:
+          version: latest
+      - name: push und lernplaner veröffentlichen
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.PROJECT_REF != ''
+        # Ohne JWT-Prüfung durch Supabase: Der Cron-Job und der Siri-Kurzbefehl melden sich mit eigenem Schlüssel,
+        # die Funktion lernplaner prüft die Anmeldung selbst.
+        run: |
+          supabase functions deploy push --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy lernplaner --project-ref "$PROJECT_REF" --no-verify-jwt

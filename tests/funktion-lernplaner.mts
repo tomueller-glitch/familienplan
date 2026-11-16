@@ -1,0 +1,20 @@
+import { lernMessages, lpFromRows, berlin } from '../supabase/functions/push/index.ts';
+const persons=[{id:'p1',name:'Papa',adult:true},{id:'p2',name:'Mama',adult:true},{id:'p3',name:'Jonas',adult:false},{id:'p4',name:'Lena',adult:false}];
+const day='2026-11-17'; // Dienstag
+const rows=[
+ {id:'settings',coll:'settings',data:{kidId:'p3',afterSchool:60,latest:'19:30',winGoal:4,bedtimeMin:30}},
+ {id:'schoolEnd',coll:'schoolEnd',data:{'1':'13:00','2':'15:30','3':'13:00','4':'13:00','5':'12:15'}},
+ {id:'task:a',coll:'task',data:{id:'a',kind:'ha',subject:'Mathe',title:'S. 10',due:'2026-11-18',done:false}},
+ {id:'task:b',coll:'task',data:{id:'b',kind:'daily',subject:'Latein',title:'Ludus Latinus',date:day,done:false}},
+ {id:'task:c',coll:'task',data:{id:'c',kind:'lern',examId:'e1',subject:'Latein',title:'20 Vokabeln',date:'2026-11-16',done:false}},
+ {id:'task:d',coll:'task',data:{id:'d',kind:'ha',subject:'Englisch',title:'WB 42',due:'2026-11-17',done:true,doneAt:day,actual:15}},
+ {id:'exam:e1',coll:'exam',data:{id:'e1',subject:'Latein',type:'Ex / Test',date:'2026-11-18'}},
+ {id:'help:h',coll:'help',data:{id:'h',date:day,subject:'Mathe',title:'Brüche'}},
+ ...['2026-11-16','2026-11-17','2026-11-18','2026-11-19'].map(k=>({id:'win:'+k,coll:'win',data:{k,v:true}})),
+];
+const lp=lpFromRows(rows);
+const at=(hm:string)=>Date.parse(`${day}T${hm}:00+01:00`);
+for(const t of ['16:30','16:35','18:30','19:05','19:45','12:00']){const m=lernMessages(lp,persons,at(t));console.log(t,berlin(at(t)).min,m.map(x=>`${x.key} -> ${x.to.join(',')} | ${x.msg.title} | ${x.msg.body}`));}
+const sun=Date.parse('2026-11-22T17:10:00+01:00');console.log('So',lernMessages(lp,persons,sun).map(x=>x.key));
+console.log('Ferien',lernMessages(lp,persons,Date.parse('2026-12-28T16:40:00+01:00')).map(x=>x.key));
+console.log('aus',lernMessages(lpFromRows([{id:'settings',coll:'settings',data:{pushOn:false}}]),persons,at('16:30')).length);

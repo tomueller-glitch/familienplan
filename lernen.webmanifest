@@ -1,0 +1,12 @@
+{
+  "name": "Lernplaner",
+  "short_name": "Lernplaner",
+  "start_url": "lernen.html",
+  "display": "standalone",
+  "background_color": "#f6f5f1",
+  "theme_color": "#F5C400",
+  "icons": [
+    { "src": "icons/lernen-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/lernen-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

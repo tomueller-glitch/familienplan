@@ -11,6 +11,9 @@
 //  - freitags einen Wochenplan-Entwurf von Claude (wenn ANTHROPIC_API_KEY gesetzt ist), siehe „Wochenplan mit Claude“.
 //  - abends eine Erinnerung an alle, die mitgegessen, aber das Abendessen noch nicht bewertet haben.
 //    Kinder etwa eine Stunde nach dem Essen, spätestens 20:15 Uhr, Erwachsene nach 90 Minuten. Abschaltbar.
+//  - Lernplaner (lernen.html): Anpfiff und Endspurt an das Kind, Erinnerung am Abend vor einer Prüfung,
+//    den Eltern den Stand am Abend, sofort Bescheid bei „schwer“, das gewonnene Wochenspiel und sonntags
+//    die Mannschaftsbesprechung. Abschaltbar im Lernplaner unter Einstellungen.
 // Außerdem kann die App eine Testnachricht an das eigene Gerät anfordern.
 //
 // Die Datei kommt ohne fremde Bibliotheken aus. Verschlüsselung (RFC 8291) und
@@ -1846,6 +1849,131 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
   return out;
 }
 
+/* ======================================================================
+   Lernplaner (lernen.html)
+   Die Daten liegen in lp_data (id, coll, data). Fehlt die Tabelle, passiert hier nichts.
+   ====================================================================== */
+
+export type LpData = {
+  settings: Row; schoolEnd: Row; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
+  wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
+};
+
+export function lpFromRows(rows: Row[]): LpData {
+  const d: LpData = { settings: {}, schoolEnd: {}, open: [], done: [], exams: [], help: [], wins: {}, kick: {}, meets: {} };
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    const v = r.data;
+    if (v == null) continue;
+    if (r.coll === 'settings') d.settings = v;
+    else if (r.coll === 'schoolEnd') d.schoolEnd = v;
+    else if (r.coll === 'task') (v.done ? d.done : d.open).push(v);
+    else if (r.coll === 'exam') d.exams.push(v);
+    else if (r.coll === 'help') d.help.push(v);
+    else if (r.coll === 'win') d.wins[v.k] = !!v.v;
+    else if (r.coll === 'kick') d.kick[v.k] = String(v.v);
+    else if (r.coll === 'meet') d.meets[v.k] = String(v.v);
+  }
+  return d;
+}
+
+const hmMin = (t: unknown, fallback: number) => { const m = String(t ?? '').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : fallback; };
+
+export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
+  const out: Due[] = [];
+  const st: Row = { afterSchool: 60, latest: '19:30', weekendStart: '10:00', winGoal: 4, bedtimeMin: 30, sundayFree: true, pushOn: true, ...lp.settings };
+  if (st.pushOn === false) return out;
+  const { day, min, wd } = berlin(nowMs);
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return out;
+  const kid = persons.find((p) => p.id === st.kidId && !p.adult);
+  const adults = persons.filter((p) => p.adult).map((p) => p.id);
+  const kname = kid ? kid.name : 'Euer Sohn';
+  const url = './lernen.html';
+  const tomorrow = addDays(day, 1);
+  const nextWork = wdOf(tomorrow) === 6 && st.sundayFree !== false ? addDays(tomorrow, 1) : tomorrow;
+  const examDate: Record<string, string> = Object.fromEntries(lp.exams.map((e) => [e.id, String(e.date)]));
+  // Was heute dran ist, wie im Lernplaner: Hausaufgaben bis zum nächsten Lerntag, Ludus Latinus, fällige Lerneinheiten.
+  const openToday = lp.open.filter((t) => (t.kind === 'ha' && String(t.due) <= nextWork)
+    || (t.kind === 'daily' && t.date === day)
+    || (t.kind === 'lern' && String(t.date) <= day && (examDate[t.examId] || '') > day));
+  const doneToday = lp.done.filter((t) => t.doneAt === day);
+  const active = schoolDay(day) || (wd === 5 && openToday.some((t) => t.kind === 'lern'));
+  const latest = hmMin(st.latest, 19 * 60 + 30);
+  const start = wd < 5 ? hmMin(lp.schoolEnd[String(wd + 1)], 13 * 60) + (Number(st.afterSchool) || 0) : hmMin(st.weekendStart, 10 * 60);
+  const names = (xs: Row[]) => xs.slice(0, 4).map((t) => (t.kind === 'daily' ? 'Ludus Latinus' : `${t.subject}: ${t.title}`)).join(', ') + (xs.length > 4 ? ` und ${xs.length - 4} weitere` : '');
+  const anzahl = (n: number) => (n === 1 ? 'eine Aufgabe' : `${n} Aufgaben`);
+
+  // Anpfiff zur geplanten Startzeit und Endspurt eine Stunde vor Schluss, nur wenn noch etwas offen ist.
+  if (kid && active && openToday.length) {
+    if (!lp.kick[day] && min >= start && min < start + 45) {
+      out.push({ key: `lp-anpfiff:${day}`, to: [kid.id], ttl: 2 * 3600, msg: { title: 'Anpfiff!', body: `Heute ${anzahl(openToday.length)}: ${names(openToday)}. Wer gleich anfängt, holt ein Extra-Tor.`, tag: 'lernplaner', url } });
+    }
+    const late = latest - 60;
+    if (late > start && min >= late && min < late + 45) {
+      out.push({
+        key: `lp-endspurt:${day}`, to: [kid.id], ttl: 2 * 3600,
+        msg: { title: lp.kick[day] ? `Endspurt: noch ${anzahl(openToday.length)}` : 'Heute noch nicht angepfiffen', body: `${names(openToday)}. Bis ${st.latest} Uhr ist noch Zeit für den Tagessieg.`, tag: 'lernplaner', url },
+      });
+    }
+  }
+
+  // Abend vor einer Prüfung.
+  if (kid && min >= 19 * 60 && min < 20 * 60) {
+    for (const e of lp.exams.filter((x) => String(x.date) === tomorrow)) {
+      out.push({ key: `lp-pruefung:${e.id}`, to: [kid.id], ttl: 3 * 3600, msg: { title: `Morgen: ${e.subject} ${e.type}`, body: 'Kurz die Lernkarten durchgehen, Tasche packen und früh schlafen. Du bist vorbereitet!', tag: 'lernplaner-pruefung', url } });
+    }
+  }
+
+  // Stand für die Eltern, eine Viertelstunde nach dem spätesten Lernende.
+  if (active && adults.length && min >= latest + 15 && min < latest + 75 && (openToday.length || doneToday.length)) {
+    const mins = doneToday.reduce((a, t) => a + (Number(t.actual) || 0), 0);
+    const body = lp.wins[day]
+      ? `Tagessieg! ${doneToday.length} erledigt, ${mins} Min. gelernt.`
+      : `${doneToday.length} erledigt, ${mins} Min. gelernt.${openToday.length ? ` Noch offen: ${names(openToday)}.` : ''}${lp.kick[day] ? '' : ' Heute nicht angepfiffen.'}`;
+    out.push({ key: `lp-stand:${day}`, to: adults, ttl: 3 * 3600, msg: { title: `Schule heute: ${kname}`, body, tag: 'lernplaner-eltern', url } });
+  }
+
+  // „Schwer“ markiert: die Eltern erfahren es gleich, nachts erst ab 7 Uhr.
+  if (adults.length && min >= 7 * 60 && min < 21 * 60 + 30) {
+    for (const x of lp.help.filter((y) => y.date === day)) {
+      out.push({ key: `lp-hilfe:${x.id}`, to: adults, ttl: 12 * 3600, msg: { title: `${kname} braucht Hilfe in ${x.subject}`, body: `„${x.title}“ war heute schwer. Am besten kurz zusammen anschauen.`, tag: 'lernplaner-hilfe', url } });
+    }
+  }
+
+  // Wochenspiel gewonnen.
+  const mon = mondayOf(day);
+  const won = [0, 1, 2, 3, 4].filter((i) => lp.wins[addDays(mon, i)]).length;
+  if (won >= (Number(st.winGoal) || 4) && min >= 7 * 60 && min < 21 * 60 + 30) {
+    const prize = `Siegprämie: Freitag und Samstag je ${st.bedtimeMin} Min. länger aufbleiben.`;
+    if (kid) out.push({ key: `lp-sieg:${mon}:kind`, to: [kid.id], ttl: DAY / 1000, msg: { title: 'Wochenspiel gewonnen!', body: `${won} Tagessiege. ${prize}`, tag: 'lernplaner-sieg', url } });
+    if (adults.length) out.push({ key: `lp-sieg:${mon}:eltern`, to: adults, ttl: DAY / 1000, msg: { title: `${kname} hat das Wochenspiel gewonnen`, body: `${won} von 5 Tagessiegen. ${prize}`, tag: 'lernplaner-sieg', url } });
+  }
+
+  // Sonntags die Mannschaftsbesprechung für die nächste Woche.
+  if (wd === 6 && min >= 17 * 60 && min < 19 * 60) {
+    const next = addDays(mon, 7);
+    const to = [...(kid ? [kid.id] : []), ...adults];
+    if (!lp.meets[next] && to.length) {
+      out.push({ key: `lp-besprechung:${next}`, to, ttl: 4 * 3600, msg: { title: 'Mannschaftsbesprechung', body: 'Schaut euch zusammen die nächste Woche im Lernplaner an: Prüfungen, Training, volle Tage. Dafür gibt es 3 Tore.', tag: 'lernplaner-woche', url } });
+    }
+  }
+  return out;
+}
+
+async function loadLern(store: Store, today: string): Promise<LpData> {
+  const base = 'lp_data?select=id,coll,data&deleted=is.false';
+  const [a, b, c, d] = await Promise.all([
+    store.get(`${base}&coll=in.(settings,schoolEnd,exam,help,meet)`),
+    store.get(`${base}&coll=eq.task&data->>done=eq.false`),
+    store.get(`${base}&coll=eq.task&data->>doneAt=eq.${today}`),
+    store.get(`${base}&coll=in.(win,kick)&data->>k=gte.${addDays(mondayOf(today), -7)}`),
+  ]);
+  return lpFromRows([...a, ...b, ...c, ...d]);
+}
+
 /* ---------- Datenbank über die REST-Schnittstelle ---------- */
 
 function env(name: string): string {
@@ -2035,6 +2163,8 @@ async function runSchedule(nowMs = Date.now()) {
   const grundZuerst = (setting('aufgaben') || {}).grund_zuerst !== false;
   const erinnerung = (setting('aufgaben') || {}).erinnerung;
   const due = dueMessages({ persons, tasks, log, abfuhr, hearts, plan, shopping, dishes, ratings, urlaub, grundZuerst, added, erinnerung }, nowMs);
+  // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
+  try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }
   // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.
   const first = await sendDue(store, subs, due, vapid);
   // Datensicherung jeden Sonntag ab 3 Uhr, einmal pro Woche.

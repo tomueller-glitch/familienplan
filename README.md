@@ -360,3 +360,25 @@ Die Schrift Barlow wird von Google Fonts geladen, die Supabase-Bibliothek von js
 - **Lernen:** Steht auf dem Kassenzettel eine Größe im Artikeltext (zum Beispiel „PUTENBR.FIL. 400G“), übernimmt die App sie. Von Hand Eingetragenes hat Vorrang.
 - **Planen:** Claude bekommt die Liste und plant mit ganzen Packungen. Auch „Liste aus dem Wochenplan neu erstellen“ rechnet bekannte Produkte in Packungen.
 - **Wer spät kommt, verschiebt das Essen nicht:** Kommt jemand erst nach 19:30 nach Hause (Termin oder „kommt später“), bleibt das Abendessen bei 18:30. Beim Tag steht dann „kommt um 22:00, isst später“ und „eine Portion zur Seite stellen“. Wer bis 19:30 kommt, verschiebt das Essen wie bisher bis dahin.
+
+## Lernplaner (lernen.html)
+
+Eigene Seite für den Lernalltag des großen Sohns, auf derselben Adresse wie der Familienplan und mit derselben Anmeldung.
+Tagesplan mit Hausaufgaben, Prüfungslernen, Ludus Latinus und Vokabelkasten-Check, Handball-Punktesystem (Tore, Ligen, Trikots, Wochenspiel mit Siegprämie),
+lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der Tabelle `lp_data`, die Karte „Schule“ im Bereich Aufgaben liest die Ansichten `lp_stand` und `lp_erledigt_heute`.
+
+- Einrichten: `supabase/lernplaner.sql` im SQL Editor ausführen, Funktion `lernplaner` anlegen (Code in `supabase/functions/lernplaner/index.ts`).
+- Claude-Aufrufe aus dem Lernplaner laufen über die Funktion `lernplaner`, Push-Erinnerungen über die Funktion `push` (Abschnitt „Lernplaner“ dort).
+- Prüfung der Erinnerungen: `node --experimental-strip-types tests/funktion-lernplaner.mts`.
+
+## Arbeiten mit GitHub
+
+Der Code liegt im privaten GitHub-Repository. Netlify ist damit verbunden und veröffentlicht jede Änderung auf `main` automatisch.
+Die Supabase-Funktionen veröffentlicht die GitHub Action `.github/workflows/supabase-funktionen.yml`, sobald die beiden Secrets dort eingetragen sind.
+
+Regeln für jede Änderung, egal aus welchem Chat:
+1. Immer zuerst den aktuellen Stand aus GitHub holen. Nie mit Code aus einem älteren Chatverlauf oder dem claude.ai-Artefakt weiterarbeiten.
+2. Kleine, beschriebene Commits auf Deutsch, damit der Verlauf lesbar bleibt.
+3. Vor dem Speichern die Prüfungen laufen lassen (`tests/`), mindestens die `.mts`-Dateien und die Syntaxprüfung der `js/`-Dateien.
+4. Ändert sich eine Datei, die der Service Worker vorhält (Liste `SHELL` in `sw.js`), lädt die App sie selbst neu. Neue Seiten in diese Liste aufnehmen.
+5. Zurück: In Netlify unter Deploys eine frühere Version veröffentlichen, oder in GitHub den Commit rückgängig machen (Revert).

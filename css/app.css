@@ -801,3 +801,15 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .zustellung .z-titel { min-width: 0; overflow-wrap: anywhere; }
 .zustellung .z-ergebnis { grid-column: 2; font-size: 13px; color: var(--gruen); }
 .zustellung .z-ergebnis.warn { color: var(--rot); }
+
+/* Karte aus dem Lernplaner (lernen.html) im Bereich Aufgaben */
+.schul-karte { background: var(--blatt); border: 2px solid var(--linie); border-left: 8px solid #F5C400; border-radius: 10px; padding: 12px 14px; margin: 0 0 18px; }
+.schul-karte.sieg { border-color: #F5C400; }
+.schul-karte .sk-kopf { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 700 20px/1.2 var(--anzeige); margin-bottom: 4px; }
+.schul-karte .sk-chip { background: #F5C400; color: #111; border-radius: 999px; padding: 2px 10px; font: 600 14px/1.4 var(--text); }
+.schul-karte .sk-zeile { color: var(--tinte-2); font-size: 15px; margin-top: 2px; }
+.schul-karte .sk-hilfe { background: var(--wand); border-left: 4px solid var(--gelb); padding: 8px 10px; margin-top: 8px; font-size: 15px; }
+.schul-karte .sk-liste { margin: 8px 0 10px; padding-left: 18px; font-size: 15px; }
+.schul-karte .sk-fach { font-weight: 600; }
+.schul-karte .sk-liste small { color: var(--tinte-2); }
+.schul-karte .knopf { margin-top: 8px; text-decoration: none; display: inline-block; text-align: center; }

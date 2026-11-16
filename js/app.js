@@ -53,6 +53,7 @@ const state = {
   stale: false,
   busy: false,
   push: null,               // Stand der Push-Nachrichten auf diesem Gerät
+  lp: null,                 // Stand aus dem Lernplaner (lernen.html)
 };
 let stats = {};
 store.bind(() => state.data);
@@ -277,6 +278,7 @@ async function enter() {
   carryOver();
   refresh();
   initPush();
+  loadSchool().then((ok) => { if (ok && state.phase === 'app') render(); });
   if (!listening) {
     listening = true;
     store.onChange(onRemote);
@@ -412,6 +414,7 @@ async function syncRemote() {
   } catch (e) {
     return;
   }
+  if (tables.includes('all') || tables.includes('lp_data')) await loadSchool();
   stats = L.computeStats(state.data.dishes, state.data.plan, state.data.ratings, L.todayISO(), state.data.hearts);
   if (!store.offline) store.remember();
   carryOver();
@@ -2367,10 +2370,47 @@ function viewAufgaben() {
       : '<p>Mama oder Papa richten die Aufgaben ein.</p>'}</div>`;
   }
   const me = personById(state.me);
-  let html = '';
+  let html = schoolCard();
   if (isKidMe() && me) html += kidTasks(me);
   if (canPlan()) html += (html ? '<hr class="trenner">' : '') + parentTasks();
   return html;
+}
+
+/* ---------- Lernplaner (lernen.html) ---------- */
+// Der Lernplaner speichert in der Tabelle lp_data. Hier wird nur der Stand gelesen und als Karte gezeigt.
+async function loadSchool() {
+  if (store.mode !== 'supabase' || !store.sb || store.offline) return false;
+  try {
+    const [st, list] = await Promise.all([
+      store.sb.from('lp_stand').select('*').maybeSingle(),
+      store.sb.from('lp_erledigt_heute').select('*'),
+    ]);
+    if (st.error || list.error || !st.data) { state.lp = null; return false; }
+    state.lp = { ...st.data, liste: list.data || [] };
+    return true;
+  } catch (e) {
+    return false; // Lernplaner noch nicht eingerichtet
+  }
+}
+
+function schoolCard() {
+  const s = state.lp;
+  if (!s) return '';
+  const me = personById(state.me);
+  const kid = personById(s.kind_id);
+  const forMe = !!(me && kid && me.id === kid.id);
+  if (!forMe && !(me && isAdult(me))) return '';
+  const won = s.siege_woche >= s.siegziel;
+  const start = s.anpfiff ? `Anpfiff um ${esc(s.anpfiff)}` : 'noch nicht angefangen';
+  const list = (s.liste || []).map((x) => `<li><span class="sk-fach">${esc(x.fach)}</span> ${esc(x.aufgabe)}${x.minuten ? ` <small>${x.minuten} Min.</small>` : ''}</li>`).join('');
+  return `<div class="schul-karte${s.tagessieg ? ' sieg' : ''}">
+    <div class="sk-kopf"><strong>${forMe ? 'Dein Lerntag' : `Schule${kid ? ` · ${esc(kid.name)}` : ''}`}</strong>${s.tagessieg ? '<span class="sk-chip">Tagessieg</span>' : ''}</div>
+    <div class="sk-zeile">Heute ${s.heute_erledigt} erledigt, ${s.heute_minuten} Min. gelernt, ${start}.</div>
+    <div class="sk-zeile">Wochenspiel: ${s.siege_woche} von ${s.siegziel} Tagessiegen${won ? `. Siegprämie: ${s.aufbleiben_min} Min. länger aufbleiben am Freitag und Samstag.` : '.'}</div>
+    ${!forMe && s.hilfe_offen ? `<div class="sk-hilfe">${s.hilfe_offen}× als schwer markiert. Im Lernplaner unter „Braucht Hilfe“ nachsehen.</div>` : ''}
+    ${list ? `<ul class="sk-liste">${list}</ul>` : ''}
+    <a class="knopf${forMe ? ' breit' : ' zweit klein'}" href="lernen.html">${forMe ? 'Zum Lernplaner' : 'Lernplaner öffnen'}</a>
+  </div>`;
 }
 
 function logTask(task, label) {
