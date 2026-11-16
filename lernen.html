@@ -434,9 +434,9 @@ function addExam(subject,type,date,topic){
   const id=uid(),t0=iso(today()),prep=Math.min(1.6,Math.max(.7,+(S.model.prep[subject]||1)));
   const plan=(EXAM[type]||EXAM['Ex / Test']).slice();
   if(prep>=1.25&&type!=='Referat')plan.unshift([type==='Schulaufgabe'?-10:-5,20]);
-  const load=loadMap(),want=[],free=d=>d.getDay()===0&&S.settings.sundayFree;
+  const load=loadMap(),want=[],free=d=>isFree(d);
   plan.forEach(([off,min])=>{
-    let d=addDays(parse(date),off);if(free(d))d=addDays(d,-1);
+    let d=addDays(parse(date),off);while(free(d))d=addDays(d,-1);
     let di=iso(d);if(di<t0)di=t0;if(di>=date)return;
     want.push({di,min:r5(min*prep)});
   });
@@ -511,7 +511,11 @@ function nextLesson(subject){if(!S.timetable)return schoolDayIn(1);for(let i=1;i
 
 /* ===== Planung ===== */
 function apptsFor(d){const di=iso(d),wd=d.getDay();return S.appts.filter(a=>+a.weekday===wd).concat(S.oneoffs.filter(a=>a.date===di)).sort((a,b)=>a.start.localeCompare(b.start))}
-function isFree(d){return(d.getDay()===0&&S.settings.sundayFree)||(S.settings.holidaysFree!==false&&!!freeReason(d))}
+// Lernfrei sind Sonntag, Ferien und Feiertage. Ein einzelner schulfreier Werktag ohne Feiertag (Buß- und Bettag)
+// ist ein Lerntag wie ein Samstag: kein Unterricht, also viel Zeit.
+const LERNTAG_FREI=['Buß- und Bettag'];
+function lernfreiReason(d){const r=freeReason(d);return r&&!LERNTAG_FREI.includes(r)?r:null}
+function isFree(d){return(d.getDay()===0&&S.settings.sundayFree)||(S.settings.holidaysFree!==false&&!!lernfreiReason(d))}
 function dayStart(d){if(!isWeekday(d)||freeReason(d))return toMin(S.settings.weekendStart);const e=schoolEndMin(d);return(e!=null?e:toMin(S.schoolEnd[d.getDay()]||'13:00'))+(+S.settings.afterSchool)}
 function windowsFor(d,isToday){
   const st=S.settings,appts=apptsFor(d);

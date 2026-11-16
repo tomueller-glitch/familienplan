@@ -195,6 +195,12 @@ export function schoolDay(day: string): boolean {
   const buss = addDays(n22, -((wdOf(n22) - 2 + 7) % 7));
   return day !== buss && day.slice(5) !== '08-15';
 }
+// Lerntag: Montag bis Freitag ohne Ferien und Feiertage. Buß- und Bettag ist schulfrei, aber ein Lerntag.
+export function lernTag(day: string): boolean {
+  if (wdOf(day) >= 5) return false;
+  if (FERIEN.some(([a, b]) => day >= a && day <= b)) return false;
+  return !shopHoliday(day);
+}
 const inSeason = (task: Row, day: string) => (!task.school_only || schoolDay(day)) && (!(task.months || []).length || task.months.includes(Number(day.slice(5, 7))));
 
 const TONNEN: Record<string, string> = { schwarz: 'schwarze Tonne', gruen: 'grüne Tonne', gelb: 'gelbe Tonne' };
@@ -1921,10 +1927,10 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
     || (t.kind === 'daily' && t.date === day)
     || (t.kind === 'lern' && String(t.date) <= day && (examDate[t.examId] || '') > day));
   const doneToday = lp.done.filter((t) => t.doneAt === day);
-  const active = schoolDay(day) || (wd === 5 && openToday.some((t) => t.kind === 'lern'));
+  const active = lernTag(day) || (wd === 5 && openToday.some((t) => t.kind === 'lern'));
   const latest = hmMin(st.latest, 19 * 60 + 30);
   const end = lpSchoolEnd(lp.timetable, day);
-  const start = wd < 5 ? (end ?? hmMin(lp.schoolEnd[String(wd + 1)], 13 * 60)) + (Number(st.afterSchool) || 0) : hmMin(st.weekendStart, 10 * 60);
+  const start = wd < 5 && schoolDay(day) ? (end ?? hmMin(lp.schoolEnd[String(wd + 1)], 13 * 60)) + (Number(st.afterSchool) || 0) : hmMin(st.weekendStart, 10 * 60);
   const names = (xs: Row[]) => xs.slice(0, 4).map((t) => (t.kind === 'daily' ? 'Ludus Latinus' : `${t.subject}: ${t.title}`)).join(', ') + (xs.length > 4 ? ` und ${xs.length - 4} weitere` : '');
   const anzahl = (n: number) => (n === 1 ? 'eine Aufgabe' : `${n} Aufgaben`);
 

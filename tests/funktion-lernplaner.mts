@@ -24,3 +24,6 @@ const tt={times:[['08:00','08:45'],['08:45','09:30'],['09:45','10:30'],['10:30',
 console.log('Schulschluss Di', lpSchoolEnd(tt,'2026-11-17'), 'Di A-Woche (Rückfall auf B)', lpSchoolEnd(tt,'2026-11-24'), 'Mo leer', lpSchoolEnd(tt,'2026-11-16'));
 const lp2=lpFromRows([...rows,{id:'timetable',coll:'timetable',data:tt}]);
 console.log('16:15', lernMessages(lp2,persons,at('16:15')).filter(x=>x.key.startsWith('lp-anpfiff')).length, '16:30 schon vorbei?', lernMessages(lp2,persons,at('17:05')).filter(x=>x.key.startsWith('lp-anpfiff')).length);
+// Buß- und Bettag (18.11.2026): schulfrei, aber Lerntag. Anpfiff zur Wochenend-Startzeit 10:00.
+const bt=lpFromRows(rows.map(r=>r.id==='task:b'?{...r,data:{...r.data,date:'2026-11-18'}}:r));
+console.log('Bettag',lernMessages(bt,persons,Date.parse('2026-11-18T10:10:00+01:00')).map(x=>x.key));
