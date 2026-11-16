@@ -87,6 +87,7 @@ h2+.li,.sub+.li,.card>.li:first-child{border-top:0}
 .day.on{background:var(--tinte);color:var(--blatt);border-color:var(--tinte)}
 .day small{display:block;font-size:12px;font-weight:400;opacity:.8}
 .item{display:flex;gap:12px;align-items:flex-start;background:var(--blatt);border:1px solid var(--linie);border-left:5px solid var(--c,var(--linie));border-radius:12px;padding:12px;margin:8px 0}
+.neue-version{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--tinte);color:#fff;border:0;border-radius:999px;padding:12px 20px;font:600 15px/1.2 var(--text);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100vw - 32px)}
 .li.stk{flex-wrap:wrap;row-gap:8px}
 .li.stk .grow{flex:1 1 calc(100% - 24px);min-width:0}
 .li.stk .acts{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:20px}
@@ -1387,6 +1388,20 @@ async function init(){
     try{if(await pull(false))render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
   setInterval(refresh,45000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
+}
+/* ===== Neue Version: wie im Familienplan ===== */
+// Der Service Worker des Familienplans lädt neue Fassungen im Hintergrund und meldet sie. Ein Tipp lädt sie.
+function updateBanner(){
+  if(document.getElementById('neue-version'))return;
+  const b=document.createElement('button');b.id='neue-version';b.className='neue-version';b.type='button';
+  b.textContent='Neue Version der App. Tippen zum Laden.';b.addEventListener('click',()=>location.reload());document.body.appendChild(b);
+}
+if('serviceWorker' in navigator&&window.isSecureContext){
+  navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='neue-version')updateBanner()});
+  const check=()=>{if(navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'pruefen'})};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')check()});
+  // Auch wenn nur der Lernplaner auf dem Handy benutzt wird, den Service Worker anmelden.
+  navigator.serviceWorker.register('sw.js').then(()=>check()).catch(()=>{});
 }
 init();
 </script>
