@@ -1099,7 +1099,7 @@ function renderFocus(plan){
   let kick='';
   if(hasWork&&!S.kick[T]){
     const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
-    kick=`<button class="btn primary" data-act="kick">Anpfiff</button><div class="b-hint">${dl&&nowMin()<=dl?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:`Heute ${q.length===1?'eine Aufgabe':q.length+' Aufgaben'}.`}</div>`;
+    kick=`<button class="btn primary" data-act="kick">Anpfiff</button><div class="b-hint">${dl&&nowMin()<=dl&&nowMin()>=dl-105?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:`Heute ${q.length===1?'eine Aufgabe':q.length+' Aufgaben'}.`}</div>`;
   }
   let h='';
   if(lmActive()){const L=S.lm;
@@ -1256,7 +1256,7 @@ function renderEltern(plan){
   const sec={ueb:'',ein:'',schule:'',einst:''};
   const lmInfo=S.lm&&S.lm.date===T?`<div class="sub" style="margin-top:6px">Lernmodus ${S.lm.on?'läuft':'war an'} seit ${hm(Math.round((S.lm.since-today().getTime())/60000))} Uhr, ${S.lm.leaves?`${S.lm.leaves}-mal die App verlassen (${Math.round(S.lm.away/60000)} Min.)`:'App nicht verlassen'}${S.lm.awayAt?', gerade nicht in der App':''}.</div>`:'';
   sec.ueb+=`<div class="card"><h2>Heute</h2>
-  <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div></div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
+  <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div>${S.kick[T]?(ui.ask==='kickreset'?`<div class="row" style="margin-top:6px"><button class="btn sm danger" data-act="kickreset">Wirklich zurücksetzen</button><button class="btn sm" data-act="askx">Nein</button></div>`:`<div class="row" style="margin-top:6px"><button class="btn sm" data-act="ask" data-v="kickreset">Anpfiff zurücksetzen</button></div>`):''}</div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
   ${lmInfo}</div>`;
@@ -1405,14 +1405,14 @@ document.addEventListener('click',e=>{
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
     case'focus':ui.focus=id;ui.fb=null;window.scrollTo(0,0);break;
-    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins;S.kick[T]=hm(nowMin());lmStart();if(w.length&&nowMin()<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
+    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
     case'fbdur':ui.fbDur=b.dataset.v;break;
     case'fbfeel':ui.fbFeel=b.dataset.v;break;
     case'fbsave':finish(ui.fb);break;
     case'fbcancel':ui.fb=null;break;
-    case'start':S.running={id,at:Date.now()};lmStart();if(!S.kick[iso(today())])S.kick[iso(today())]=hm(nowMin());save();break;
+    case'start':S.running={id,at:Date.now()};lmStart();if(!S.kick[iso(today())]&&nowMin()>=dayStart(today())-90)S.kick[iso(today())]=hm(nowMin());save();break;
     case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d])delete S.wins[d];save()}break;
     case'rv':ui.rv[id]=Object.assign({},ui.rv[id],{[b.dataset.k]:b.dataset.v});break;
     case'rvsave':{const r=ui.rv[id]||{},e=S.exams.find(x=>x.id===id);if(!e)break;
@@ -1430,6 +1430,9 @@ document.addEventListener('click',e=>{
     case'quizend':ui.quiz=null;break;
     case'qdel':if(t&&t.quiz){t.quiz.qs.splice(+b.dataset.v,1);if(!t.quiz.qs.length)delete t.quiz;save()}break;
     case'qnew':if(t&&!ui.busy){delete t.quiz;genQuiz(t,false)}return;
+    case'kickreset':{const T=iso(today());delete S.kick[T];S.goals=S.goals.filter(g=>!(g.date===T&&g.why==='Pünktlicher Anpfiff'));
+      if(S.lm&&S.lm.date===T)S.lm=null;if(S.brk&&S.brk.date===T)S.brk=null;S.running=null;ui.ask=null;
+      ui.msg='Anpfiff, Lernmodus und laufende Zeit von heute sind zurückgesetzt.';ui.msgType='okn';save();beam();break}
     case'lmgo':lmStart();save();break;
     case'lmendask':ui.lmEnd=!ui.lmEnd;break;
     case'backok':ui.back=null;break;
@@ -1441,7 +1444,7 @@ document.addEventListener('click',e=>{
     case'editx':ui.edit=null;break;
     case'grade':ui.edit='g-'+id;break;
     case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks.filter(x=>x.examId===id&&!x.done).forEach(x=>removeTask(x.id));S.tasks=S.tasks.filter(x=>x.examId!==id||x.done);ui.ask=null;save();break;
-    case'ask':ui.ask=b.dataset.v+id;break;
+    case'ask':ui.ask=b.dataset.v+(id||'');break;
     case'askx':ui.ask=null;break;
     case'pdel':removeTask(id);ui.ask=null;ui.msg='Eintrag gelöscht. Er zählt weder als erledigt noch als nicht geschafft.';ui.msgType='okn';save();break;
     case'exedit':ui.edit=ui.edit==='x-'+id?null:'x-'+id;break;
