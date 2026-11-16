@@ -31,6 +31,6 @@ jobs:
         # Ohne JWT-Prüfung durch Supabase: Der Cron-Job und der Siri-Kurzbefehl melden sich mit eigenem Schlüssel,
         # die Funktion lernplaner prüft die Anmeldung selbst.
         run: |
-          npx --yes supabase@latest --version
-          npx --yes supabase@latest functions deploy push --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
-          npx --yes supabase@latest functions deploy lernplaner --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+          npx --yes supabase@3 --version
+          npx --yes supabase@3 functions deploy push --remote="$PROJECT_REF" --no-verify-jwt --use-api --yes
+          npx --yes supabase@3 functions deploy lernplaner --remote="$PROJECT_REF" --no-verify-jwt --use-api --yes
