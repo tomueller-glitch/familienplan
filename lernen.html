@@ -10,113 +10,196 @@
 <link rel="apple-touch-icon" href="icons/lernen-180.png">
 <script src="js/config.js"></script>
 <title>Lernplaner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f6f5f1;--card:#fff;--tx:#1f1e1c;--tx2:#6b6a65;--bd:rgba(0,0,0,.12);--bd2:rgba(0,0,0,.07);--ac:#185FA5;--acbg:#E6F1FB;--ok:#3B6D11;--okbg:#EAF3DE;--wa:#854F0B;--wabg:#FAEEDA;--er:#A32D2D;--erbg:#FCEBEB;--soft:#efeee9;--fill:#F5C400;--on:#111;--stripe:#111}
-@media (prefers-color-scheme:dark){:root{--bg:#1b1b1a;--card:#262624;--tx:#eceae4;--tx2:#a5a39c;--bd:rgba(255,255,255,.14);--bd2:rgba(255,255,255,.08);--ac:#85B7EB;--acbg:#0C447C;--ok:#C0DD97;--okbg:#27500A;--wa:#FAC775;--wabg:#633806;--er:#F7C1C1;--erbg:#791F1F;--soft:#31312e}}
+/* Lernplaner. Gleiche Grundlage wie der Familienplan: Wand (Grau), Blatt (Weiß), Tinte (Petrol).
+   Einziger Blickfang ist die Spielstand-Tafel. Die Trikotfarbe (--fill) erscheint nur auf Hauptknöpfen und in der Tafel. */
+:root{--wand:#E7EDEF;--blatt:#fff;--tinte:#14323C;--tinte2:#4F6972;--linie:#D5DFE2;--leise:#F2F5F6;--tafel:#14323C;
+  --ok:#2E7D55;--okbg:#E3F1E9;--wa:#8A5A00;--wabg:#FBF0D6;--er:#C42B24;--erbg:#FBE7E5;--ac:#1E5F74;--acbg:#E1EEF2;
+  --fill:#F5C400;--on:#14323C;--stripe:#14323C;--anz:'Barlow Condensed','Arial Narrow',sans-serif;--text:'Barlow','Helvetica Neue',Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--wand:#0E1A1F;--blatt:#172930;--tinte:#E2EBED;--tinte2:#9AB0B7;--linie:#2B4048;--leise:#1D333B;--tafel:#0A1418;
+  --ok:#7CC79C;--okbg:#173A29;--wa:#F0C46A;--wabg:#3A2C0C;--er:#F08A84;--erbg:#3F1B19;--ac:#8CC6D6;--acbg:#16343E}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-header{position:sticky;top:0;background:var(--bg);z-index:2;padding:16px 16px 0;max-width:560px;margin:0 auto}
-header .tabs{margin-top:12px}
-main{max-width:560px;margin:0 auto;padding:4px 16px 80px}
-h1{font-size:20px;font-weight:600;margin:0}
-h2{font-size:16px;font-weight:600;margin:0 0 8px}
-.sub{color:var(--tx2);font-size:13px}
-.tabs{display:flex;border-bottom:1px solid var(--bd)}
-.tab{flex:1;padding:10px 0;border:0;background:none;color:var(--tx2);font:inherit;font-size:14px;border-bottom:3px solid transparent;cursor:pointer}
-.tab.on{color:var(--tx);border-color:var(--tx);font-weight:600}
-.sync{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px;background:var(--tx2);vertical-align:1px}
-.sync.ok{background:#639922}.sync.err{background:#E24B4A}
-.card{background:var(--card);border:1px solid var(--bd2);border-radius:16px;padding:16px;margin:12px 0}
-h3{font-size:14px;font-weight:600;margin:0 0 2px}
-.grp{border-top:1px solid var(--bd2);margin-top:16px;padding-top:12px}
-.seg{display:flex;gap:4px;background:var(--soft);border-radius:12px;padding:4px;margin:14px 0 4px}
-.seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 4px;font:inherit;font-size:13px;color:var(--tx2);cursor:pointer}
-.seg button.on{background:var(--card);color:var(--tx);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.seg .cnt{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--erbg);color:var(--er);font-size:11px;font-weight:600}
-details.card summary{cursor:pointer;list-style:none}
-details.card summary::-webkit-details-marker{display:none}
-details.card summary::after{content:'›';float:right;color:var(--tx2);transition:transform .2s}
-details.card[open] summary::after{transform:rotate(90deg)}
-details.card[open] summary{margin-bottom:8px}
-.days{display:flex;gap:6px;overflow-x:auto;padding:12px 0 4px}
-.day{flex:0 0 auto;border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:6px 10px;font:inherit;font-size:13px;color:var(--tx);text-align:center;cursor:pointer;min-width:54px;line-height:1.3}
-.day.on{background:var(--fill);color:var(--on);border-color:var(--fill)}
-.day small{display:block;font-size:11px;opacity:.8}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
-.chip{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--soft);display:inline-block}
-.chip.wa{background:var(--wabg);color:var(--wa)}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.er{background:var(--erbg);color:var(--er)}
-.item{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--bd);border-left:5px solid var(--c,#888);border-radius:12px;padding:12px;margin:8px 0}
-.item.appt{background:var(--soft);border-left-color:var(--tx2)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--wand);color:var(--tinte);font:16px/1.45 var(--text)}
+a{color:inherit}
+header{max-width:560px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top,0px)) 18px 4px;display:flex;justify-content:space-between;align-items:flex-end}
+.brand{font:700 26px/1 var(--anz);letter-spacing:.01em}
+.hdr-sub{font-size:14px;color:var(--tinte2);margin-top:4px}
+.hdr-r{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--tinte2)}
+.hdr-r a{text-decoration:none;border:1px solid var(--linie);border-radius:999px;padding:4px 12px;background:var(--blatt)}
+main{max-width:560px;margin:0 auto;padding:6px 14px calc(92px + env(safe-area-inset-bottom,0px))}
+/* Leiste unten wie im Familienplan */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--blatt);border-top:1px solid var(--linie);display:flex;justify-content:center;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs .in{display:flex;width:100%;max-width:560px}
+.tab{flex:1;border:0;background:none;font:500 12px/1.2 var(--text);color:var(--tinte2);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;cursor:pointer;border-radius:10px}
+.tab svg{width:24px;height:24px}
+.tab.on{color:var(--tinte);font-weight:600}
+.tab.on svg{stroke-width:2.2}
+.tab.on .pip{background:var(--fill)}
+.pip{width:18px;height:3px;border-radius:2px;background:transparent;margin-top:1px}
+.sync{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--linie)}
+.sync.ok{background:var(--ok)}.sync.err{background:var(--er)}
+h1{font:700 24px/1.1 var(--anz);margin:0}
+h2{font:700 20px/1.15 var(--anz);margin:0 0 8px;letter-spacing:.01em}
+h3{font:600 15px/1.3 var(--text);margin:0 0 2px}
+.sub{color:var(--tinte2);font-size:14px}
+.muted{color:var(--tinte2)}
+.big{font:700 26px/1.1 var(--anz)}
+/* Blätter */
+.card{background:var(--blatt);border-radius:14px;padding:16px;margin:12px 0;border:1px solid var(--linie)}
+.grp{border-top:1px solid var(--linie);margin-top:18px;padding-top:14px}
+.li{display:flex;gap:10px;align-items:center;padding:11px 0;border-top:1px solid var(--linie);font-size:15px;flex-wrap:wrap}
+h2+.li,.sub+.li,.card>.li:first-child{border-top:0}
 .grow{flex:1;min-width:0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0}
+/* Spielstand-Tafel: der eine Blickfang */
+.board{background:var(--tafel);color:#fff;border-radius:18px;padding:16px 18px 18px;margin:12px 0}
+.board .b-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.board .b-lab{font-size:13px;color:#A9C2C9}
+.board .b-num{font:700 64px/0.9 var(--anz);color:#fff;margin-top:4px}
+.board .b-liga{text-align:right}
+.board .b-ligan{font:700 22px/1.1 var(--anz);color:var(--hl,var(--fill))}
+.board .b-week{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:16px}
+.board .b-week div{text-align:center;border-radius:8px;padding:6px 0 5px;background:rgba(255,255,255,.07);font:600 13px/1.2 var(--text);color:#A9C2C9}
+.board .b-week div b{display:block;font:700 15px/1.2 var(--anz);color:#fff;margin-top:2px}
+.board .b-week .won{background:var(--fill);color:var(--on)}
+.board .b-week .won b{color:var(--on)}
+.board .b-week .now{box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)}
+.board .b-week .lost b{color:#F08A84}
+.board .b-prize{font-size:14px;color:#D6E3E7;margin-top:12px}
+.board .btn.primary{width:100%;margin-top:14px;font:700 22px/1 var(--anz);padding:14px;letter-spacing:.02em}
+.board .b-hint{font-size:13px;color:#A9C2C9;text-align:center;margin-top:8px}
+/* Jetzt dran */
+.focus{border-left:6px solid var(--c);padding-left:16px}
+.focus .label{font:600 14px/1 var(--text);color:var(--tinte2)}
+.focus .ft{font:700 26px/1.1 var(--anz);margin:8px 0 4px}
+.meta{font-size:14px;color:var(--tinte2)}
+.time{font-size:14px;margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:13px;padding:3px 10px;border-radius:999px;background:var(--leise);color:var(--tinte2);display:inline-block}
+.chip.wa{background:var(--wabg);color:var(--wa)}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.er{background:var(--erbg);color:var(--er)}
+/* Tagesplan */
+.days{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px}
+.day{flex:0 0 auto;border:1px solid var(--linie);background:var(--blatt);border-radius:10px;padding:6px 10px;font:600 14px/1.25 var(--text);color:var(--tinte);text-align:center;cursor:pointer;min-width:56px}
+.day.on{background:var(--tinte);color:var(--blatt);border-color:var(--tinte)}
+.day small{display:block;font-size:12px;font-weight:400;opacity:.8}
+.item{display:flex;gap:12px;align-items:flex-start;background:var(--blatt);border:1px solid var(--linie);border-left:5px solid var(--c,var(--linie));border-radius:12px;padding:12px;margin:8px 0}
+.item.appt{background:var(--leise);border-left-color:var(--tinte2)}
 .tt{font-weight:600}
-.meta{font-size:13px;color:var(--tx2)}
-.time{font-size:13px;margin-top:2px}
-.chk{width:30px;height:30px;border-radius:8px;border:2px solid var(--bd);background:var(--card);flex-shrink:0;cursor:pointer}
-button{font:inherit;cursor:pointer}
-.btn{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:9px;padding:7px 12px;font-size:14px;text-decoration:none;display:inline-block}
-.btn.sm{padding:4px 9px;font-size:13px}
+.chk{width:30px;height:30px;border-radius:8px;border:2px solid var(--linie);background:var(--blatt);flex-shrink:0;cursor:pointer}
+/* Knöpfe */
+button{font:inherit;cursor:pointer;color:inherit}
+.btn{border:1px solid var(--linie);background:var(--blatt);color:var(--tinte);border-radius:10px;padding:8px 14px;font:500 15px/1.2 var(--text);text-decoration:none;display:inline-block}
+.btn.sm{padding:5px 10px;font-size:14px}
 .btn.primary{background:var(--fill);border-color:var(--fill);color:var(--on);font-weight:600}
-.btn.big{font-size:17px;padding:12px 18px;font-weight:600}
-.btn.on{background:var(--acbg);border-color:var(--ac);color:var(--ac)}
+.btn.big{font-size:18px;padding:12px 18px}
+.btn.on{background:var(--tinte);border-color:var(--tinte);color:var(--blatt)}
 .btn.danger{color:var(--er)}
+.btn.ghost{border-color:transparent;background:none;color:var(--tinte2);padding-left:0}
+.btn:focus-visible,.tab:focus-visible,.seg button:focus-visible,.day:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.fb{margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)}
-.fb .q{font-size:14px;margin:8px 0 6px}
-label{display:block;font-size:13px;color:var(--tx2);margin:8px 0 0}
-input,select,textarea{display:block;width:100%;max-width:100%;min-width:0;font:inherit;font-size:16px;padding:8px 10px;margin-top:3px;border:1px solid var(--bd);border-radius:9px;background:var(--card);color:var(--tx)}
+.more{display:flex;flex-wrap:wrap;gap:4px 18px;margin:18px 2px 0}
+.more .btn{padding:6px 0;border:0;background:none;color:var(--tinte2);text-decoration:underline;text-underline-offset:3px}
+.fb{margin-top:14px;padding-top:12px;border-top:1px solid var(--linie)}
+.fb .q{font-size:15px;margin:8px 0 6px}
+/* Formulare */
+label{display:block;font-size:14px;color:var(--tinte2);margin:10px 0 0}
+input,select,textarea{display:block;width:100%;max-width:100%;min-width:0;font:16px/1.3 var(--text);padding:9px 11px;margin-top:4px;border:1px solid var(--linie);border-radius:10px;background:var(--blatt);color:var(--tinte)}
 input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-height:42px;text-align:left}
 input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
-input[type=checkbox]{display:inline;width:auto;min-height:0;margin-right:6px}
+input[type=checkbox]{display:inline;width:auto;min-height:0;margin:0 8px 0 0;accent-color:var(--tinte)}
+label:has(>input[type=checkbox]){color:var(--tinte);font-size:15px;display:flex;align-items:center}
 .g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
 .g2>label,.g5>label{min-width:0}
 @media (max-width:480px){.g2{grid-template-columns:minmax(0,1fr);gap:0}.g5{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.note{font-size:13px;padding:8px 12px;border-radius:10px;background:var(--acbg);color:var(--ac);margin:10px 0}
+/* Hinweise */
+.note{font-size:14px;padding:10px 12px;border-radius:10px;background:var(--acbg);color:var(--ac);margin:10px 0}
 .warn{background:var(--wabg);color:var(--wa)}.err{background:var(--erbg);color:var(--er)}.okn{background:var(--okbg);color:var(--ok)}
-.li{display:flex;gap:8px;align-items:center;padding:9px 0;border-top:1px solid var(--bd2);font-size:14px;flex-wrap:wrap}
-.li:first-of-type{border-top:0}
-.bar{height:10px;background:var(--soft);border-radius:5px;overflow:hidden;margin:6px 0}
-.bar div{height:100%;background:var(--fill)}
-.bar div.full{background:#BA7517}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;flex-shrink:0}
-.muted{color:var(--tx2)}
-.big{font-size:22px;font-weight:600}
-.score{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.score .n{font-size:28px;font-weight:700;line-height:1}
-.wk{display:flex;gap:6px;margin-top:10px}
-.wk div{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:8px;background:var(--soft);color:var(--tx2)}
-.wk div.won{background:var(--okbg);color:var(--ok);font-weight:600}
-.wk div.lost{background:var(--erbg);color:var(--er)}
-.wk div.now{outline:2px solid var(--tx)}
-.focus{border:2px solid var(--c);border-left-width:8px}
-.focus .label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--c);text-transform:uppercase}
-.focus .ft{font-size:21px;font-weight:700;margin:4px 0}
-.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
-.badge{border:1px solid var(--bd);border-radius:12px;padding:10px;font-size:13px}
+/* Elternbereich: Umschalter */
+.seg{display:flex;gap:4px;background:var(--blatt);border:1px solid var(--linie);border-radius:12px;padding:4px;margin:12px 0 4px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 2px;font:500 14px/1.1 var(--text);color:var(--tinte2)}
+.seg button.on{background:var(--tinte);color:var(--blatt);font-weight:600}
+.seg .cnt{display:inline-block;min-width:18px;padding:1px 5px;border-radius:9px;background:var(--er);color:#fff;font-size:11px;font-weight:600;margin-left:2px}
+details.card summary{cursor:pointer;list-style:none}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary::after{content:'›';float:right;font-size:22px;line-height:20px;color:var(--tinte2);transition:transform .2s}
+details.card[open] summary::after{transform:rotate(90deg)}
+details.card[open] summary{margin-bottom:8px}
+/* Einstellungen als Zeilen */
+.sh{margin:18px 0 2px;color:var(--tinte2);font-size:14px}
+.srow{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0;padding:10px 0;border-top:1px solid var(--linie);color:var(--tinte);font-size:15px}
+.sh+.srow{border-top:0}
+.srow>span:first-child{flex:1;min-width:0}
+.srow small{display:block;font-size:13px;color:var(--tinte2);margin-top:2px}
+.srow .iv{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.srow .iv input,.srow .iv select{width:96px;margin:0;padding:7px 9px;text-align:right}
+.srow .iv input[type=time]{width:116px}
+.srow .iv em{font-style:normal;font-size:14px;color:var(--tinte2);min-width:30px}
+.srow.col{flex-direction:column;align-items:stretch;gap:6px}
+.srow.col input,.srow.col select{margin:0}
+input.tg{-webkit-appearance:none;appearance:none;width:46px;height:28px;border-radius:14px;background:var(--linie);position:relative;flex:0 0 auto;margin:0;cursor:pointer;transition:background .15s}
+input.tg::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s}
+input.tg:checked{background:var(--ok)}
+input.tg:checked::after{left:21px}
+input.tg:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+/* Kennzahlen */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:4px 0 2px}
+.stats .v{font:700 34px/1 var(--anz)}
+.stats .v small{font:600 16px var(--text);color:var(--tinte2)}
+.stats .sub{margin-top:4px;font-size:13px}
+/* Stundenplan */
+.days5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:6px 0 10px}
+.days5 .day{min-width:0;padding:7px 2px}
+.ttrow{display:grid;grid-template-columns:22px 48px minmax(0,1fr);gap:8px;align-items:center;padding:4px 0}
+.ttrow .n{font:700 17px/1 var(--anz);text-align:right}
+.ttrow .tm{font-size:13px;color:var(--tinte2)}
+.ttrow select{margin:0;padding:7px 10px;color:var(--tinte2)}
+.ttrow select.set{color:var(--tinte);font-weight:500;background:var(--leise)}
+.ttimes{display:grid;grid-template-columns:28px minmax(0,1fr) minmax(0,1fr);gap:6px 10px;align-items:center;margin-top:10px}
+.ttimes input{margin:0}
+details.grp summary{cursor:pointer;list-style:none}
+details.grp summary::-webkit-details-marker{display:none}
+details.grp summary::after{content:'›';float:right;font-size:22px;line-height:20px;color:var(--tinte2);transition:transform .2s}
+details.grp[open] summary::after{transform:rotate(90deg)}
+details.grp[open] summary{margin-bottom:6px}
+/* Woche */
+.bar{height:6px;background:var(--leise);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.bar div{height:100%;background:var(--tinte2)}
+.bar div.full{background:var(--wa)}
+.prog{height:6px;background:var(--leise);border-radius:3px;overflow:hidden;margin:6px 0 2px}
+.prog div{height:100%;background:var(--ok)}
+/* Pokale */
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.badge{border:1px solid var(--linie);border-radius:12px;padding:10px 12px;font-size:14px;color:var(--tinte2)}
 .badge.off{opacity:.45}
-.badge b{display:block;font-size:14px}
-.jer{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;font-size:11px;text-align:center;background:none;border:0;color:var(--tx);padding:4px}
+.badge b{display:block;font:700 17px/1.2 var(--anz);color:var(--tinte)}
+.jer{display:flex;flex-direction:column;align-items:center;gap:4px;width:84px;font-size:12px;text-align:center;background:none;border:0;color:var(--tinte);padding:4px}
 .jer .sh{width:56px;height:56px;border-radius:12px 12px 8px 8px;border:3px solid transparent;background:repeating-linear-gradient(90deg,var(--m) 0 10px,var(--s) 10px 14px)}
-.jer.on .sh{border-color:var(--tx)}
+.jer.on .sh{border-color:var(--tinte)}
 .jer.lock{opacity:.3;cursor:default}
-pre.rep{white-space:pre-wrap;font:inherit;font-size:14px;margin:0}
-#toast{position:fixed;left:50%;top:90px;transform:translateX(-50%);background:var(--fill);color:var(--on);padding:14px 26px;border-radius:16px;font-weight:700;font-size:22px;text-align:center;z-index:9;animation:pop 2.4s ease forwards;pointer-events:none}
-#toast small{display:block;font-size:13px;font-weight:500}
-@keyframes pop{0%{opacity:0;transform:translate(-50%,10px) scale(.8)}12%{opacity:1;transform:translate(-50%,0) scale(1.08)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0}}
+pre.rep{white-space:pre-wrap;font:15px/1.5 var(--text);margin:0}
+#toast{position:fixed;left:50%;top:80px;transform:translateX(-50%);background:var(--tafel);color:#fff;padding:14px 26px;border-radius:16px;font:700 30px/1 var(--anz);text-align:center;z-index:9;animation:pop 2.4s ease forwards;pointer-events:none;border-bottom:4px solid var(--fill)}
+#toast small{display:block;font:500 14px/1.3 var(--text);margin-top:4px;color:#D6E3E7}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,10px) scale(.85)}12%{opacity:1;transform:translate(-50%,0) scale(1.05)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){#toast{animation:none}details.card summary::after{transition:none}}
 </style>
 </head>
 <body>
 <header>
-  <div class="row" style="justify-content:space-between"><h1>Mein Lerntag</h1><span class="sub"><span id="today"></span><span class="sync" id="sync" title=""></span></span></div>
-  <div class="sub" style="margin-top:2px"><a href="index.html" style="color:inherit">Zum Familienplan</a></div>
-  <nav class="tabs">
-    <button class="tab" data-act="tab" data-v="heute">Heute</button>
-    <button class="tab" data-act="tab" data-v="woche">Woche</button>
-    <button class="tab" data-act="tab" data-v="pokale">Pokale</button>
-    <button class="tab" data-act="tab" data-v="eltern">Eltern</button>
-  </nav>
+  <div><div class="brand">Lernplaner</div><div class="hdr-sub" id="today"></div></div>
+  <div class="hdr-r"><span class="sync" id="sync" title=""></span><a href="index.html">Familienplan</a></div>
 </header>
 <main id="app"></main>
+<nav class="tabs" aria-label="Bereiche"><div class="in">
+  <button class="tab" data-act="tab" data-v="heute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Heute</span><span class="pip"></span></button>
+  <button class="tab" data-act="tab" data-v="woche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg><span>Woche</span><span class="pip"></span></button>
+  <button class="tab" data-act="tab" data-v="pokale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4.5v1.5A3 3 0 0 0 7.5 10.5M17 6h2.5v1.5a3 3 0 0 1-3 3M12 13v4M8.5 20h7"/></svg><span>Pokale</span><span class="pip"></span></button>
+  <button class="tab" data-act="tab" data-v="eltern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a4 4 0 0 1 7 0"/></svg><span>Eltern</span><span class="pip"></span></button>
+</div></nav>
 <script>
 /* ===== Konfiguration: kommt aus js/config.js der Familien-App ===== */
 const FCFG=window.ESSENSPLAN_CONFIG||{};
@@ -389,7 +472,7 @@ const TT_TIMES=[['08:00','08:45'],['08:45','09:30'],['09:45','10:30'],['10:30','
 // Vorschlag aus dem Schulmanager-Screenshot vom 16.11.2026 (KW 47, B-Woche). Mittwoch war Buß- und Bettag und fehlt.
 const TT_SUGGEST={week:'2026-11-16',type:'B',days:{1:['Geschichte','Deutsch','Deutsch','Latein','Natur und Technik','Geschichte'],2:['Latein','Mathe','Intensivierung','Englisch','Sport','Sport','','Bläserklasse','Bläserklasse'],3:[],4:['Latein','Latein','Mathe','Natur und Technik','Englisch','Musik','','Kunst','Kunst'],5:['Deutsch','Geographie','Musik','Englisch','Mathe']}};
 function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-n+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return 1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7)}
-function ttNew(){return{times:TT_TIMES.map(x=>x.slice()),timesOk:false,ab:true,refWeek:iso(monday(today())),refType:'B',A:{},B:{}}}
+function ttNew(){return{times:TT_TIMES.map(x=>x.slice()),timesOk:true,ab:true,refWeek:iso(monday(today())),refType:'B',A:{},B:{}}}
 function ttFilled(p){return!!p&&[1,2,3,4,5].some(w=>(p[w]||[]).some(Boolean))}
 function weekType(d){const tt=S.timetable;if(!tt||!tt.ab)return'A';const diffW=Math.round((monday(d)-parse(tt.refWeek))/(7*864e5));return Math.abs(diffW)%2===0?tt.refType:(tt.refType==='A'?'B':'A')}
 // Plan für einen Tag. Ist eine der beiden Wochen noch leer, gilt die andere.
@@ -690,24 +773,25 @@ function scanCard(){
   <div class="row" style="margin-top:10px"><button class="btn primary" data-act="scanrun">Auslesen</button></div></div>`;
 }
 function msgBox(){if(!ui.msg)return'';const h=`<div class="note ${ui.msgType||''}">${esc(ui.msg)}</div>`;ui.msg='';ui.msgType='';return h}
-function addButtons(){
+function addButtons(withDay){
   let h=ui.scanOpen||ui.scan.status!=='idle'?scanCard():'';
   h+=ui.addHA?haForm():'';
-  h+=`<div class="row" style="margin-top:14px">${ui.addHA?'':'<button class="btn" data-act="toggleha">+ Hausaufgabe eintragen</button>'}${AI_OK()&&!ui.scanOpen&&ui.scan.status==='idle'?'<button class="btn" data-act="scanopen">Screenshot auslesen</button>':''}</div>`;
+  h+=`<div class="more">${withDay?'<button class="btn" data-act="full">Tagesplan mit Uhrzeiten</button>':''}${ui.addHA?'':'<button class="btn" data-act="toggleha">Hausaufgabe eintragen</button>'}${AI_OK()&&!ui.scanOpen&&ui.scan.status==='idle'?'<button class="btn" data-act="scanopen">Hausaufgaben aus Screenshot</button>':''}</div>`;
   return h;
 }
 
 /* ===== Seiten ===== */
-function scoreboard(){
+function scoreboard(kick){
   const T=iso(today()),w=weekInfo(),L=liga(),bt=+S.settings.bedtimeMin||30;
   let prize;
   if(w.prize)prize=w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Wochenspiel gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`;
-  else if(w.possible)prize=`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''} bis zur Siegprämie: ${bt} Min. länger aufbleiben am Freitag und Samstag.`;
-  else prize='Diese Woche reicht es nicht mehr für die Siegprämie. Am Montag beginnt ein neues Spiel.';
-  return `<div class="card"><div class="score"><div><div class="sub">Tore heute</div><div class="n">${goalsOn(T)}</div></div>
-  <div style="text-align:right"><div class="sub">${esc(L.name)}</div><div style="font-weight:600">${L.n} Tore</div></div></div>
-  <div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d));return `<div class="${S.wins[d]?'won':fr?'':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<br>${S.wins[d]?'Sieg':fr?'frei':d<T?'·':'&nbsp;'}</div>`}).join('')}</div>
-  <div class="sub" style="margin-top:8px">${prize}</div></div>`;
+  else if(w.possible)prize=`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''} bis zur Siegprämie: ${bt} Min. länger aufbleiben.`;
+  else prize='Für die Siegprämie reicht es diese Woche nicht mehr. Am Montag geht es neu los.';
+  return `<section class="board" aria-label="Spielstand">
+  <div class="b-top"><div><div class="b-lab">Tore heute</div><div class="b-num">${goalsOn(T)}</div></div>
+  <div class="b-liga"><div class="b-lab">${L.n} Tore insgesamt</div><div class="b-ligan">${esc(L.name)}</div></div></div>
+  <div class="b-week">${w.days.map((d,i)=>{const fr=isFree(parse(d));return `<div class="${S.wins[d]?'won':fr?'':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<b>${S.wins[d]?'Sieg':fr?'frei':d<T?'0':'&nbsp;'}</b></div>`}).join('')}</div>
+  <div class="b-prize">${prize}</div>${kick||''}</section>`;
 }
 function reviewCards(){
   return pendingReviews().map(e=>{const r=ui.rv[e.id]||{};
@@ -726,26 +810,25 @@ function meetCard(){
 }
 function renderFocus(plan){
   const T=iso(today()),day=plan[0],q=queueOf(day);
-  let h=scoreboard();
+  const hasWork=q.length>0;
+  let kick='';
+  if(hasWork&&!S.kick[T]){
+    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
+    kick=`<button class="btn primary" data-act="kick">Anpfiff</button><div class="b-hint">${dl&&nowMin()<=dl?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:`Heute ${q.length===1?'eine Aufgabe':q.length+' Aufgaben'}.`}</div>`;
+  }
+  let h=scoreboard(kick);
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich (PIN 1234) Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox()+reviewCards()+meetCard();
-  const hasWork=q.length>0;
-  if(hasWork&&!S.kick[T]){
-    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
-    h+=`<div class="card" style="text-align:center"><div class="big">Bereit für den Anpfiff?</div>
-    <div class="sub" style="margin:4px 0 12px">${dl&&nowMin()<=dl?`Wenn du bis ${hm(dl)} anfängst, gibt es ein Extra-Tor.`:'Heute stehen '+q.length+' Aufgaben an. Los geht’s!'}</div>
-    <button class="btn primary big" data-act="kick">Anpfiff</button></div>`;
-  }
   if(S.settings.checksOn&&!checksDone(T)&&!day.free){
     const c=S.checks[T]||{};
-    h+=`<div class="card"><h2>Kabinen-Check</h2>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} auf dem aktuellen Stand?</span>${c[k]?`<span class="chip ${c[k]==='ok'?'ok':'wa'}">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn sm" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn sm" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
+    h+=`<div class="card"><h2>Kabinen-Check</h2>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} aktuell?</span>${c[k]?`<span class="chip ${c[k]==='ok'?'ok':'wa'}">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn sm" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn sm" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
   }
   if(hasWork){
     const cur=q.find(x=>x.t.id===ui.focus)||q[0],t=cur.t;
-    h+=`<div class="card focus" style="--c:${col(t.subject)}"><div class="label">${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}</div>
+    h+=`<div class="card focus" style="--c:${col(t.subject)}"><div class="label">${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}${cur.segs?' ab '+hm(cur.segs[0][0]):''}</div>
       <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
-      <div class="chips"><span class="chip">${cur.P} Min.</span>${cur.segs?`<span class="chip">geplant ab ${hm(cur.segs[0][0])}</span>`:''}${t.together?'<span class="chip wa">Zusammen mit Mama oder Papa</span>':''}${cur.over?'<span class="chip er">passt eigentlich nicht mehr in den Tag</span>':''}</div>
+      <div class="chips"><span class="chip">${cur.P} Min.</span>${t.together?'<span class="chip wa">Zusammen mit Mama oder Papa</span>':''}${cur.over?'<span class="chip er">passt eigentlich nicht mehr in den Tag</span>':''}</div>
       ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:10px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
       ${ui.fb===t.id?fbPanel(t,cur.P):timerRow(t)}</div>`;
     const rest=q.filter(x=>x!==cur);
@@ -755,8 +838,7 @@ function renderFocus(plan){
   }else h+=`<div class="card">${esc(freeReason(today())||'Sonntag')}: heute ist lernfrei. Genieß den Tag!</div>`;
   const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T);
   if(doneToday.length)h+=`<div class="card"><h2>Erledigt</h2>`+doneToday.map(t=>`<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="muted">(${t.actual} Min.)</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</div>`;
-  h+=`<div class="row" style="margin-top:6px"><button class="btn" data-act="full">Ganzen Tag mit Uhrzeiten zeigen</button></div>`;
-  return h+addButtons();
+  return h+addButtons(true);
 }
 function renderHeute(plan){
   if(ui.day===0&&!ui.full)return renderFocus(plan);
@@ -784,7 +866,7 @@ function renderWoche(plan){
     ${ex.map(e=>`<div class="chip wa" style="margin:4px 0">${esc(e.subject)} ${esc(e.type)}</div>`).join('')}
     ${d.appts.map(a=>`<div class="li muted">${a.start} ${esc(a.title)}</div>`).join('')}
     ${d.items.map(it=>`<div class="li"><span class="dot" style="background:${col(it.t.subject)}"></span><span class="grow">${esc(it.t.subject)}: ${esc(it.t.title)}</span><span class="sub">${it.P} Min.</span></div>`).join('')}
-    ${d.over.map(o=>`<div class="li" style="color:var(--er)"><span class="grow">Passt nicht: ${esc(o.t.subject)}, ${esc(o.t.title)}</span><span>${o.P} Min.</span></div>`).join('')}
+    ${d.over.map(o=>`<div class="li"><span class="dot" style="background:${col(o.t.subject)}"></span><span class="grow">${esc(o.t.subject)}: ${esc(o.t.title)}<br><span class="chip er" style="margin-top:4px">passt nicht in den Tag</span></span><span class="sub">${o.P} Min.</span></div>`).join('')}
     </div>`}).join('');
 }
 function renderPokale(){
@@ -810,7 +892,7 @@ function renderPokale(){
 }
 function renderStundenplan(){
   const tt=S.timetable;
-  let h=`<div class="row" style="margin-top:12px"><button class="btn" data-act="esec" data-v="schule">Zurück</button></div>`+msgBox();
+  let h=`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="esec" data-v="schule">‹ Schule</button></div>`+msgBox();
   if(!tt){
     return h+`<div class="card"><h2>Stundenplan</h2><div class="sub">Aus deinem Screenshot vom 16.11. habe ich die B-Woche schon vorbereitet. Der Mittwoch fehlt, weil Buß- und Bettag war.</div>
     <div class="row" style="margin-top:12px"><button class="btn primary" data-act="ttsuggest">Vorschlag übernehmen</button><button class="btn" data-act="ttempty">Leer anfangen</button></div></div>`;
@@ -820,8 +902,8 @@ function renderStundenplan(){
   h+=`<div class="card"><h2>Stundenplan</h2>`;
   if(tt.ab)h+=`<div class="sub" style="margin-bottom:8px">Diese Woche ist ${thisType}-Woche.${ttFilled(tt[t==='A'?'B':'A'])?'':' Die '+(t==='A'?'B':'A')+'-Woche ist noch leer, solange gilt dieser Plan für beide.'}</div>
     <div class="row" style="margin-bottom:8px">${['A','B'].map(x=>`<button class="btn ${t===x?'on':''}" data-act="tttype" data-v="${x}">${x}-Woche</button>`).join('')}</div>`;
-  h+=`<div class="days" style="padding-top:4px">${[1,2,3,4,5].map(w=>{const e=(()=>{const ls=(p[w]||[]);let last=-1;ls.forEach((x,i)=>{if(x)last=i});return last<0?null:toMin(tt.times[last][1])})();return `<button class="day ${w===wd?'on':''}" data-act="ttday" data-v="${w}">${WD[w]}<small>${e!=null?'bis '+hm(e):'leer'}</small></button>`}).join('')}</div>`;
-  h+=tt.times.map((tm,i)=>`<div class="li"><span style="width:76px" class="sub"><b style="color:var(--tx)">${i+1}.</b> ${tm[0]}</span><select data-tt="${i}" style="flex:1;margin:0">${['',...TT_SUBJ].map(x=>`<option value="${esc(x)}" ${x===(l[i]||'')?'selected':''}>${x?esc(x):'frei'}</option>`).join('')}</select></div>`).join('');
+  h+=`<div class="days5">${[1,2,3,4,5].map(w=>{const e=(()=>{const ls=(p[w]||[]);let last=-1;ls.forEach((x,i)=>{if(x)last=i});return last<0?null:toMin(tt.times[last][1])})();return `<button class="day ${w===wd?'on':''}" data-act="ttday" data-v="${w}">${WD[w]}<small>${e!=null?'bis '+hm(e):'leer'}</small></button>`}).join('')}</div>`;
+  h+=tt.times.map((tm,i)=>`<div class="ttrow"><span class="n">${i+1}</span><span class="tm">${tm[0]}</span><select data-tt="${i}" class="${l[i]?'set':''}">${['',...TT_SUBJ].map(x=>`<option value="${esc(x)}" ${x===(l[i]||'')?'selected':''}>${x?esc(x):'frei'}</option>`).join('')}</select></div>`).join('');
   const lastI=(()=>{let last=-1;l.forEach((x,i)=>{if(x)last=i});return last})();
   h+=`<div class="note ${lastI<0?'warn':'okn'}">${lastI<0?WDL[wd]+': noch keine Stunden eingetragen.':'Schulschluss am '+WDL[wd]+': '+tt.times[lastI][1]+' Uhr, Lernen ab '+hm(toMin(tt.times[lastI][1])+(+S.settings.afterSchool))+' Uhr.'}</div>
   <div class="sub">Einträge werden sofort gespeichert. Vertretungen und Ausfälle nicht eintragen, nur den regulären Plan.</div></div>`;
@@ -831,8 +913,9 @@ function renderStundenplan(){
   ${tt.timesOk?'':'<div class="note warn">Die Pausen nach der 2. Stunde (9:30 bis 9:45) und nach der 4. Stunde (11:15 bis 11:30) sind eingetragen. Bitte noch den Beginn der 1. Stunde und die Nachmittagsstunden prüfen und speichern.</div>'}
   <label style="color:var(--tx)"><input type="checkbox" name="ab" ${tt.ab?'checked':''}>A- und B-Woche wechseln sich ab</label>
   <label>Diese Woche ist<select name="ref"><option value="A" ${thisType==='A'?'selected':''}>A-Woche</option><option value="B" ${thisType==='B'?'selected':''}>B-Woche</option></select></label>
-  <div class="sub" style="margin-top:12px">Uhrzeiten der Stunden</div>
-  ${tt.times.map((tm,i)=>`<div class="g2" style="grid-template-columns:40px minmax(0,1fr) minmax(0,1fr);display:grid;gap:8px;align-items:end"><b style="padding-bottom:10px">${i+1}.</b><label>Beginn<input type="time" name="s${i}" value="${tm[0]}"></label><label>Ende<input type="time" name="e${i}" value="${tm[1]}"></label></div>`).join('')}
+  <details class="grp"${tt.timesOk?'':' open'}><summary><h3 style="display:inline">Uhrzeiten der Stunden</h3> <span class="sub">${tt.times[0][0]} bis ${tt.times[tt.times.length-1][1]}</span></summary>
+  <div class="ttimes"><span></span><span class="sub">Beginn</span><span class="sub">Ende</span>
+  ${tt.times.map((tm,i)=>`<b>${i+1}.</b><input type="time" name="s${i}" value="${tm[0]}" aria-label="Beginn ${i+1}. Stunde"><input type="time" name="e${i}" value="${tm[1]}" aria-label="Ende ${i+1}. Stunde">`).join('')}</div></details>
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   return h;
 }
@@ -872,7 +955,7 @@ function renderEltern(plan){
   const tight=plan.slice(0,7).filter(d=>d.over.length);
   const sec={ueb:'',ein:'',schule:'',einst:''};
   sec.ueb+=`<div class="card"><h2>Heute</h2>
-  <div class="g2"><div><div class="sub">Heute erledigt</div><div class="big">${doneT.length} von ${doneT.length+openT}</div><div class="sub">${S.kick[T]?'Anpfiff um '+S.kick[T]:'Noch nicht angefangen'}</div></div><div><div class="sub">Letzte 7 Tage</div><div class="big">${wk.length} Aufgaben</div><div class="sub">${wk.reduce((a,t)=>a+(t.actual||0),0)} Min. gelernt</div></div></div>
+  <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div></div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
   </div>`;
@@ -918,36 +1001,43 @@ function renderEltern(plan){
   <div class="row" style="margin-top:10px"><button class="btn">Lehrwerk hinzufügen</button></div></form></div>`;
   const all=S.appts.map(a=>({...a,lab:'jeden '+WDL[a.weekday]})).concat(S.oneoffs.filter(a=>a.date>=T).map(a=>({...a,lab:fmt(a.date)})));
   sec.einst+=`<div class="card"><h2>Feste Termine</h2>${all.map(a=>`<div class="li"><span class="grow">${esc(a.title)}<br><span class="sub">${a.lab}, ${a.start} bis ${a.end}</span></span><button class="btn sm danger" data-act="delappt" data-id="${a.id}">Löschen</button></div>`).join('')||'<div class="muted">Keine Termine.</div>'}
-  <form data-form="appt" style="margin-top:10px"><label>Was<input name="title" required placeholder="Handballtraining"></label>
+  <details class="grp"><summary><h3 style="display:inline">Termin hinzufügen</h3></summary>  <form data-form="appt"><label>Was<input name="title" required placeholder="Handballtraining"></label>
   <div class="g2"><label>Wann<select name="when">${[1,2,3,4,5,6,0].map(w=>`<option value="w${w}">jeden ${WDL[w]}</option>`).join('')}<option value="once">einmalig</option></select></label><label>Datum (nur bei einmalig)<input type="date" name="date"></label></div>
   <div class="g2"><label>Beginn<input type="time" name="start" required value="17:00"></label><label>Ende<input type="time" name="end" required value="18:30"></label></div>
-  <div class="row" style="margin-top:12px"><button class="btn">Termin hinzufügen</button></div></form>
+  <div class="row" style="margin-top:12px"><button class="btn">Termin hinzufügen</button></div></form></details>
   <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei (Fahrt, Umziehen, Essen).</div></div>`;
+  const sr=(lab,inp,unit)=>`<label class="srow"><span>${lab}</span><span class="iv">${inp}${unit?`<em>${unit}</em>`:''}</span></label>`;
+  const num=(n,v,mi,ma)=>`<input type="number" name="${n}" min="${mi}" max="${ma}" value="${v}">`;
+  const tim=(n,v)=>`<input type="time" name="${n}" value="${v}">`;
+  const tog=(lab,n,on,hint)=>`<label class="srow"><span>${lab}${hint?`<small>${hint}</small>`:''}</span><input type="checkbox" class="tg" name="${n}" ${on?'checked':''}></label>`;
   sec.einst+=`<form data-form="settings" class="card"><h2>Einstellungen</h2>
-  <h3>Nachmittag</h3><div class="sub">Der Schulschluss kommt aus dem Stundenplan.</div>
-  <div class="g2"><label>Pause nach der Schule (Min.)<input type="number" name="afterSchool" min="0" max="180" value="${st.afterSchool}"></label><label>Spätestens fertig um<input type="time" name="latest" value="${st.latest}"></label></div>
-  <div class="g2"><label>Am Samstag ab<input type="time" name="weekendStart" value="${st.weekendStart}"></label><label>Puffer um Termine (Min.)<input type="number" name="buffer" min="0" max="90" value="${st.buffer}"></label></div>
-  <div class="g2"><label>Längster Lernblock (Min.)<input type="number" name="blockMax" min="10" max="60" value="${st.blockMax}"></label><label>Pause zwischen Blöcken (Min.)<input type="number" name="pause" min="0" max="20" value="${st.pause}"></label></div>
-  <div class="grp"><h3>Lernfrei</h3></div>
-  <label style="color:var(--tx)"><input type="checkbox" name="sundayFree" ${st.sundayFree?'checked':''}>Sonntag lernfrei</label>
-  <label style="color:var(--tx)"><input type="checkbox" name="holidaysFree" ${st.holidaysFree!==false?'checked':''}>Ferien und Feiertage lernfrei</label>
-  <div class="grp"><h3>Feste tägliche Aufgaben</h3></div>
-  <label style="color:var(--tx)"><input type="checkbox" name="ludusOn" ${st.ludusOn?'checked':''}>Jeden Lerntag fest einplanen</label>
-  <div class="g2"><label>Dauer (Min.)<input type="number" name="ludusMin" min="5" max="60" value="${st.ludusMin}"></label><label>Link zur App (optional)<input name="ludusUrl" type="url" value="${esc(st.ludusUrl)}" placeholder="https://…"></label></div>
-  <label style="color:var(--tx)"><input type="checkbox" name="checksOn" ${st.checksOn?'checked':''}>Täglicher Vokabelkasten-Check (Latein und Englisch)</label>
-  ${REMOTE?`<div class="grp"><h3>Push-Nachrichten</h3></div>
-  <label style="color:var(--tx)"><input type="checkbox" name="pushOn" ${st.pushOn!==false?'checked':''}>Erinnerungen aufs Handy</label>
-  <div class="sub">Kind: Anpfiff zur Startzeit, Endspurt eine Stunde vor Schluss, Abend vor einer Prüfung. Eltern: Stand am Abend, sofort Bescheid bei „schwer“, gewonnenes Wochenspiel. Sonntags die Mannschaftsbesprechung. Nicht an Ferientagen. Dafür müssen im Familienplan auf den Handys die Benachrichtigungen eingeschaltet sein.</div>`:''}
-  <div class="grp"><h3>Wochenspiel</h3></div>
-  <div class="g2"><label>Tagessiege für die Siegprämie<input type="number" name="winGoal" min="1" max="5" value="${st.winGoal}"></label><label>Länger aufbleiben (Min.)<input type="number" name="bedtimeMin" min="5" max="120" value="${st.bedtimeMin}"></label></div>
-  <div class="grp"><h3>Kind und PIN</h3></div>
-  ${REMOTE&&kids.length?`<label>Für wen ist der Lernplaner? (Karte im Familienplan)<select name="kidId"><option value="">bitte wählen</option>${kids.map(k=>`<option value="${esc(k.id)}" ${st.kidId===k.id?'selected':''}>${esc(k.name)}</option>`).join('')}</select></label>`:''}
-  <label>Neue PIN (leer lassen zum Behalten)<input name="pin" inputmode="numeric" autocomplete="off"></label>
-  <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
+  <h3 class="sh">Nachmittag</h3>
+  ${sr('Pause nach der Schule',num('afterSchool',st.afterSchool,0,180),'Min.')}
+  ${sr('Spätestens fertig',tim('latest',st.latest),'Uhr')}
+  ${sr('Samstag ab',tim('weekendStart',st.weekendStart),'Uhr')}
+  ${sr('Puffer um Termine',num('buffer',st.buffer,0,90),'Min.')}
+  ${sr('Längster Lernblock',num('blockMax',st.blockMax,10,60),'Min.')}
+  ${sr('Pause zwischen Blöcken',num('pause',st.pause,0,20),'Min.')}
+  <h3 class="sh">Lernfrei</h3>
+  ${tog('Sonntag','sundayFree',st.sundayFree)}
+  ${tog('Ferien und Feiertage','holidaysFree',st.holidaysFree!==false)}
+  <h3 class="sh">Jeden Tag</h3>
+  ${tog('Ludus Latinus einplanen','ludusOn',st.ludusOn)}
+  ${sr('Dauer Ludus Latinus',num('ludusMin',st.ludusMin,5,60),'Min.')}
+  <label class="srow col"><span>Link zu Ludus Latinus</span><input name="ludusUrl" type="url" value="${esc(st.ludusUrl)}" placeholder="https://"></label>
+  ${tog('Vokabelkasten-Check','checksOn',st.checksOn,'Latein und Englisch')}
+  ${REMOTE?`<h3 class="sh">Push-Nachrichten</h3>${tog('Erinnerungen aufs Handy','pushOn',st.pushOn!==false,'Anpfiff, Endspurt, Prüfung. Für euch: Stand am Abend und „schwer“. Nicht in den Ferien.')}`:''}
+  <h3 class="sh">Wochenspiel</h3>
+  ${sr('Tagessiege für die Prämie',num('winGoal',st.winGoal,1,5),'von 5')}
+  ${sr('Länger aufbleiben',num('bedtimeMin',st.bedtimeMin,5,120),'Min.')}
+  <h3 class="sh">Zugang</h3>
+  ${REMOTE&&kids.length?`<label class="srow col"><span>Lernplaner gehört zu</span><select name="kidId"><option value="">bitte wählen</option>${kids.map(k=>`<option value="${esc(k.id)}" ${st.kidId===k.id?'selected':''}>${esc(k.name)}</option>`).join('')}</select></label>`:''}
+  ${sr('Neue PIN',`<input name="pin" inputmode="numeric" autocomplete="off" placeholder="••••">`,'')}
+  <div class="row" style="margin-top:16px"><button class="btn primary">Speichern</button></div></form>`;
   sec.einst+=`<div class="card"><h2>Daten</h2><div class="row">${S.meta.sample?'<button class="btn danger" data-act="clearsample">Beispieldaten löschen</button>':''}<button class="btn" data-act="lock">Elternbereich schließen</button></div>
   <div class="sub" style="margin-top:8px">${REMOTE?'Alles wird in der Datenbank des Familienplans gespeichert und auf allen Geräten abgeglichen. Den Stand seht ihr auch im Familienplan unter „Aufgaben“.':'Diese Version speichert nur in diesem Browser.'}</div></div>`;
   const cur=ui.esec||'ueb';
-  const nav=[['ueb','Überblick',S.help.length],['ein','Eintragen',0],['schule','Schule',0],['einst','Einstellungen',0]];
+  const nav=[['ueb','Überblick',S.help.length],['ein','Eintragen',0],['schule','Schule',0],['einst','Optionen',0]];
   return `<div class="seg">${nav.map(([k,l,n])=>`<button class="${cur===k?'on':''}" data-act="esec" data-v="${k}">${l}${n?` <span class="cnt">${n}</span>`:''}</button>`).join('')}</div>`+msgBox()+sec[cur];
 }
 
@@ -961,7 +1051,8 @@ function render(){
   if(ch)save();
   const th=THEMES[S.settings.theme]||THEMES[0],rs=document.documentElement.style;
   rs.setProperty('--fill',th.m);rs.setProperty('--on',th.on);rs.setProperty('--stripe',th.s);
-  document.getElementById('today').textContent=WDL[today().getDay()]+', '+today().getDate()+'.'+(today().getMonth()+1)+'.';
+  {const hx=th.m.replace('#',''),lum=(0.299*parseInt(hx.slice(0,2),16)+0.587*parseInt(hx.slice(2,4),16)+0.114*parseInt(hx.slice(4,6),16));rs.setProperty('--hl',lum<90?th.s:th.m)}
+  document.getElementById('today').textContent=WDL[today().getDay()]+', '+today().getDate()+'. '+['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][today().getMonth()];
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===ui.tab));
   document.getElementById('app').innerHTML=ui.tab==='heute'?renderHeute(plan):ui.tab==='woche'?renderWoche(plan):ui.tab==='pokale'?renderPokale():renderEltern(plan);
   syncDot();
