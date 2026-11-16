@@ -95,6 +95,20 @@ select cron.schedule(
     timeout_milliseconds := 20000
   );
   $$
+);
+
+-- Lernplaner im Minutentakt: Pause vorbei, Lernmodus
+select cron.schedule(
+  'lernplaner-minute',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := '${url}/functions/v1/push',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', '${cron}'),
+    body := '{"nur":"lern"}'::jsonb,
+    timeout_milliseconds := 20000
+  );
+  $$
 );`;
   };
   $('url').addEventListener('input', sql);

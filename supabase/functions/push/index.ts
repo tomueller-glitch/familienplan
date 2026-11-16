@@ -1863,10 +1863,11 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
 export type LpData = {
   settings: Row; schoolEnd: Row; timetable: Row | null; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
   wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
+  lm?: Row | null; brk?: Row | null;
 };
 
 export function lpFromRows(rows: Row[]): LpData {
-  const d: LpData = { settings: {}, schoolEnd: {}, timetable: null, open: [], done: [], exams: [], help: [], wins: {}, kick: {}, meets: {} };
+  const d: LpData = { settings: {}, schoolEnd: {}, timetable: null, open: [], done: [], exams: [], help: [], wins: {}, kick: {}, meets: {}, lm: null, brk: null };
   const seen = new Set<string>();
   for (const r of rows) {
     if (seen.has(r.id)) continue;
@@ -1882,6 +1883,8 @@ export function lpFromRows(rows: Row[]): LpData {
     else if (r.coll === 'win') d.wins[v.k] = !!v.v;
     else if (r.coll === 'kick') d.kick[v.k] = String(v.v);
     else if (r.coll === 'meet') d.meets[v.k] = String(v.v);
+    else if (r.coll === 'lm') d.lm = v;
+    else if (r.coll === 'brk') d.brk = v;
   }
   return d;
 }
@@ -1948,6 +1951,27 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
     }
   }
 
+  // Bewegungspause vorbei: kurze Nachricht an ihn, höchstens 10 Minuten nach dem Ende.
+  const brk = lp.brk;
+  if (kid && brk && brk.date === day && Number(brk.until) <= nowMs && nowMs - Number(brk.until) < 10 * 60000) {
+    const next = openToday.find((t) => !doneToday.some((x) => x.id === t.id));
+    out.push({ key: `lp-pause:${brk.until}`, to: [kid.id], ttl: 600, msg: { title: 'Pause vorbei', body: next ? `Weiter geht's: ${names([next])}.` : 'Weiter geht\'s!', tag: 'lernplaner', url } });
+  }
+
+  // Lernmodus: länger als eingestellt außerhalb der App (Pausenzeit zählt nicht).
+  const lm = lp.lm;
+  if (lm && lm.on && lm.date === day && lm.awayAt) {
+    const from = Number(lm.awayAt);
+    let gone = nowMs - from;
+    if (brk && brk.at && brk.until) { const o = Math.min(nowMs, Number(brk.until)) - Math.max(from, Number(brk.at)); if (o > 0) gone -= o; }
+    const limit = Math.max(2, Number(st.awayAlert) || 5) * 60000;
+    if (gone >= limit && gone < 3 * 3600000) {
+      const mins = Math.round(gone / 60000);
+      if (kid) out.push({ key: `lp-weg-kind:${from}`, to: [kid.id], ttl: 900, msg: { title: 'Zurück zum Lernplaner?', body: `Du bist seit ${mins} Minuten raus. Die nächste Aufgabe wartet, mit Fokus-Tor geht es weiter.`, tag: 'lernplaner', url } });
+      if (adults.length) out.push({ key: `lp-weg:${from}`, to: adults, ttl: 1800, msg: { title: `Lernmodus: ${kname} ist raus`, body: `Seit etwa ${mins} Minuten nicht im Lernplaner.`, tag: 'lernplaner-eltern', url } });
+    }
+  }
+
   // Abend vor einer Prüfung.
   if (kid && min >= 19 * 60 && min < 20 * 60) {
     for (const e of lp.exams.filter((x) => String(x.date) === tomorrow)) {
@@ -1994,7 +2018,7 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
 async function loadLern(store: Store, today: string): Promise<LpData> {
   const base = 'lp_data?select=id,coll,data&deleted=is.false';
   const [a, b, c, d] = await Promise.all([
-    store.get(`${base}&coll=in.(settings,schoolEnd,timetable,exam,help,meet)`),
+    store.get(`${base}&coll=in.(settings,schoolEnd,timetable,exam,help,meet,lm,brk)`),
     store.get(`${base}&coll=eq.task&data->>done=eq.false`),
     store.get(`${base}&coll=eq.task&data->>doneAt=eq.${today}`),
     store.get(`${base}&coll=in.(win,kick)&data->>k=gte.${addDays(mondayOf(today), -7)}`),
@@ -2165,6 +2189,21 @@ export async function sendDue(store: ReturnType<typeof db>, subs: Row[], due: Du
     if (d.extraKeys && d.extraKeys.length) await store.claim(d.extraKeys);
   }
   return { fresh: fresh.size, sent };
+}
+
+// Nur der Lernplaner, für einen zusätzlichen Zeitplan im Minutentakt (Pause vorbei, Lernmodus).
+async function runLernOnly(nowMs = Date.now()) {
+  const store = db();
+  const today = berlin(nowMs).day;
+  const [persons, subs, urlaubRow] = await Promise.all([
+    store.get('ep_persons?select=*'),
+    store.get('ep_push_subs?select=*'),
+    store.get('ep_settings?select=key,value&key=eq.urlaub').catch(() => []),
+  ]);
+  const u = (urlaubRow[0] || {}).value;
+  const due = lernMessages(await loadLern(store, today), persons, nowMs, Array.isArray(u) ? u : []);
+  const r = await sendDue(store, subs, due, vapidFromEnv());
+  return { due: due.length, new: r.fresh, sent: r.sent, nur: 'lern' };
 }
 
 async function runSchedule(nowMs = Date.now()) {
@@ -2391,7 +2430,10 @@ export async function handler(req: Request): Promise<Response> {
   try {
     const secret = env('CRON_SECRET');
     usageKind = 'kosten';
-    if (secret && secret.length >= 16 && req.headers.get('x-cron-secret') === secret) return json(200, await runSchedule());
+    if (secret && secret.length >= 16 && req.headers.get('x-cron-secret') === secret) {
+      const b = await req.clone().json().catch(() => ({}));
+      return json(200, b && b.nur === 'lern' ? await runLernOnly() : await runSchedule());
+    }
     usageKind = 'siri';
     // Siri-Kurzbefehl, einfache Form: alles steht in der Adresse, die Antwort ist Text zum Vorlesen.
     const q = new URL(req.url).searchParams;

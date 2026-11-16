@@ -370,6 +370,9 @@ lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der
 - Einrichten: `supabase/lernplaner.sql` im SQL Editor ausführen, Funktion `lernplaner` anlegen (Code in `supabase/functions/lernplaner/index.ts`).
 - Claude-Aufrufe aus dem Lernplaner laufen über die Funktion `lernplaner`, Push-Erinnerungen über die Funktion `push` (Abschnitt „Lernplaner“ dort).
 - Prüfung der Erinnerungen: `node --experimental-strip-types tests/funktion-lernplaner.mts`.
+- Termine: Ist unter Optionen „Lernplaner gehört zu“ gewählt, nutzt der Lernplaner die Termine des Familienplans (`ep_events`, gleiche Regeln). Neue Termine aus dem Lernplaner landen dort ebenfalls.
+- Lernmodus: startet mit dem Anpfiff, zeigt nur die aktuelle Aufgabe, Beenden mit Eltern-PIN. Verlässt er die App, zählt die Zeit nicht; nach der eingestellten Zeit kommt eine Push-Nachricht. Eine echte Sperre gibt es nur mit dem Geführten Zugriff am iPhone.
+- „Pause vorbei“ und Lernmodus-Meldungen kommen pünktlich mit einem zweiten Zeitplan im Minutentakt (`lernplaner-minute` in `supabase/cron.sql` bzw. `push-einrichten.html`). Ohne ihn kommen sie mit bis zu fünf Minuten Verspätung.
 
 ## Arbeiten mit GitHub
 

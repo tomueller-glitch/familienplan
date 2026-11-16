@@ -159,6 +159,12 @@ input.tg:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .stats .sub{margin-top:4px;font-size:13px}
 /* Stundenplan */
 .days5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:6px 0 10px}
+.days5.wd7{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dchk{position:relative;display:block;margin:0;min-width:0;width:100%}
+.dchk input{position:absolute;opacity:0;width:1px!important;height:1px;padding:0;border:0;margin:0}
+.dchk span{display:block;width:100%;box-sizing:border-box;text-align:center;padding:9px 0;border:1px solid var(--linie);border-radius:10px;font-weight:600;color:var(--tinte);background:var(--blatt)}
+.dchk input:checked+span{background:var(--tafel);color:#fff;border-color:var(--tafel)}
+.dchk input:focus-visible+span{outline:2px solid var(--tinte);outline-offset:2px}
 .days5 .day{min-width:0;padding:7px 2px}
 .ttrow{display:grid;grid-template-columns:22px 48px minmax(0,1fr);gap:8px;align-items:center;padding:4px 0}
 .ttrow .n{font:700 17px/1 var(--anz);text-align:right}
@@ -187,6 +193,16 @@ details.grp[open] summary{margin-bottom:6px}
 .badge .bprog{display:block;height:5px;border-radius:3px;background:var(--leise);margin-top:8px;overflow:hidden}
 .badge .bprog i{display:block;height:100%;background:var(--tinte)}
 .badge .bcnt{display:block;font-size:12px;margin-top:3px}
+.quiz{margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
+.quiz .qh{font-size:13px;color:var(--tinte2);font-weight:600}
+.quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
+.quiz .qa{background:var(--leise);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:16px}
+.qdet{margin:0 0 8px 20px}.qdet summary{font-size:14px;color:var(--tinte2);cursor:pointer}
+.lmbar{display:flex;align-items:center;gap:10px;background:var(--tafel);color:#fff;border-radius:14px;padding:10px 14px;margin:0 0 10px}
+.lmbar b{display:block;font:700 18px/1.1 var(--anz)}.lmbar span{font-size:13px;color:#C9D8DC}
+.lmbar .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+body.lm nav.tabs,body.lm .hdr-r a{display:none}
+.backk{border:2px solid var(--fill)}
 .pausek{border:2px dashed var(--linie)}
 .pausek .pidea{font:700 22px/1.2 var(--anz);margin:4px 0 6px}
 .rules{margin:0 0 8px;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}
@@ -225,7 +241,7 @@ pre.rep{white-space:pre-wrap;font:15px/1.5 var(--text);margin:0}
 /* ===== Konfiguration: kommt aus js/config.js der Familien-App ===== */
 const FCFG=window.ESSENSPLAN_CONFIG||{};
 const REMOTE=!!(FCFG.supabaseUrl&&FCFG.supabaseKey);
-let sb=null,authOk=true,kids=[];
+let sb=null,authOk=true,kids=[],persons=[],accessToken='';
 const CACHE_KEY=REMOTE?'lernplaner-web-v1':'lernplaner-v1';
 
 const SUBJ=['Mathe','Deutsch','Englisch','Latein','Biologie','Physik','Natur und Technik','Geschichte','Geographie','Wirtschaft','Religion/Ethik','Musik','Kunst','Sonstiges'];
@@ -326,8 +342,8 @@ function aiError(e){
 /* ===== Datenmodell ===== */
 const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result',lessons:'lesson'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
-const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable','lm','brk'];
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -337,7 +353,7 @@ function migrate(x){
     x.goals.forEach(g=>{if(!g.id)g.id=uid()});
     delete x.v;delete x.sample;
   }
-  x.settings=Object.assign({pin:'1234',afterSchool:60,latest:'19:30',weekendStart:'10:00',buffer:30,blockMax:20,pause:5,longAfter:40,longPause:15,breakIdeas:'',grade:7,sundayFree:true,ludusOn:true,ludusMin:15,ludusUrl:'',checksOn:true,winGoal:4,bedtimeMin:30,theme:0},x.settings);
+  x.settings=Object.assign({pin:'1234',afterSchool:60,latest:'19:30',weekendStart:'10:00',buffer:30,blockMax:20,pause:5,longAfter:40,longPause:15,breakIdeas:'',grade:7,focusMode:true,awayAlert:5,quizOn:true,sundayFree:true,ludusOn:true,ludusMin:15,ludusUrl:'',checksOn:true,winGoal:4,bedtimeMin:30,theme:0},x.settings);
   if(typeof x.settings.theme!=='number')x.settings.theme=0;
   x.schoolEnd=Object.assign({1:'13:00',2:'15:30',3:'13:00',4:'13:00',5:'12:15'},x.schoolEnd);
   x.model=Object.assign({cap:60,prep:{}},x.model);
@@ -553,7 +569,30 @@ function schoolEndMin(d){const l=lessonsOn(d),tt=S.timetable;let last=-1;l.forEa
 function nextLesson(subject){if(!S.timetable)return schoolDayIn(1);for(let i=1;i<=21;i++){const d=addDays(today(),i);if(!isWeekday(d)||freeReason(d))continue;if(lessonsOn(d).includes(subject))return iso(d)}return schoolDayIn(1)}
 
 /* ===== Planung ===== */
-function apptsFor(d){const di=iso(d),wd=d.getDay();return S.appts.filter(a=>+a.weekday===wd).concat(S.oneoffs.filter(a=>a.date===di)).sort((a,b)=>a.start.localeCompare(b.start))}
+// Termine: aus dem Familienplan (Tabelle ep_events, gleiche Regeln wie dort), dazu noch nicht übernommene eigene Termine.
+let famEv=null;try{famEv=JSON.parse(localStorage.getItem('lp-fam-ev')||'null')}catch(e){}
+const famOn=()=>REMOTE&&Array.isArray(famEv)&&!!S.settings.kidId;
+async function loadFam(){if(!REMOTE||!sb||!authOk)return false;
+  try{const{data,error}=await sb.from('ep_events').select('*');if(error)throw error;const j=JSON.stringify(data||[]),ch=j!==JSON.stringify(famEv);famEv=data||[];try{localStorage.setItem('lp-fam-ev',j)}catch(e){}return ch}catch(e){console.warn(e);return false}}
+function famBreak(d){try{const r=CAL?CAL.schoolFree(iso(d)):null;return!!r&&r!=='Wochenende'}catch(e){return false}}
+function famFor(d){if(!famOn())return[];const di=iso(d),wd=(d.getDay()+6)%7,k=S.settings.kidId;
+  return famEv.filter(e=>e.active!==false&&(e.who||[]).includes(k)&&(e.weekdays||[]).map(Number).includes(wd)&&(!e.valid_from||di>=e.valid_from)&&(!e.valid_to||di<=e.valid_to)&&!(e.pause_ferien&&famBreak(d))&&/^\d{1,2}:\d{2}$/.test(e.start_time||''))
+    .map(e=>{const st=toMin(e.start_time),en=e.home_time||e.end_time;return{id:e.id,title:e.title,start:e.start_time,end:en&&toMin(en)>st?en:hm(st+60),fam:true}})}
+function apptsFor(d){const di=iso(d),wd=d.getDay(),fam=famFor(d);
+  const own=S.appts.filter(a=>+a.weekday===wd).concat(S.oneoffs.filter(a=>a.date===di)).filter(a=>!fam.some(f=>f.start===a.start));
+  return own.concat(fam).sort((a,b)=>a.start.localeCompare(b.start))}
+const WDM=['Mo','Di','Mi','Do','Fr','Sa','So'];
+function famRow(o){return Object.assign({id:'lp-'+uid(),title:'',who:[S.settings.kidId],weekdays:[],start_time:'',end_time:null,home_time:null,pause_ferien:true,valid_from:null,valid_to:null,active:true,sort:100},o)}
+async function famSave(rows){const{error}=await sb.from('ep_events').upsert(rows);if(error)throw error;await loadFam()}
+async function famDelete(id){const{error}=await sb.from('ep_events').delete().eq('id',id);if(error)throw error;await loadFam()}
+// Eigene Lernplaner-Termine in den Familienplan übernehmen (doppelte werden nur gelöscht).
+async function famMigrate(){
+  const k=S.settings.kidId,rows=[],has=(wd,start)=>famEv.some(e=>(e.who||[]).includes(k)&&(e.weekdays||[]).map(Number).includes(wd)&&e.start_time===start);
+  S.appts.forEach(a=>{const wd=(+a.weekday+6)%7;if(!has(wd,a.start))rows.push(famRow({title:a.title,weekdays:[wd],start_time:a.start,end_time:a.end}))});
+  S.oneoffs.filter(a=>a.date>=iso(today())).forEach(a=>{const wd=(parse(a.date).getDay()+6)%7;rows.push(famRow({title:a.title,weekdays:[wd],start_time:a.start,end_time:a.end,valid_from:a.date,valid_to:a.date,pause_ferien:false}))});
+  if(rows.length)await famSave(rows);
+  S.appts=[];S.oneoffs=[];return rows.length;
+}
 // Lernfrei sind Sonntag, Ferien und Feiertage. Ein einzelner schulfreier Werktag ohne Feiertag (Buß- und Bettag)
 // ist ein Lerntag wie ein Samstag: kein Unterricht, also viel Zeit.
 const LERNTAG_FREI=['Buß- und Bettag'];
@@ -642,6 +681,35 @@ function checkDayWin(){
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
   if(!day.items.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;ui.msg='Tagessieg! Alles geschafft, was heute dran war.';ui.msgType='okn'}
 }
+/* ===== Lernmodus ===== */
+// Eine Web-App kann das Verlassen nicht verhindern (dafür: Geführter Zugriff am iPhone). Sie merkt es aber,
+// rechnet die Zeit nicht als Lernzeit, belohnt Aufgaben ohne App-Wechsel und meldet längeres Wegbleiben.
+const lmActive=()=>!!(S.lm&&S.lm.on&&S.lm.date===iso(today()));
+function lmStart(){if(S.settings.focusMode===false||lmActive())return;S.lm={date:iso(today()),on:true,since:Date.now(),away:0,leaves:0,awayAt:null,clean:true};beam()}
+function lmStop(msg){if(!S.lm)return;S.lm=Object.assign({},S.lm,{on:false,awayAt:null,ended:Date.now()});if(msg){ui.msg=msg;ui.msgType='okn'}beam()}
+// Zeit, in der jemand weg war, ohne die Zeit einer Pause.
+function goneMs(from,to){const b=S.brk;let g=to-from;if(b&&b.at&&b.until){const o=Math.min(to,b.until)-Math.max(from,b.at);if(o>0)g-=o}return Math.max(0,g)}
+function lmHide(){if(!lmActive()||S.lm.awayAt)return;S.lm.awayAt=Date.now();writeCache();beam()}
+function lmShow(){
+  if(!S.lm||!S.lm.awayAt)return;
+  const now=Date.now(),g=goneMs(S.lm.awayAt,now);S.lm.awayAt=null;
+  if(lmActive()&&g>=20000){S.lm.leaves++;S.lm.away+=g;S.lm.clean=false;ui.back=Math.max(1,Math.round(g/60000));
+    if(S.running)S.running=Object.assign({},S.running,{at:S.running.at+g})}
+  save();render();
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')lmHide();else{lmShow();keepAwake(lmActive())}});
+window.addEventListener('pagehide',lmHide);
+// Lernmodus und Pause sofort an den Server, damit die Push-Funktion Bescheid weiß, auch wenn die App gleich angehalten wird.
+function beam(){
+  if(!REMOTE||!sb||!authOk||!accessToken)return;
+  const rows=['lm','brk'].map(k=>({id:k,coll:k,data:S[k]===undefined?null:S[k],deleted:false}));
+  try{fetch(FCFG.supabaseUrl+'/rest/v1/lp_data?on_conflict=id',{method:'POST',keepalive:true,
+    headers:{apikey:FCFG.supabaseKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})
+    .then(r=>{if(r.ok)rows.forEach(x=>{synced[x.id]=JSON.stringify(x.data);syncedColl[x.id]=x.coll})}).catch(()=>{})}catch(e){}
+}
+// Bildschirm im Lernmodus anlassen: sonst zählt das automatische Sperren als Verlassen.
+let wl=null;
+async function keepAwake(on){try{if(on&&!wl&&'wakeLock' in navigator&&document.visibilityState==='visible'){wl=await navigator.wakeLock.request('screen');wl.addEventListener('release',()=>{wl=null})}else if(!on&&wl){const w=wl;wl=null;await w.release()}}catch(e){wl=null}}
 function toWin(){const T=iso(today()),day=simulate({fullDay:true})[0];if(S.wins[T]||day.free)return 0;
   return day.items.length+(S.settings.checksOn&&!checksDone(T)?1:0)}
 function weekInfo(){
@@ -667,7 +735,8 @@ function badges(){
     ['Ludus-Profi','10-mal Ludus Latinus gespielt',Math.min(10,S.tasks.filter(t=>t.kind==='daily'&&t.done).length),10],
     ['Kabinen-Chef','7-mal den Vokabel-Check gemacht',Math.min(7,Object.keys(S.checks).filter(d=>CHECKS.every(([k])=>S.checks[d][k])).length),7],
     ['Gut vorbereitet','Alle Lerneinheiten vor einer Prüfung geschafft',exDone?1:0,1],
-    ['Taktiker','3-mal die Woche gemeinsam geplant',Math.min(3,Object.keys(S.meets).length),3]
+    ['Taktiker','3-mal die Woche gemeinsam geplant',Math.min(3,Object.keys(S.meets).length),3],
+    ['Fokus-Profi','10 Fokus-Tore im Lernmodus',Math.min(10,cnt('Fokus-Tor')),10]
   ];
 }
 
@@ -680,6 +749,7 @@ function finish(id){
   if(!t.fixed){const r=actual/t.est;learn(paceKey(t),r);learn(t.subject,r);learn('_all',r)}
   Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel});
   award(PTS.task,'Tor!',t.id);
+  if(lmActive()){if(S.lm.clean)award(1,'Fokus-Tor',t.id);S.lm.clean=true}
   if(ui.fbFeel==='schwer'){
     S.help.push({id:uid(),date:iso(today()),subject:t.subject,title:t.title});
     if(t.examId){const nx=S.tasks.filter(x=>x.examId===t.examId&&!x.done).sort((a,b)=>a.date.localeCompare(b.date))[0];if(nx)nx.together=true}
@@ -690,8 +760,9 @@ function finish(id){
   const T=iso(today());if(!S.run||S.run.date!==T)S.run={date:T,min:0};S.run.min+=actual;
   const long=S.run.min>=(+S.settings.longAfter||40),len=long?(+S.settings.longPause||15):(+S.settings.pause||5);if(long)S.run.min=0;
   ui.fb=null;checkDayWin();
-  if(len&&!S.wins[T]&&queueOf(simulate()[0]).length)ui.brk={until:Date.now()+len*60000,len,long,idea:breakIdea(long,T+id)};
-  save();
+  if(len&&!S.wins[T]&&queueOf(simulate()[0]).length){const now=Date.now();S.brk={date:T,at:now,until:now+len*60000,len,long,idea:breakIdea(long,T+id)}}
+  if(lmActive()&&toWin()===0)lmStop('Alles geschafft! Der Lernmodus ist beendet.');
+  save();beam();
 }
 function answerCheck(k,ok){
   const T=iso(today()),c=Object.assign({},S.checks[T]||{});if(c[k])return;
@@ -741,6 +812,14 @@ Wenn du nichts erkennst: {"stunden":[]}`;
     ui.kb=items.length?{status:'review',items}:{status:'idle',err:'Auf dem Screenshot habe ich keine Unterrichtsinhalte gefunden. Ist das Klassenbuch zu sehen?'};
   }catch(e){ui.kb={status:'idle',err:aiError(e)}}
   render();
+}
+function quizInfo(ts){
+  const qz=ts.filter(t=>t.quiz);if(!qz.length)return'';
+  const rs=ts.flatMap(t=>(t.quizRes||[]).slice(-1)),ok=rs.reduce((a,r)=>a+r.ok,0),n=rs.reduce((a,r)=>a+r.n,0);
+  return `<details class="qdet"><summary>Abfragen (Test): ${qz.length} erstellt${n?`, ${ok} von ${n} beim ersten Mal gewusst`:''}</summary>`+
+    qz.map(t=>`<div class="sub" style="margin-top:8px"><b>${esc(t.title)}</b>${t.quiz.note?`<br>Hinweis von Claude: ${esc(t.quiz.note)}`:''}</div>`+
+      t.quiz.qs.map((x,i)=>`<div class="li"><span class="grow">${esc(x.f)}<br><span class="sub">${esc(x.a)}</span></span><button class="btn sm danger" data-act="qdel" data-id="${t.id}" data-v="${i}" aria-label="Frage löschen">×</button></div>`).join('')+
+      `<div class="row"><button class="btn sm" data-act="qnew" data-id="${t.id}">${ui.busy==='quiz'+t.id?'Moment …':'Neu erstellen lassen'}</button></div>`).join('')+`</details>`;
 }
 function examEditForm(e,ts){
   const sh=ts.find(t=>t.sheet);
@@ -877,6 +956,49 @@ Wenn es noch zu wenig Daten gibt, sag das kurz und nenne, worauf die Eltern in d
 
 /* ===== Anzeige-Bausteine ===== */
 function examOf(t){return S.exams.find(x=>x.id===t.examId)}
+/* ===== Abfrage (Testfunktion): Claude stellt Fragen zur Lerneinheit, er deckt die Antwort selbst auf ===== */
+const quizOk=()=>S.settings.quizOn!==false&&AI_OK();
+async function genQuiz(t,open){
+  const ex=examOf(t)||{},grade=+S.settings.grade||7;
+  ui.busy='quiz'+t.id;render();
+  try{
+    const prompt=`Erstelle eine kurze Abfrage für einen Schüler der ${grade}. Klasse an einem bayerischen Gymnasium. Er bereitet sich auf eine ${ex.type||'Prüfung'} in ${t.subject}${ex.date?' am '+fmt(ex.date):''} vor.
+Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${ex.lp?'\nEinordnung im Lehrplan: '+ex.lp:''}${ex.focus&&ex.focus.length?'\nSchwerpunkte: '+ex.focus.join(', '):''}${bookContext(t.subject)}${ex.id?lessonContext(ex):''}
+Heutige Lerneinheit (${t.part||1} von ${t.parts||1}): ${t.title}.
+Regeln:
+- 6 Fragen, die genau zu diesem Stoff gehören. Was nicht sicher dazugehört, lass weg. Im Zweifel frag Grundlagen des Themas, die in der ${grade}. Klasse sicher behandelt werden.
+- Jede Antwort ist kurz: ein Wort, eine Zahl, eine Form, ein Satz oder eine kleine Rechnung mit Ergebnis. Er soll sie ohne Hilfsmittel im Kopf oder auf Papier finden können.
+- Bei Vokabeln nur Wörter, die oben im Klassenbuch, im Lehrwerk oder im Thema genannt sind. Sind keine konkreten Vokabeln bekannt, frag stattdessen Grammatik oder Formen ab.
+- Von leicht zu schwerer, keine Fangfragen, einfache Sprache, keine Gedankenstriche.
+- Wenn du den Stoff nicht sicher eingrenzen konntest, schreib das kurz in "hinweis", sonst lass "hinweis" leer.
+Antworte nur mit JSON: {"fragen":[{"f":"Frage","a":"Antwort"}],"hinweis":""}`;
+    const res=await aiJSON(prompt);
+    const qs=((res&&res.fragen)||[]).filter(x=>x&&x.f&&x.a).slice(0,8).map(x=>({f:String(x.f).trim().slice(0,240),a:String(x.a).trim().slice(0,240)}));
+    if(!qs.length)throw{code:'parse'};
+    t.quiz={qs,at:iso(today()),note:String((res&&res.hinweis)||'').slice(0,200)};
+    if(open)ui.quiz={id:t.id,order:qs.map((_,i)=>i),pos:0,show:false,ok:0};
+    save();
+  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+  ui.busy=null;render();
+}
+function quizBlock(t){
+  if(ui.busy==='quiz'+t.id)return `<div class="quiz"><div class="sub">Claude stellt die Fragen zusammen, einen Moment …</div></div>`;
+  const q=ui.quiz&&ui.quiz.id===t.id&&t.quiz?ui.quiz:null;
+  if(!q){const r=(t.quizRes||[]).slice(-1)[0];
+    return `<div class="row" style="margin-top:10px"><button class="btn" data-act="quiz" data-id="${t.id}">${t.quiz?'Abfrage nochmal':'Abfrage starten'}</button><span class="chip">Test</span>${r?`<span class="sub">zuletzt ${r.ok} von ${r.n} gewusst</span>`:''}</div>`}
+  const qs=t.quiz.qs;
+  if(q.pos>=q.order.length)return `<div class="quiz"><div class="qh">Abfrage fertig</div><div class="qq">${q.ok} von ${qs.length} beim ersten Mal gewusst</div><div class="sub">${q.ok===qs.length?'Super, alles sitzt!':'Was du nicht wusstest, hast du eben gleich noch einmal geübt.'}</div><div class="row" style="margin-top:8px"><button class="btn" data-act="quizend">Schließen</button></div></div>`;
+  const x=qs[q.order[q.pos]],again=q.pos>=qs.length;
+  return `<div class="quiz"><div class="qh">${again?'Noch einmal':'Frage '+(q.pos+1)+' von '+qs.length}</div><div class="qq">${esc(x.f)}</div>
+    ${q.show?`<div class="qa">${esc(x.a)}</div><div class="row"><button class="btn primary" data-act="qok">Gewusst</button><button class="btn" data-act="qno">Nicht gewusst</button></div>`
+      :`<div class="sub">Erst selbst überlegen oder aufschreiben, dann aufdecken.</div><div class="row" style="margin-top:8px"><button class="btn primary" data-act="qshow">Antwort zeigen</button></div>`}</div>`;
+}
+function quizStep(knew){
+  const q=ui.quiz,t=q&&S.tasks.find(x=>x.id===q.id);if(!t||!t.quiz)return;
+  const n=t.quiz.qs.length;if(q.pos<n&&knew)q.ok++;if(!knew&&q.pos<n)q.order.push(q.order[q.pos]);
+  q.pos++;q.show=false;
+  if(q.pos>=q.order.length&&!q.saved){q.saved=true;t.quizRes=(t.quizRes||[]).concat({date:iso(today()),ok:q.ok,n});save()}
+}
 function taskMeta(t){
   if(t.kind==='daily')return 'Latein · jeden Tag zum Aufwärmen';
   if(t.kind==='ha')return `${esc(t.subject)} · Hausaufgabe bis ${fmt(t.due)}`;
@@ -979,12 +1101,19 @@ function renderFocus(plan){
     const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
     kick=`<button class="btn primary" data-act="kick">Anpfiff</button><div class="b-hint">${dl&&nowMin()<=dl?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:`Heute ${q.length===1?'eine Aufgabe':q.length+' Aufgaben'}.`}</div>`;
   }
-  let h=scoreboard(kick);
+  let h='';
+  if(lmActive()){const L=S.lm;
+    h+=`<div class="lmbar"><div class="grow"><b>Lernmodus</b><span>seit ${hm(Math.round((L.since-new Date(today()).getTime())/60000))} Uhr, ${L.leaves?`${L.leaves}-mal raus, ${Math.round(L.away/60000)} Min.`:'noch nie raus'}</span></div><button class="btn sm" data-act="lmendask">Beenden</button></div>`;
+    if(ui.lmEnd)h+=`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`;
+    if(ui.back)h+=`<div class="card backk"><h2>Willkommen zurück!</h2><div class="sub">Du warst ${ui.back} Min. weg. Diese Zeit zählt nicht als Lernzeit, und für diese Aufgabe gibt es kein Fokus-Tor mehr. Bei der nächsten klappt es!</div><div class="row" style="margin-top:8px"><button class="btn" data-act="backok">Weiter</button></div></div>`;
+  }
+  h+=scoreboard(kick);
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox();
-  if(ui.brk&&ui.brk.until>Date.now())h+=`<div class="card pausek"><h2>${ui.brk.long?'Große Pause':'Bewegungspause'}: ${ui.brk.len} Min.</h2>
-    <div class="pidea">${esc(ui.brk.idea)}</div><div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((ui.brk.until-Date.now())/60000)+nowMin())} Uhr.</div>
+  const bk=S.brk;
+  if(bk&&bk.date===T&&bk.until>Date.now())h+=`<div class="card pausek"><h2>${bk.long?'Große Pause':'Bewegungspause'}: ${bk.len} Min.</h2>
+    <div class="pidea">${esc(bk.idea)}</div><div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((bk.until-Date.now())/60000)+nowMin())} Uhr.${REMOTE?' Wenn die Pause vorbei ist, kommt eine Nachricht.':''}</div>
     <div class="row" style="margin-top:10px"><button class="btn" data-act="brkend">Pause vorbei</button><button class="btn ghost" data-act="brknew">Andere Idee</button></div></div>`;
   h+=reviewCards()+meetCard();
   if(S.settings.checksOn&&!checksDone(T)&&!day.free){
@@ -999,7 +1128,8 @@ function renderFocus(plan){
       ${t.sheet?`<div style="margin-top:10px">${t.link?`<a class="btn" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
       ${t.examId&&(examOf(t)||{}).focus?`<div class="sub" style="margin-top:8px">Darum geht es: ${esc(examOf(t).focus.join(', '))}</div>`:''}
       ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:10px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
-      ${ui.fb===t.id?fbPanel(t,cur.P):timerRow(t)}</div>`;
+      ${t.kind==='lern'&&quizOk()?quizBlock(t):''}
+      ${ui.fb===t.id?fbPanel(t,cur.P):ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length?'':timerRow(t)}</div>`;
     const rest=q.filter(x=>x!==cur);
     if(rest.length)h+=`<div class="card"><h2>Danach (${rest.length})</h2>`+rest.map(x=>`<div class="li"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}<br><span class="sub">${esc(x.t.subject)} · ${x.P} Min.</span></span><button class="btn sm" data-act="focus" data-id="${x.t.id}">Zuerst</button></div>`).join('')+`</div>`;
   }else if(!day.free){
@@ -1007,7 +1137,8 @@ function renderFocus(plan){
   }else h+=`<div class="card">${esc(freeReason(today())||'Sonntag')}: heute ist lernfrei. Genieß den Tag!</div>`;
   const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T);
   if(doneToday.length)h+=`<div class="card"><h2>Erledigt</h2>`+doneToday.map(t=>`<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="muted">(${t.actual} Min.)</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</div>`;
-  return h+addButtons(true);
+  if(hasWork&&!lmActive()&&S.settings.focusMode!==false&&S.kick[T])h+=`<div class="card"><h2>Lernmodus</h2><div class="sub">Im Lernmodus gibt es für jede Aufgabe, bei der du die App nicht verlässt, ein Fokus-Tor.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="lmgo">Lernmodus starten</button></div></div>`;
+  return h+(lmActive()?'':addButtons(true));
 }
 function renderHeute(plan){
   if(ui.day===0&&!ui.full)return renderFocus(plan);
@@ -1046,7 +1177,7 @@ function renderPokale(){
   const wg=S.settings.winGoal,bt=S.settings.bedtimeMin;
   let h=msgBox()+`<div class="card"><h2>So funktioniert das Spiel</h2>
   <ol class="rules">
-  <li><b>Tore.</b> Jede erledigte Aufgabe ist ein Tor. Auch der Kabinen-Check, ein pünktlicher Anpfiff, die Spielanalyse nach einer Prüfung und die Besprechung am Wochenende bringen je ein Tor.</li>
+  <li><b>Tore.</b> Jede erledigte Aufgabe ist ein Tor. Auch der Kabinen-Check, ein pünktlicher Anpfiff, die Spielanalyse nach einer Prüfung und die Besprechung am Wochenende bringen je ein Tor. Im Lernmodus gibt es für jede Aufgabe ohne App-Wechsel ein Fokus-Tor dazu.</li>
   <li><b>Tagessieg.</b> Du gewinnst den Tag, wenn alles erledigt ist, was heute dran war, und der Kabinen-Check gemacht ist.</li>
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
   <li><b>Aufstieg.</b> Mit deinen Toren steigst du in die nächste Liga auf. In jeder neuen Liga bekommst du ein neues Trikot.</li>
@@ -1123,11 +1254,12 @@ function renderEltern(plan){
   const overdue=S.tasks.filter(t=>!t.done&&t.kind==='ha'&&t.due<=T);
   const tight=plan.slice(0,7).filter(d=>d.over.length);
   const sec={ueb:'',ein:'',schule:'',einst:''};
+  const lmInfo=S.lm&&S.lm.date===T?`<div class="sub" style="margin-top:6px">Lernmodus ${S.lm.on?'läuft':'war an'} seit ${hm(Math.round((S.lm.since-today().getTime())/60000))} Uhr, ${S.lm.leaves?`${S.lm.leaves}-mal die App verlassen (${Math.round(S.lm.away/60000)} Min.)`:'App nicht verlassen'}${S.lm.awayAt?', gerade nicht in der App':''}.</div>`:'';
   sec.ueb+=`<div class="card"><h2>Heute</h2>
   <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div></div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
-  </div>`;
+  ${lmInfo}</div>`;
   sec.schule+=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Stundenplan</h2><button class="btn primary" data-act="sub" data-v="plan">${S.timetable?'Bearbeiten':'Eintragen'}</button></div>
   <div class="sub" style="margin-top:6px">${S.timetable?'Schulschluss diese Woche: '+[1,2,3,4,5].map(w=>{const d=addDays(monday(today()),w-1),fr=freeReason(d),e=schoolEndMin(d);return WD[w]+' '+(fr?'frei':e!=null?hm(e):'?')}).join(' · ')+(S.timetable.ab?' ('+weekType(today())+'-Woche)':''):'Noch kein Stundenplan. Daraus berechnet der Lernplaner den Schulschluss und das Abgabedatum von Hausaufgaben.'}</div></div>`;
   sec.ueb+=`<div class="card"><h2>Wochenspiel</h2><div>${w.won} von ${w.goal} Tagessiegen</div>
@@ -1157,7 +1289,7 @@ function renderEltern(plan){
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
   const delBtn=(act,id)=>ui.ask===act+id?`<button class="btn sm danger" data-act="${act}" data-id="${id}">Wirklich löschen</button><button class="btn sm" data-act="askx">Nein</button>`:`<button class="btn sm danger" data-act="ask" data-v="${act}" data-id="${id}">Löschen</button>`;
-  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span><span class="acts">${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span><span class="acts">${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${quizInfo(ts)}${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
   ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
   const open=S.tasks.filter(t=>!t.done&&(t.kind!=='daily'||t.date===T)).sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
   sec.schule+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
@@ -1174,12 +1306,30 @@ function renderEltern(plan){
   <div class="g2"><label>ISBN (optional)<input name="isbn" inputmode="numeric"></label><label>Aktuelle Lektion<input name="chapter" placeholder="Lektion 41"></label></div>
   <div class="row" style="margin-top:10px"><button class="btn">Lehrwerk hinzufügen</button></div></form></div>`;
   const all=S.appts.map(a=>({...a,lab:'jeden '+WDL[a.weekday]})).concat(S.oneoffs.filter(a=>a.date>=T).map(a=>({...a,lab:fmt(a.date)})));
-  sec.einst+=`<div class="card"><h2>Feste Termine</h2>${all.map(a=>`<div class="li"><span class="grow">${esc(a.title)}<br><span class="sub">${a.lab}, ${a.start} bis ${a.end}</span></span><button class="btn sm danger" data-act="delappt" data-id="${a.id}">Löschen</button></div>`).join('')||'<div class="muted">Keine Termine.</div>'}
+  if(famOn()){
+    const delBtn=(act,id)=>ui.ask===act+id?`<button class="btn sm danger" data-act="${act}" data-id="${id}">Wirklich löschen</button><button class="btn sm" data-act="askx">Nein</button>`:`<button class="btn sm danger" data-act="ask" data-v="${act}" data-id="${id}">Löschen</button>`;
+    const k=st.kidId,pn=id=>(persons.find(p=>p.id===id)||{}).name||'',kn=pn(k)||'euer Sohn';
+    const mine=famEv.filter(e=>(e.who||[]).includes(k)&&!(e.valid_to&&e.valid_to<T)).sort((a,b)=>Math.min(...(a.weekdays||[7]))-Math.min(...(b.weekdays||[7]))||String(a.start_time).localeCompare(String(b.start_time)));
+    const days=e=>e.valid_from&&e.valid_from===e.valid_to?fmt(e.valid_from):(e.weekdays||[]).slice().sort().map(w=>WDM[w]).join(', ');
+    sec.einst+=`<div class="card"><h2>Termine</h2><div class="sub">Gemeinsam mit dem Familienplan: Was hier steht, gilt auch dort fürs Abendessen, und umgekehrt.</div>
+    ${mine.map(e=>{const others=(e.who||[]).filter(x=>x!==k).map(pn).filter(Boolean);
+      return `<div class="li stk"><span class="grow">${esc(e.title)}${e.active===false?' <span class="chip">pausiert</span>':''}<br><span class="sub">${esc(days(e))}, ${esc(e.start_time||'')}${e.end_time?' bis '+esc(e.end_time):''}${e.home_time?', zu Hause '+esc(e.home_time):''}${e.pause_ferien?', Pause in den Ferien':''}${others.length?'<br>auch für '+esc(others.join(', '))+', nur im Familienplan änderbar':''}</span></span>${others.length?'':`<span class="acts">${delBtn('famdel',e.id)}</span>`}</div>`}).join('')||`<div class="muted">Für ${esc(kn)} sind noch keine Termine eingetragen.</div>`}
+    ${all.length?`<div class="note warn" style="margin-top:10px">${all.length} Termin${all.length>1?'e stehen':' steht'} nur im Lernplaner: ${esc(all.map(a=>a.title+' ('+a.lab+')').join(', '))}.<div class="row" style="margin-top:8px"><button class="btn sm primary" data-act="fammig">In den Familienplan übernehmen</button></div></div>`:''}
+    <details class="grp"><summary><h3 style="display:inline">Termin eintragen</h3></summary><form data-form="famappt"><label>Was<input name="title" required maxlength="60" placeholder="Handballtraining"></label>
+    <div class="sub" style="margin-top:6px">An welchen Tagen</div><div class="days5 wd7">${WDM.map((w,i)=>`<label class="dchk"><input type="checkbox" name="wd${i}"><span>${w}</span></label>`).join('')}</div>
+    <label>Oder einmalig am<input type="date" name="date" min="${T}"></label>
+    <div class="g2"><label>Beginn<input type="time" name="start" required value="17:00"></label><label>Ende<input type="time" name="end" value="18:30"></label></div>
+    <label>Wieder zu Hause um (optional)<input type="time" name="home"></label>
+    <label class="srow"><span>Pause in den Schulferien und an Feiertagen</span><input type="checkbox" class="tg" name="pf" checked></label>
+    <div class="row" style="margin-top:12px"><button class="btn">Termin speichern</button></div></form></details>
+    <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei. Gibt es „wieder zu Hause um“, gilt diese Uhrzeit als Ende.</div></div>`;
+  }else{  sec.einst+=`<div class="card"><h2>Feste Termine</h2>${all.map(a=>`<div class="li"><span class="grow">${esc(a.title)}<br><span class="sub">${a.lab}, ${a.start} bis ${a.end}</span></span><button class="btn sm danger" data-act="delappt" data-id="${a.id}">Löschen</button></div>`).join('')||'<div class="muted">Keine Termine.</div>'}
   <details class="grp"><summary><h3 style="display:inline">Termin hinzufügen</h3></summary>  <form data-form="appt"><label>Was<input name="title" required placeholder="Handballtraining"></label>
   <div class="g2"><label>Wann<select name="when">${[1,2,3,4,5,6,0].map(w=>`<option value="w${w}">jeden ${WDL[w]}</option>`).join('')}<option value="once">einmalig</option></select></label><label>Datum (nur bei einmalig)<input type="date" name="date"></label></div>
   <div class="g2"><label>Beginn<input type="time" name="start" required value="17:00"></label><label>Ende<input type="time" name="end" required value="18:30"></label></div>
   <div class="row" style="margin-top:12px"><button class="btn">Termin hinzufügen</button></div></form></details>
-  <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei (Fahrt, Umziehen, Essen).</div></div>`;
+  <div class="sub" style="margin-top:8px">Vor und nach jedem Termin hält der Plan ${st.buffer} Min. frei (Fahrt, Umziehen, Essen).${REMOTE?'<div class="note" style="margin-top:8px">Wählt unten bei „Lernplaner gehört zu“ euren Sohn aus. Dann nutzt der Lernplaner die Termine aus dem Familienplan.</div>':''}</div></div>`;
+  }
   const sr=(lab,inp,unit)=>`<label class="srow"><span>${lab}</span><span class="iv">${inp}${unit?`<em>${unit}</em>`:''}</span></label>`;
   const num=(n,v,mi,ma)=>`<input type="number" name="${n}" min="${mi}" max="${ma}" value="${v}">`;
   const tim=(n,v)=>`<input type="time" name="${n}" value="${v}">`;
@@ -1196,6 +1346,10 @@ function renderEltern(plan){
   ${sr('Länge der großen Pause',num('longPause',st.longPause,5,45),'Min.')}
   <label class="srow col"><span>Eigene Pausenideen<small>Eine pro Zeile, kommen zu den Vorschlägen dazu</small></span><textarea name="breakIdeas" rows="3" placeholder="Meerschweinchen füttern">${esc(st.breakIdeas||'')}</textarea></label>
   ${sr('Jahrgangsstufe',num('grade',st.grade||7,5,13),'. Klasse')}
+  <h3 class="sh">Lernmodus</h3>
+  ${tog('Lernmodus beim Anpfiff','focusMode',st.focusMode!==false,'Nur noch die aktuelle Aufgabe, Beenden mit PIN, Fokus-Tore')}
+  ${sr('Meldung an euch nach',num('awayAlert',st.awayAlert||5,2,30),'Min. außerhalb')}
+  ${tog('Abfrage durch Claude (Test)','quizOn',st.quizOn!==false,'Fragen zu jeder Prüfungs-Lerneinheit')}
   <h3 class="sh">Lernfrei</h3>
   ${tog('Sonntag','sundayFree',st.sundayFree)}
   ${tog('Ferien und Feiertage','holidaysFree',st.holidaysFree!==false)}
@@ -1223,6 +1377,10 @@ function renderEltern(plan){
 function render(){
   let ch=ensureDaily();
   if(evaluateDays())ch=true;
+  if(S.lm&&S.lm.on&&S.lm.date!==iso(today())){S.lm=Object.assign({},S.lm,{on:false});ch=true}
+  if(lmActive()&&toWin()===0){lmStop('Alles geschafft! Der Lernmodus ist beendet.');ch=true}
+  if(lmActive()){ui.tab='heute';ui.full=false;ui.day=0}
+  document.body.classList.toggle('lm',lmActive());
   const plan=simulate(),T=iso(today());
   if(!plan[0].free){const tot=plan[0].used+plan[0].over.reduce((a,o)=>a+o.P,0)+S.tasks.filter(t=>t.done&&t.doneAt===T).reduce((a,t)=>a+(t.planned||0),0);
     const cur=S.days[T]||{};if(!cur.planned||tot>cur.planned){S.days[T]=Object.assign({},cur,{planned:tot});ch=true}}
@@ -1233,7 +1391,7 @@ function render(){
   document.getElementById('today').textContent=WDL[today().getDay()]+', '+today().getDate()+'. '+['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][today().getMonth()];
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===ui.tab));
   document.getElementById('app').innerHTML=ui.tab==='heute'?renderHeute(plan):ui.tab==='woche'?renderWoche(plan):ui.tab==='pokale'?renderPokale():renderEltern(plan);
-  syncDot();
+  syncDot();keepAwake(lmActive());
   if(toastQ){const old=document.getElementById('toast');if(old)old.remove();
     const d=document.createElement('div');d.id='toast';d.innerHTML=`+${toastQ.n} ${toastQ.n===1?'Tor':'Tore'}<small>${esc(toastQ.why)}</small>`;
     document.body.appendChild(d);setTimeout(()=>d.remove(),2500);toastQ=null}
@@ -1247,22 +1405,34 @@ document.addEventListener('click',e=>{
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
     case'focus':ui.focus=id;ui.fb=null;window.scrollTo(0,0);break;
-    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins;S.kick[T]=hm(nowMin());if(w.length&&nowMin()<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
+    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins;S.kick[T]=hm(nowMin());lmStart();if(w.length&&nowMin()<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
     case'fbdur':ui.fbDur=b.dataset.v;break;
     case'fbfeel':ui.fbFeel=b.dataset.v;break;
     case'fbsave':finish(ui.fb);break;
     case'fbcancel':ui.fb=null;break;
-    case'start':S.running={id,at:Date.now()};if(!S.kick[iso(today())])S.kick[iso(today())]=hm(nowMin());save();break;
+    case'start':S.running={id,at:Date.now()};lmStart();if(!S.kick[iso(today())])S.kick[iso(today())]=hm(nowMin());save();break;
     case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d])delete S.wins[d];save()}break;
     case'rv':ui.rv[id]=Object.assign({},ui.rv[id],{[b.dataset.k]:b.dataset.v});break;
     case'rvsave':{const r=ui.rv[id]||{},e=S.exams.find(x=>x.id===id);if(!e)break;
       if(!r.feel||!r.prep){ui.msg='Bitte beide Fragen beantworten.';ui.msgType='err';break}
       S.results.push({id:uid(),examId:id,subject:e.subject,type:e.type,date:e.date,feel:r.feel,prep:r.prep});
       applyResult(e,r.feel,r.prep);award(PTS.review,'Spielanalyse');delete ui.rv[id];save();break}
-    case'brkend':ui.brk=null;break;
-    case'brknew':if(ui.brk)ui.brk.idea=breakIdea(ui.brk.long,Date.now());break;
+    case'brkend':S.brk=null;save();beam();break;
+    case'brknew':if(S.brk)S.brk=Object.assign({},S.brk,{idea:breakIdea(S.brk.long,Date.now())});save();break;
+    case'famdel':ui.ask=null;(async()=>{try{await famDelete(id);ui.msg='Termin gelöscht, auch im Familienplan.';ui.msgType='okn'}catch(e){ui.msg='Löschen hat nicht geklappt.';ui.msgType='err'}render()})();return;
+    case'fammig':(async()=>{try{const n=await famMigrate();save();ui.msg=n?`${n} Termin${n>1?'e':''} in den Familienplan übernommen.`:'Die Termine standen schon im Familienplan, die doppelten sind entfernt.';ui.msgType='okn'}catch(e){ui.msg='Übernehmen hat nicht geklappt.';ui.msgType='err'}render()})();return;
+    case'quiz':if(!t)break;if(t.quiz){ui.quiz={id,order:t.quiz.qs.map((_,i)=>i),pos:0,show:false,ok:0};break}if(!ui.busy)genQuiz(t,true);return;
+    case'qshow':if(ui.quiz)ui.quiz.show=true;break;
+    case'qok':quizStep(true);break;
+    case'qno':quizStep(false);break;
+    case'quizend':ui.quiz=null;break;
+    case'qdel':if(t&&t.quiz){t.quiz.qs.splice(+b.dataset.v,1);if(!t.quiz.qs.length)delete t.quiz;save()}break;
+    case'qnew':if(t&&!ui.busy){delete t.quiz;genQuiz(t,false)}return;
+    case'lmgo':lmStart();save();break;
+    case'lmendask':ui.lmEnd=!ui.lmEnd;break;
+    case'backok':ui.back=null;break;
     case'meet':S.meets[b.dataset.k]=iso(today());award(PTS.meet,'Mannschaftsbesprechung');save();break;
     case'toggleha':ui.addHA=!ui.addHA;ui.scanOpen=false;break;
     case'del':S.tasks=S.tasks.filter(x=>x.id!==id);save();break;
@@ -1312,6 +1482,14 @@ document.addEventListener('submit',e=>{
       tt.times=tt.times.map((tm,i)=>[v['s'+i]||tm[0],v['e'+i]||tm[1]]);tt.timesOk=true;
       tt.ab=!!v.ab;tt.refWeek=iso(monday(today()));tt.refType=v.ref==='A'?'A':'B';
       S.timetable=tt;ui.msg='Stundenplan-Einstellungen gespeichert.';ui.msgType='okn';break}
+    case'famappt':{const wds=[0,1,2,3,4,5,6].filter(i=>v['wd'+i]),title=(v.title||'').trim();
+      if(!title||!v.start){break}
+      if(!v.date&&!wds.length){ui.msg='Bitte Tage auswählen oder ein Datum für einen einmaligen Termin.';ui.msgType='err';break}
+      if(v.end&&toMin(v.end)<=toMin(v.start)){ui.msg='Das Ende muss nach dem Beginn liegen.';ui.msgType='err';break}
+      const row=famRow({title,start_time:v.start,end_time:v.end||null,home_time:v.home||null,pause_ferien:!!v.pf,
+        weekdays:v.date?[(parse(v.date).getDay()+6)%7]:wds,valid_from:v.date||null,valid_to:v.date||null});
+      (async()=>{try{await famSave([row]);ui.msg='Termin gespeichert, auch im Familienplan.';ui.msgType='okn'}catch(e){ui.msg='Speichern hat nicht geklappt.';ui.msgType='err'}render()})();return}
+    case'lmend':if(v.pin===String(S.settings.pin)){lmStop('Lernmodus beendet.');ui.lmEnd=false}else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'pin':if(v.pin===S.settings.pin)ui.unlocked=true;else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'ha':if(!v.title.trim())return;addHA(v.subject,v.title.trim(),v.due,v.est);ui.addHA=false;ui.msg='Hausaufgabe gespeichert und eingeplant.';break;
     case'scanok':{
@@ -1345,7 +1523,7 @@ document.addEventListener('submit',e=>{
     case'settings':{
       const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);
       st.afterSchool=+v.afterSchool||0;st.latest=v.latest||st.latest;st.weekendStart=v.weekendStart||st.weekendStart;
-      st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
+      st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.focusMode=!!v.focusMode;st.awayAlert=Math.min(30,Math.max(2,+v.awayAlert||5));st.quizOn=!!v.quizOn;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
       st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
       st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
       if(v.pin&&v.pin.trim())st.pin=v.pin.trim();
@@ -1379,15 +1557,18 @@ async function init(){
     if(!window.supabase)await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';sc.onload=res;sc.onerror=rej;document.head.append(sc)});
     sb=window.supabase.createClient(FCFG.supabaseUrl,FCFG.supabaseKey);
     const{data}=await sb.auth.getSession();
+    accessToken=(data&&data.session&&data.session.access_token)||'';
+    sb.auth.onAuthStateChange((ev,ses)=>{if(ses&&ses.access_token)accessToken=ses.access_token});
     if(!data||!data.session){authOk=false;if(!cached){document.getElementById('app').innerHTML='<div class="card"><h2>Bitte zuerst anmelden</h2><div class="sub">Der Lernplaner nutzt die Anmeldung des Familienplans. Öffne zuerst den Familienplan auf diesem Gerät und melde dich an.</div><div class="row" style="margin-top:12px"><a class="btn primary" href="index.html">Zum Familienplan</a></div></div>';return}}
   }catch(e){ui.sync='err';console.warn(e)}
   if(sb&&authOk){
     try{await pull(true,!cached)}catch(e){ui.sync='err';console.warn(e)}
-    try{const{data}=await sb.from('ep_persons').select('id,name,adult').order('sort');kids=(data||[]).filter(p=>!p.adult)}catch(e){}
+    try{const{data}=await sb.from('ep_persons').select('id,name,adult').order('sort');persons=data||[];kids=persons.filter(p=>!p.adult)}catch(e){}
+    await loadFam();
   }
   render();push();
-  const refresh=async()=>{if(ui.fb||ui.edit||document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
-    try{if(await pull(false))render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
+  const refresh=async()=>{if(ui.fb||ui.edit||ui.quiz||document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
+    try{const a=await pull(false),b=await loadFam();if(a||b)render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
   setInterval(refresh,45000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
 }

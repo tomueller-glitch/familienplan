@@ -27,3 +27,16 @@ console.log('16:15', lernMessages(lp2,persons,at('16:15')).filter(x=>x.key.start
 // Buß- und Bettag (18.11.2026): schulfrei, aber Lerntag. Anpfiff zur Wochenend-Startzeit 10:00.
 const bt=lpFromRows(rows.map(r=>r.id==='task:b'?{...r,data:{...r.data,date:'2026-11-18'}}:r));
 console.log('Bettag',lernMessages(bt,persons,Date.parse('2026-11-18T10:10:00+01:00')).map(x=>x.key));
+// Pause vorbei und Lernmodus (Dienstag 17.11.2026, 16:40)
+{
+  const now=Date.parse('2026-11-17T16:40:00+01:00');
+  const extra=[
+    {id:'brk',coll:'brk',data:{date:'2026-11-17',at:now-8*60000,until:now-2*60000,len:5,long:false}},
+    {id:'lm',coll:'lm',data:{date:'2026-11-17',on:true,since:now-60*60000,away:0,leaves:0,awayAt:now-14*60000}},
+  ];
+  const m=lernMessages(lpFromRows([...rows,...extra]),persons,now).filter(x=>/lp-(pause|weg)/.test(x.key));
+  console.log('Pause/Weg',m.map(x=>`${x.key.split(':')[0]} -> ${x.to.join(',')} | ${x.msg.body}`));
+  // Weg seit 7 Min., davon 6 Min. Pause: zählt nur 1 Min., keine Meldung
+  const extra2=[{id:'brk',coll:'brk',data:{date:'2026-11-17',at:now-7*60000,until:now-1*60000,len:6,long:true}},{id:'lm',coll:'lm',data:{date:'2026-11-17',on:true,since:now-3600000,away:0,leaves:0,awayAt:now-7*60000}}];
+  console.log('In der Pause raus',lernMessages(lpFromRows([...rows,...extra2]),persons,now).filter(x=>/lp-weg/.test(x.key)).length);
+}
