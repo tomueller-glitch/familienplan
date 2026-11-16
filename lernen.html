@@ -580,7 +580,8 @@ function alloc(cap,P,day){
   if(rem>0)return null;cap.splice(0,cap.length,...c.filter(w=>w[1]-w[0]>0));
   if(day){day.run=run;day.breaks.push(...brk)}return segs;
 }
-function simulate(){
+function simulate(opt){
+  opt=opt||{};
   const t0=today(),T=iso(t0),out=[],placed=new Set(),exD={};
   S.exams.forEach(e=>exD[e.id]=e.date);
   const open=S.tasks.filter(t=>!t.done&&!(t.examId&&(exD[t.examId]||'')<=T));
@@ -589,7 +590,7 @@ function simulate(){
   for(let i=0;i<14;i++){
     const d=addDays(t0,i),di=iso(d);
     let nx=addDays(d,1);if(isFree(nx))nx=addDays(nx,1);const nextWork=iso(nx);
-    const{wins,appts,free}=windowsFor(d,i===0),cap=wins.map(w=>w.slice()),lim=dayLimit(d),base=i===0?doneToday:0;
+    const{wins,appts,free}=windowsFor(d,i===0&&!opt.fullDay),cap=wins.map(w=>w.slice()),lim=dayLimit(d),base=i===0?doneToday:0;
     const day={date:di,appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim,max:dayMax(d),run:0,breaks:[]};
     const ha=open.filter(t=>t.kind==='ha'&&!placed.has(t.id));
     const urgent=ha.filter(t=>t.due<=nextWork).sort(byDue);
@@ -636,12 +637,13 @@ function award(n,why,taskId){
 function checksDone(di){if(!S.settings.checksOn)return true;const c=S.checks[di]||{};return CHECKS.every(([k])=>c[k])}
 function checkDayWin(){
   const T=iso(today());if(S.wins[T])return;
-  const day=simulate()[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
+  // Maßstab ist der ganze Tag ab Lernbeginn: Wer spät anfängt, bekommt den Rest nicht als „passt nicht mehr“ geschenkt.
+  const day=simulate({fullDay:true})[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
   if(!day.items.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;ui.msg='Tagessieg! Alles geschafft, was heute dran war.';ui.msgType='okn'}
 }
-function toWin(){const T=iso(today()),day=simulate()[0];if(S.wins[T]||day.free)return 0;
-  return queueOf(day).length+(S.settings.checksOn&&!checksDone(T)?1:0)}
+function toWin(){const T=iso(today()),day=simulate({fullDay:true})[0];if(S.wins[T]||day.free)return 0;
+  return day.items.length+(S.settings.checksOn&&!checksDone(T)?1:0)}
 function weekInfo(){
   const m=monday(today()),all=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
   const days=all.filter(d=>!isFree(parse(d)));
@@ -979,7 +981,7 @@ function renderFocus(plan){
   }
   let h=scoreboard(kick);
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
-  else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich (PIN 1234) Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
+  else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox();
   if(ui.brk&&ui.brk.until>Date.now())h+=`<div class="card pausek"><h2>${ui.brk.long?'Große Pause':'Bewegungspause'}: ${ui.brk.len} Min.</h2>
     <div class="pidea">${esc(ui.brk.idea)}</div><div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((ui.brk.until-Date.now())/60000)+nowMin())} Uhr.</div>
@@ -1214,7 +1216,7 @@ function renderEltern(plan){
   <div class="sub" style="margin-top:8px">${REMOTE?'Alles wird in der Datenbank des Familienplans gespeichert und auf allen Geräten abgeglichen. Den Stand seht ihr auch im Familienplan unter „Aufgaben“.':'Diese Version speichert nur in diesem Browser.'}</div></div>`;
   const cur=ui.esec||'ueb';
   const nav=[['ueb','Überblick',S.help.length],['ein','Eintragen',0],['schule','Schule',0],['einst','Optionen',0]];
-  return `<div class="seg">${nav.map(([k,l,n])=>`<button class="${cur===k?'on':''}" data-act="esec" data-v="${k}">${l}${n?` <span class="cnt">${n}</span>`:''}</button>`).join('')}</div>`+msgBox()+sec[cur];
+  return `<div class="seg">${nav.map(([k,l,n])=>`<button class="${cur===k?'on':''}" data-act="esec" data-v="${k}">${l}${n?` <span class="cnt">${n}</span>`:''}</button>`).join('')}</div>`+msgBox()+(String(S.settings.pin)==='1234'?`<div class="note warn">Die PIN ist noch 1234. Bitte unter „Optionen“ eine eigene PIN festlegen, sonst kommt euer Sohn in den Elternbereich.</div>`:'')+sec[cur];
 }
 
 /* ===== Rendern ===== */
