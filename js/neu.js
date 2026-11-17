@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-18a', datum: '18. November', titel: 'Push-Nachrichten: Fehler „BadWebPushTopic“ behoben',
+    punkte: [
+      { text: 'Apple hat manche Nachrichten wegen einer ungültigen Kennung abgelehnt (abgelehnt, Status 400, BadWebPushTopic), etwa „Aufgabe erledigt“, die Tonne oder neue Einträge auf der Einkaufsliste. Die Kennung ist jetzt immer gültig.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-17d', datum: '17. November, abends', titel: 'Müll-Ampel und „Was ist neu?“',
     punkte: [
       { text: 'Unter „Aufgaben“ gibt es eine Ampel für Plastikmüll und Restmüll in der Küche. Grün heißt noch Platz, Gelb fast voll, Rot voll.' },

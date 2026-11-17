@@ -136,6 +136,15 @@ async function makeVapidHeader(origin: string, vapid: Vapid, nowSec: number): Pr
   return `vapid t=${head}.${claims}.${b64u(sig)}, k=${vapid.publicKey}`;
 }
 
+// Topic-Kopfzeile: Apple prüft sie als gültiges Base64url (Länge darf nicht 4n+1 sein) mit höchstens 32 Zeichen.
+// Kennzeichen wie "offen", "tonne" oder "liste-neu" wurden deshalb mit BadWebPushTopic abgelehnt.
+// Darum aus dem Kennzeichen einen festen Wert mit genau 32 Zeichen bilden: gleiches Kennzeichen, gleiches Topic,
+// eine neuere Nachricht ersetzt also weiterhin die ältere.
+export async function pushTopic(tag: string): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(tag)));
+  return b64u(h.slice(0, 24));
+}
+
 // Schickt eine Nachricht an ein Gerät. Liefert den HTTP-Status des Push-Dienstes.
 export async function sendPush(sub: Sub, msg: Message, vapid: Vapid, ttl = 86400): Promise<number> {
   return (await sendPushDetailed(sub, msg, vapid, ttl)).status;
@@ -152,7 +161,7 @@ export async function sendPushDetailed(sub: Sub, msg: Message, vapid: Vapid, ttl
       TTL: String(ttl),
       // „high“: Apple stellt sonst im Stromsparmodus verzögert oder gar nicht zu.
       Urgency: 'high',
-      ...(msg.tag ? { Topic: msg.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) } : {}),
+      ...(msg.tag ? { Topic: await pushTopic(msg.tag) } : {}),
     },
     body: ab(body),
   });
