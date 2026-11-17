@@ -34,7 +34,10 @@ Deno.serve(async (req) => {
   const content = [
     ...images
       .filter((i) => i && typeof i.data === 'string' && i.data.length < 8_000_000)
-      .map((i) => ({ type: 'image', source: { type: 'base64', media_type: /^image\/(png|jpeg|gif|webp)$/.test(i.type || '') ? i.type : 'image/jpeg', data: i.data } })),
+      // PDF (zum Beispiel ein Inhaltsverzeichnis als Datei) geht als Dokument an Claude, alles andere als Bild.
+      .map((i) => i.type === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: i.data } }
+        : { type: 'image', source: { type: 'base64', media_type: /^image\/(png|jpeg|gif|webp)$/.test(i.type || '') ? i.type : 'image/jpeg', data: i.data } }),
     { type: 'text', text: prompt },
   ];
   // Mit web: true darf Claude im Lehrplan und bei den Schulbuchverlagen nachsehen (Websuche der Claude-API).
