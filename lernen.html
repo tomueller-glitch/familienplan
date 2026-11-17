@@ -535,14 +535,38 @@ function syncDot(){const el=document.getElementById('sync');if(!el)return;el.cla
 
 /* ===== Aufgaben ===== */
 function addHA(subject,title,due,est){S.tasks.push({id:uid(),kind:'ha',subject,title,due,est:+est,done:false,created:iso(today())})}
-const LANG=['Latein','Englisch','Deutsch'];
-function stepTitles(subject,type,n){
+// Grundschritte, solange Claude die Lernschritte noch nicht angepasst hat. Je Fachgruppe passend, mit dem Thema im Text.
+// Die letzte Zeile ist immer die kurze Wiederholung am Vortag.
+const LANG=['Latein','Englisch','Französisch','Spanisch','Italienisch','Griechisch'];
+const RECHNEN=['Mathe','Physik','Chemie'];
+const OLD_STEPS=new Set(['Überblick: neue Vokabeln und Grammatik raussuchen, Lernkarten schreiben','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik: 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen','Überblick: Hefteinträge lesen, dann ohne Heft die 5 wichtigsten Punkte aufschreiben','Üben: 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Lernkarten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Lernkarten durchgehen, Tasche packen']);
+function stepPool(subject,topic){
+  const th=topic?` zu ${topic}`:'',zu=topic?` (${topic})`:'';
+  if(LANG.includes(subject))return['Überblick: neue Vokabeln und Grammatik'+th+' raussuchen, Lernkarten schreiben','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik'+zu+': 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen'];
+  if(subject==='Deutsch')return['Überblick: Hefteinträge und Merkkästen'+th+' lesen, Regeln auf Karten schreiben','Übung'+zu+': 2 Übungen aus dem Buch schriftlich lösen','Eigenen kurzen Text oder Übung schreiben, mit den Merkkästen prüfen','Fehler von gestern verbessern, Regeln laut erklären','Probetest: eine Übung in der echten Prüfungszeit schreiben','Wiederholen: Regelkarten durchgehen, Tasche packen'];
+  if(RECHNEN.includes(subject))return['Überblick: Hefteinträge'+th+' lesen, dann ohne Heft die 5 wichtigsten Punkte aufschreiben','Üben'+zu+': 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Formeln auf Karten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Formelkarten durchgehen, Tasche packen'];
+  const extra={Musik:'Hörbeispiele'+th+' anhören und zu jedem 3 Merkmale notieren',Geschichte:'Zeitleiste'+th+' mit den wichtigsten Jahreszahlen zeichnen',Geographie:'Stumme Karte'+th+': Orte und Begriffe eintragen',Kunst:'Fachbegriffe'+th+' an einem Bild aus dem Buch erklären',Biologie:'Skizze'+th+' aus dem Kopf zeichnen und beschriften'}[subject]||(topic?`${topic} in eigenen Worten Mama oder Papa erklären`:'Das Thema in eigenen Worten Mama oder Papa erklären');
+  return['Überblick: Hefteinträge'+th+' lesen, dann ohne Heft die 5 wichtigsten Punkte aufschreiben','Lernkarten: Fachbegriffe und Fakten'+th+' auf Karteikarten schreiben',extra,'Karten abfragen, falsche zur Seite legen und nochmal','Probetest: Fragen aus dem Heft ohne Hilfe schriftlich beantworten','Wiederholen: nur die schweren Karten, Tasche packen'];
+}
+function stepTitles(subject,type,n,topic){
   if(type==='Referat'){const r=['Material sammeln: 3 gute Quellen finden und Stichpunkte machen','Gliederung schreiben: Einleitung, 3 Hauptpunkte, Schluss','Plakat oder Folien gestalten','Vortrag einmal laut für dich üben, Zeit stoppen','Generalprobe: Vortrag vor Mama oder Papa halten'];return Array.from({length:n},(_,i)=>r[Math.round(i*(r.length-1)/Math.max(1,n-1))])}
-  const g=LANG.includes(subject)
-    ?['Überblick: neue Vokabeln und Grammatik raussuchen, Lernkarten schreiben','20 Vokabeln mit dem Vokabelkasten abfragen','Grammatik: 5 Übungssätze übersetzen oder bilden','Falsche Vokabeln nochmal, dann laut abfragen lassen','Probetest: Mama oder Papa fragt 20 Vokabeln und 5 Sätze ab','Wiederholen: nur die schweren Karten durchgehen']
-    :['Überblick: Hefteinträge lesen, dann ohne Heft die 5 wichtigsten Punkte aufschreiben','Üben: 5 Aufgaben aus Buch oder Arbeitsblatt rechnen','Üben: 5 weitere Aufgaben, Fehler rot markieren','Fehler von gestern nochmal machen und Lernkarten schreiben','Probetest: Übungsblatt in der echten Prüfungszeit bearbeiten','Wiederholen: Lernkarten durchgehen, Tasche packen'];
+  const g=stepPool(subject,topic);
   if(n===1)return[g[5]];
-  return Array.from({length:n},(_,i)=>i===n-1?g[5]:n<=3?g[[1,4][i]]:g[Math.round(i*4/(n-2))]);
+  if(n<=3)return Array.from({length:n},(_,i)=>i===n-1?g[5]:g[[1,4][i]]);
+  // Wichtigste zuerst auswählen (Probetest, Überblick, Lernen, Fachübung, Abfragen), dann in Lernreihenfolge bringen.
+  const pick=[4,0,1,2,3,3,1,3].slice(0,n-1).sort((a,b)=>a-b);
+  return pick.map(k=>g[k]).concat(g[5]);
+}
+// Ältere Prüfungen, die Claude nie angepasst hat, bekommen statt der alten Rechen-Schritte die fachgerechten Grundschritte.
+function fixGenericSteps(){
+  let ch=false;
+  S.exams.forEach(ex=>{
+    if(ex.ai==='ok'||ex.lp||(ex.focus&&ex.focus.length))return;
+    const ts=S.tasks.filter(t=>t.examId===ex.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const titles=stepTitles(ex.subject,ex.type,ts.length,ex.topic);
+    ts.forEach((t,i)=>{if(!t.done&&!t.sheet&&OLD_STEPS.has(t.title)&&titles[i]&&titles[i]!==t.title){t.title=titles[i];ch=true}});
+  });
+  return ch;
 }
 // Lernzeit pro Tag (Hausaufgaben, Lernen, Ludus zusammen). Grundlage: NRW-Richtwert 60 Min. für Klasse 5 bis 7,
 // Cooper (10 Min. pro Klassenstufe), Fernández-Alonso u. a. 2015 (Optimum 60 bis 70 Min., über 90 Min. kein Gewinn).
@@ -575,7 +599,7 @@ function planExam(ex,opt){
     let pick=unused.find(d=>ld(d)+min<=dayLimit(d))||unused.sort((a,b)=>ld(a)-ld(b))[0]||all.sort((a,b)=>ld(a)-ld(b))[0]||parse(di<t0?t0:di);
     const pi=iso(pick);byDay[pi]=(byDay[pi]||0)+min;load[pi]=ld(pick)+min;
   });
-  const keys=Object.keys(byDay).sort(),titles=stepTitles(subject,type,keys.length);
+  const keys=Object.keys(byDay).sort(),titles=stepTitles(subject,type,keys.length,topic);
   // Übungsblatt (von den Eltern mit Claude erstellt) in der Übungsphase: vorletzte Einheit, bei nur zwei Einheiten die erste.
   const sheetAt=opt.sheet?(keys.length>=3?keys.length-2:0):-1;
   keys.forEach((di,i)=>S.tasks.push(Object.assign({id:uid(),kind:'lern',examId:id,subject,title:titles[i],date:di,est:Math.min(byDay[di],45),part:i+1,parts:keys.length,done:false},
@@ -1003,6 +1027,31 @@ function lessonContext(ex){
   return `\nUnterrichtsinhalte laut Klassenbuch${prev?' seit der letzten Prüfung am '+fmt(prev):''} (älteste zuerst):\n`+ls.map(l=>`${fmt(l.date)}: ${l.content}`).join('\n').slice(-3000)+
     `\nNutze diese Inhalte, um genau festzulegen, was drankommt. Was zuletzt im Unterricht war, ist besonders wahrscheinlich.`;
 }
+// Was in einem Fach typischerweise geprüft wird und wie man es lernt. Damit Claude keine Rechenaufgaben für Musik plant.
+const FACH_HINWEIS={
+  Mathe:'Mathe: Aufgaben selbst rechnen ist der Kern. Nenne Aufgabentypen und Buchseiten, zum Beispiel Terme vereinfachen oder Gleichungen lösen.',
+  Physik:'Physik: Fachbegriffe und Einheiten, Formeln anwenden, Versuche beschreiben und erklären, kurze Rechenaufgaben.',
+  Chemie:'Chemie: Fachbegriffe, Stoffeigenschaften, Versuche beschreiben und deuten, Reaktionsschemata.',
+  'Natur und Technik':'Natur und Technik: Fachbegriffe, Skizzen beschriften, Versuche beschreiben und erklären. Rechnen nur, wenn das Thema es verlangt.',
+  Biologie:'Biologie: Fachbegriffe, Skizzen aus dem Kopf zeichnen und beschriften, Abläufe in eigenen Worten erklären, Zusammenhänge begründen. Kein Rechnen.',
+  Geschichte:'Geschichte: Jahreszahlen und Ereignisse auf einer Zeitleiste, Fachbegriffe, Ursachen und Folgen erklären, Quellen und Bilder beschreiben. Kein Rechnen.',
+  Geographie:'Geographie: Orte auf der stummen Karte, Fachbegriffe, Zusammenhänge mit Karten und Diagrammen erklären. Kein Rechnen.',
+  Musik:'Musik: kein Rechnen. Typisch sind Fachbegriffe, Komponisten mit Lebensdaten, Epoche und wichtigsten Werken, Hörbeispiele erkennen und beschreiben (Besetzung, Tempo, Dynamik, Form), Notenlehre nur wenn sie zum Thema gehört.',
+  Kunst:'Kunst: Fachbegriffe, Künstler und Epochen, Bilder beschreiben und deuten. Kein Rechnen.',
+  Wirtschaft:'Wirtschaft: Fachbegriffe, Abläufe mit Beispielen aus dem Alltag erklären, Schaubilder lesen.',
+  'Religion/Ethik':'Religion oder Ethik: Begriffe, Geschichten und Personen, eigene begründete Meinung formulieren. Kein Rechnen.',
+  Deutsch:'Deutsch: je nach Thema Grammatik und Rechtschreibung üben oder einen Text schreiben (Aufbau, Merkmale der Textsorte), mit Musterlösung vergleichen.',
+};
+function fachHinweis(subject){return FACH_HINWEIS[subject]||(LANG.includes(subject)?`${subject}: Vokabeln und Grammatik der Lektionen, Übersetzen, Formen bilden.`:`${subject}: Fachbegriffe und Inhalte des Themas aktiv abfragen und erklären. Rechnen nur, wenn das Fach es verlangt.`)}
+function examMsg(id,text,type){ui.exMsg={id,text,type}}
+const examRefined=e=>e.ai==='ok'||!!e.lp||!!(e.focus&&e.focus.length);
+function examStatus(e,ts){
+  const m=ui.exMsg&&ui.exMsg.id===e.id?`<div class="note ${ui.exMsg.type||''}" style="margin-top:6px">${esc(ui.exMsg.text)}</div>`:'';
+  if(ui.busy===e.id)return`<div class="note" style="margin-top:6px">Claude gleicht Thema, Lehrplan und Buch ab und plant die Schritte. Das dauert bis zu einer Minute.</div>`;
+  if(m)return m;
+  if(examRefined(e)||!ts.some(t=>!t.done))return'';
+  return`<div class="note warn" style="margin-top:6px">Die Lernschritte sind noch allgemein.${e.aiErr?' Letzter Versuch: '+esc(e.aiErr):''} Mit „Mit Claude planen“ werden sie auf Thema, Jahrgangsstufe und Lehrplan zugeschnitten.</div>`;
+}
 async function refineExam(id){
   const ex=S.exams.find(e=>e.id===id);if(!ex||!AI_OK())return;
   const ts=S.tasks.filter(t=>t.examId===id&&!t.done).sort((a,b)=>a.date.localeCompare(b.date));if(!ts.length)return;
@@ -1010,23 +1059,32 @@ async function refineExam(id){
   const grade=+S.settings.grade||7;
   ui.busy=id;render();
   try{
-    const prompt=`Ein Schüler der ${grade}. Klasse an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${bookContext(ex.subject)}${lessonContext(ex)}
+    const prompt=`Ein Schüler der ${grade}. Jahrgangsstufe an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${bookContext(ex.subject)}${lessonContext(ex)}
+Fachtypisch: ${fachHinweis(ex.subject)}
 
 Schritt 1, Lehrplan: Prüfe im LehrplanPLUS Gymnasium Bayern (lehrplanplus.bayern.de), Fach ${ex.subject}, Jahrgangsstufe ${grade}, zu welchem Lernbereich das Thema gehört und welche Kompetenzen und Inhalte dort verlangt werden. Gleiche das mit dem Lehrwerk ab: welche Lektionen oder Kapitel passen dazu. Wenn das Thema nur Seitenzahlen nennt, leite den Inhalt aus dem Inhaltsverzeichnis ab. Wenn du etwas nicht sicher weißt, sag das knapp und erfinde keine Seitenzahlen.
-Schritt 2, Schwerpunkte: Nenne die 2 bis 4 Inhalte, die für diese Prüfung am wichtigsten sind, also das, was typischerweise abgefragt wird und worauf der Rest aufbaut.
+Schritt 2, Schwerpunkte: Nenne die 2 bis 4 Inhalte, die für diese Prüfung in dieser Jahrgangsstufe am wichtigsten sind, also das, was typischerweise abgefragt wird und worauf der Rest aufbaut. Bei Personen und Werken: die konkreten Fakten, Werke oder Begriffe nennen.
 Schritt 3, Lernschritte: Plane ${ts.length} Lerneinheiten in dieser Reihenfolge und mit diesen Längen: ${ts.map((t,i)=>`${i+1}. ${fmt(t.date)}, ${planMin(t)} Minuten${t.sheet?' (Übungsblatt der Eltern, Auftrag bleibt so)':''}`).join('; ')}.
-Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Aufgaben ohne Lösung lösen, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Jede Einheit beginnt mit 2 bis 3 Minuten Abfragen vom letzten Mal. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
-Jeder Auftrag ist ein kurzer Satz (höchstens 90 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Aufgabe aus dem Lehrwerk. Einfache Sprache, keine Gedankenstriche.
-Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem Satz","schwerpunkte":["..."],"schritte":["...","..."]}`;
+Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Fragen ohne Hilfe beantworten, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
+Jeder Auftrag nennt den konkreten Inhalt dieses Themas, nicht nur eine Methode. Gut für ein Musik-Thema Beethoven wäre etwa: „Lebensstationen Beethovens auf 6 Karteikarten: Bonn, Wien, Taubheit, 1827“ oder „5. Sinfonie anhören: Anfangsmotiv, Besetzung, Tempo notieren“. Schlecht wären allgemeine Aufträge wie „5 Aufgaben aus dem Buch rechnen“ oder „Lernkarten durchgehen“ ohne Inhalt. Nur Aufgaben, die zum Fach passen.
+Jeder Auftrag ist ein kurzer Satz (höchstens 100 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Aufgabe aus dem Lehrwerk. Einfache Sprache, keine Gedankenstriche.
+Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem Satz","schwerpunkte":["..."],"schritte":["...","..."]} mit genau ${ts.length} Einträgen in "schritte".`;
     // Erst mit Lehrplan-Suche; klappt das nicht, ohne Suche aus Claudes eigenem Wissen.
     let res,noWeb=false;
-    try{res=await aiJSON(prompt,null,{web:true})}catch(e){if(e&&e.code==='rate_limited')throw e;noWeb=true;res=await aiJSON(prompt.replace('Prüfe im LehrplanPLUS','Ordne nach deinem Wissen über den LehrplanPLUS ein'))}
-    const steps=(res&&res.schritte)||(Array.isArray(res)?res:[]);
+    const plain=()=>aiJSON(prompt.replace('Prüfe im LehrplanPLUS','Ordne nach deinem Wissen über den LehrplanPLUS ein'));
+    try{res=await aiJSON(prompt,null,{web:true})}catch(e){if(e&&e.code==='rate_limited')throw e;noWeb=true;res=await plain()}
+    let steps=(res&&res.schritte)||(Array.isArray(res)?res:[]);
+    // Kam mit Websuche nichts Brauchbares, einmal ohne Suche nachfragen.
+    if(!steps.filter(x=>String(x||'').trim()).length&&!noWeb){noWeb=true;res=await plain();steps=(res&&res.schritte)||(Array.isArray(res)?res:[])}
+    if(!steps.filter(x=>String(x||'').trim()).length)throw{code:'parse'};
     ts.forEach((t,i)=>{if(!t.sheet&&steps[i]&&String(steps[i]).trim())t.title=String(steps[i]).trim().slice(0,120)});
     if(res&&res.lehrplan)ex.lp=String(res.lehrplan).slice(0,300);
     if(res&&Array.isArray(res.schwerpunkte))ex.focus=res.schwerpunkte.map(x=>String(x).trim().slice(0,80)).filter(Boolean).slice(0,4);
-    ui.msg=(noWeb?'Die Lehrplan-Suche war gerade nicht erreichbar, Claude hat aus eigenem Wissen eingeordnet. ':'')+'Thema mit Lehrplan und Lehrwerk abgeglichen. Die Lernschritte sind jetzt konkreter und lassen sich unter „Offene Aufgaben“ noch ändern.';ui.msgType='okn';save();
-  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+    ex.ai='ok';ex.aiErr='';
+    const txt=(noWeb?'Die Lehrplan-Suche war gerade nicht erreichbar, Claude hat aus eigenem Wissen eingeordnet. ':'')+'Thema mit Lehrplan und Lehrwerk abgeglichen. Die Lernschritte sind jetzt konkreter und lassen sich unter „Offene Aufgaben“ noch ändern.';
+    // Oben nur, wenn die Prüfungsliste gerade nicht zu sehen ist; sonst steht die Meldung direkt bei der Prüfung.
+    if(ui.esec!=='schule'){ui.msg=txt;ui.msgType='okn'}examMsg(id,txt,'okn');save();
+  }catch(e){ex.ai='fehler';ex.aiErr=aiError(e);if(ui.esec!=='schule'){ui.msg=ex.aiErr+' Unter „Schule“ bei der Prüfung lässt es sich neu versuchen.';ui.msgType='err'}examMsg(id,ex.aiErr,'err');save()}
   ui.busy=null;render();
 }
 // Rückmeldung direkt beim Buch, nicht oben auf der Seite (dort war sie beim Lehrwerk nicht zu sehen).
@@ -1518,7 +1576,7 @@ function renderEltern(plan){
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
   const delBtn=(act,id)=>ui.ask===act+id?`<button class="btn sm danger" data-act="${act}" data-id="${id}">Wirklich löschen</button><button class="btn sm" data-act="askx">Nein</button>`:`<button class="btn sm danger" data-act="ask" data-v="${act}" data-id="${id}">Löschen</button>`;
-  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}</span><span class="acts">${AI_OK()?`<button class="btn sm" data-act="refine" data-id="${e.id}">${ui.busy===e.id?'Moment …':'Schritte von Claude'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${quizInfo(ts)}${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}${examStatus(e,ts)}</span><span class="acts">${AI_OK()?`<button class="btn sm${examRefined(e)||!ts.some(t=>!t.done)?'':' primary'}" data-act="refine" data-id="${e.id}"${ui.busy===e.id?' disabled':''}>${ui.busy===e.id?'Claude plant …':examRefined(e)?'Neu planen':'Mit Claude planen'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${quizInfo(ts)}${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
   ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
   const open=S.tasks.filter(t=>!t.done&&(t.kind!=='daily'||t.date===T)).sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
   sec.schule+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
@@ -1611,6 +1669,7 @@ function renderEltern(plan){
 /* ===== Rendern ===== */
 function render(){
   let ch=ensureDaily();
+  if(fixGenericSteps())ch=true;
   if(evaluateDays())ch=true;
   if(S.lm&&S.lm.on&&S.lm.date!==iso(today())){S.lm=Object.assign({},S.lm,{on:false});ch=true}
   if(lmActive()&&toWin()===0){lmStop('Alles geschafft! Der Lernmodus ist beendet.');ch=true}
@@ -1832,6 +1891,10 @@ async function init(){
 // sein als alle bisherigen. eltern:1 zeigt einen Punkt nur auf den Geräten der Eltern.
 const NEWS_KEY='lp-neu-gesehen';
 const NEUES=[
+  {id:'2026-11-18b',datum:'18. November',titel:'Lernschritte passen besser zum Fach',punkte:[
+    {t:'Die Lernschritte für Prüfungen passen jetzt zum Fach: Rechnen nur in Mathe, Physik und Chemie, in Musik, Geschichte oder Biologie zum Beispiel Lernkarten, Hörbeispiele, Zeitleiste oder Skizzen. Das Thema steht direkt im Auftrag.'},
+    {t:'Claude bekommt für jedes Fach einen Hinweis, was dort typischerweise geprüft wird, und soll in jedem Schritt den konkreten Inhalt nennen, also Werke, Begriffe oder Buchseiten statt allgemeiner Methoden.',eltern:1},
+    {t:'Bei jeder Prüfung unter Eltern, Schule steht jetzt, ob Claude die Schritte angepasst hat. Wenn nicht, steht dort der Grund und der Knopf „Mit Claude planen“.',eltern:1}]},
   {id:'2026-11-18a',datum:'18. November',titel:'Inhaltsverzeichnis auch als PDF',punkte:[
     {t:'Unter Eltern, Schule, Lehrwerke lässt sich das Inhaltsverzeichnis eines Schulbuchs jetzt auch als PDF einlesen, nicht nur als Foto. Das PDF darf bis zu 5 MB groß sein.',eltern:1},
     {t:'Die Rückmeldung beim Einlesen steht jetzt direkt beim Buch. Das Inhaltsverzeichnis lässt sich dort auch ansehen, korrigieren oder als Text einfügen.',eltern:1}]},
