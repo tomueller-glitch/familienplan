@@ -860,3 +860,9 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .km-abstand { margin-top: 24px; }
 @media (max-width: 360px) { .km-ampel.knoepfe .km-l { width: 32px; height: 32px; } }
 @media (prefers-reduced-motion: reduce) { .km-ampel.knoepfe .km-l { transition: none; } }
+
+/* Was ist neu? */
+.neu-eintrag { margin-bottom: 18px; }
+.neu-eintrag .abteilung { margin-bottom: 0; }
+.neu-eintrag .meta { margin: 2px 0 8px; }
+.neu-eintrag ul { margin: 0; padding-left: 20px; list-style: disc; display: grid; gap: 8px; line-height: 1.45; }

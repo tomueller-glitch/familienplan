@@ -8,7 +8,7 @@ const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 const SHELL = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest', 'icons/haus-192.png',
   'js/config.js', 'js/app.js', 'js/logic.js', 'js/store.js', 'js/seed.js', 'js/ferien.js', 'js/abfuhr.js',
-  'js/aufgaben.js', 'js/termine.js', 'js/push.js', 'js/naehrwerte.js', 'js/planer.js', 'js/haushalt.js', 'js/packungen.js',
+  'js/aufgaben.js', 'js/termine.js', 'js/push.js', 'js/naehrwerte.js', 'js/planer.js', 'js/haushalt.js', 'js/packungen.js', 'js/neu.js',
   // Lernplaner: gehört dazu, damit neue Fassungen auch dort ankommen.
   'lernen.html', 'lernen.webmanifest', 'icons/lernen-192.png',
 ];

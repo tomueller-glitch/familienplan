@@ -11,10 +11,12 @@ import * as N from './naehrwerte.js';
 import * as KI from './planer.js';
 import * as HB from './haushalt.js';
 import * as P from './packungen.js';
+import * as NEU from './neu.js';
 
 const store = createStore(window.ESSENSPLAN_CONFIG);
 const ME_KEY = 'essensplan.ich';
 const TESTDAY_KEY = 'essensplan.testdatum';
+const NEWS_KEY = 'essensplan.neu-gesehen';
 if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
@@ -220,6 +222,27 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* ---------- Was ist neu? ---------- */
+
+// Nach einem Update einmal pro Gerät zeigen, was dazugekommen ist (Liste in js/neu.js).
+// Im Testmodus nicht, damit das Fenster keinen Ablauf blockiert. Aus der Hilfe lässt es sich jederzeit öffnen.
+function showNews() {
+  if (state.phase !== 'app' || state.sheet || globalThis.ESSENSPLAN_HEUTE) return;
+  const list = NEU.forAudience(NEU.unseen(NEU.NEUES, readLocal(NEWS_KEY), Date.now()), canPlan());
+  writeLocal(NEWS_KEY, NEU.newest(NEU.NEUES));
+  if (list.length) openSheet({ type: 'neu', list });
+}
+function sheetNews(sh) {
+  const list = sh.list || NEU.forAudience(NEU.NEUES, canPlan());
+  return {
+    over: sh.list ? 'Update' : 'Hilfe',
+    title: 'Was ist neu?',
+    body: `${list.map((n) => `<section class="neu-eintrag"><h3 class="abteilung">${esc(n.titel)}</h3><p class="meta">${esc(n.datum)}</p>
+      <ul>${n.punkte.map((p) => `<li>${esc(p.text)}</li>`).join('')}</ul></section>`).join('')}
+      <div class="knopfreihe"><button class="knopf" data-action="zu">Alles klar</button></div>`,
+  };
+}
+
 async function boot() {
   render();
   Push.register();
@@ -278,6 +301,7 @@ async function enter() {
   carryOver();
   refresh();
   initPush();
+  setTimeout(showNews, 800);
   loadSchool().then((ok) => { if (ok && state.phase === 'app') render(); });
   if (!listening) {
     listening = true;
@@ -2595,7 +2619,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3222,7 +3246,7 @@ const HELP_ADULTS = [
   ['Notizen fürs nächste Mal', 'Unter jedem Rezept und am Ende des Kochmodus steht „Notiz fürs nächste Mal“, zum Beispiel „Möhren zu den Erbsen“ oder „Senfsoße dazu“. Die Notiz erscheint beim nächsten Mal im Rezept und am Anfang des Kochmodus, und Claude berücksichtigt sie beim Planen und Einkaufen.'],
   ['Schultage und Kinder-Sperre', 'Bei jeder Aufgabe lässt sich „Nur an Schultagen“ anhaken, dann ruht sie am Wochenende, in den Ferien und an Feiertagen. Im Familie-Fenster sorgt „Kinder wechseln nur mit PIN“ dafür, dass ein Kind nicht ohne die PIN von Mama oder Papa zum anderen Kind wechseln kann.'],
   ['Packungsgrößen', 'Gibt es etwas im Markt nur in einer anderen Größe, im Einkaufsmodus auf „fehlt“ und dann „Andere Größe“ tippen, oder unten bei „Liste“ auf „Packungsgrößen“. Die App fragt dann, ob das Rezept auf 1 oder 2 Packungen umgerechnet wird oder bleibt (der Rest kommt auf „Was muss weg?“). Größen vom Kassenzettel lernt sie von selbst, und Claude plant künftig mit ganzen Packungen.'],
-  ['Updates', 'Gibt es eine neue Fassung der App, erscheint unten „Neue Version der App. Tippen zum Laden.“ Ein Tipp genügt.'],
+  ['Updates', 'Gibt es eine neue Fassung der App, erscheint unten „Neue Version der App. Tippen zum Laden.“ Ein Tipp genügt. Danach zeigt ein Fenster einmal, was neu ist. Unten in dieser Hilfe öffnet „Was ist neu?“ die Liste jederzeit.'],
   ['Müllabfuhr', 'Die Abholtermine stehen in der App. Gehen sie zu Ende, erscheint ein Hinweis. Dann auf abfuhrkalender.ceb-coburg.de die Kalenderdatei (.ics) für eure Straße laden und im Familie-Fenster oder unter „Aufgaben“ hochladen.'],
   ['Kosten, Saison und Festtage', 'Unter der Woche stehen die geschätzten Kosten der geplanten Abendessen und was vom Monatsbudget übrig ist. In der Einkaufsliste markiert „Saison“ Obst und Gemüse aus der Region, das lässt sich in den Regeln für Claude abschalten. Unter „Festtage“ lässt sich ein Fest vom letzten Jahr mit einem Tipp wieder übernehmen.'],
 ];
@@ -3237,7 +3261,7 @@ function sheetHelp() {
       ? `<h3 class="abteilung">Für dich</h3>${sec(HELP_KIDS, true)}<h3 class="abteilung">Was Mama und Papa machen</h3>${sec(HELP_ADULTS, false)}`
       : `<h3 class="abteilung">Für Eltern</h3>${sec(HELP_ADULTS, true)}<h3 class="abteilung">Was die Kinder sehen</h3>${sec(HELP_KIDS, false)}`)
       + `<div class="kasten-text" style="margin-top:16px"><strong>Fehlt etwas oder nervt etwas?</strong>Schreib es auf den Wunschzettel für die App.
-        <div class="knopfreihe" style="margin-top:8px"><button class="knopf zweit klein" data-action="app-wuensche">Wunschzettel öffnen${appWishes().filter((w) => !w.done).length ? ` (${appWishes().filter((w) => !w.done).length})` : ''}</button></div></div>`,
+        <div class="knopfreihe" style="margin-top:8px"><button class="knopf zweit klein" data-action="neu-zeigen">Was ist neu?</button><button class="knopf zweit klein" data-action="app-wuensche">Wunschzettel öffnen${appWishes().filter((w) => !w.done).length ? ` (${appWishes().filter((w) => !w.done).length})` : ''}</button></div></div>`,
   };
 }
 
@@ -4003,6 +4027,7 @@ const actions = {
     window.scrollTo(0, 0);
   },
   'app-wuensche': () => openSheet({ type: 'app-wuensche' }),
+  'neu-zeigen': () => openSheet({ type: 'neu' }),
   'app-wunsch-erledigt': ({ id }) => { saveAppWishes(appWishes().map((w) => (w.id === id ? { ...w, done: !w.done } : w))); renderSheet(); },
   'app-wunsch-weg': ({ id }) => {
     const w = appWishes().find((x) => x.id === id);
@@ -4392,6 +4417,7 @@ const actions = {
     render();
     refreshPush(true);
     if (state.fresh) runPending();
+    setTimeout(showNews, 600);
   }),
   'brotbox-stern': ({ day, n }) => rateLunch(day, Number(n)),
   termine: () => openSheet({ type: 'termine' }),

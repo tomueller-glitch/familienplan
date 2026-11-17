@@ -87,6 +87,13 @@ h2+.li,.sub+.li,.card>.li:first-child{border-top:0}
 .day.on{background:var(--tinte);color:var(--blatt);border-color:var(--tinte)}
 .day small{display:block;font-size:12px;font-weight:400;opacity:.8}
 .item{display:flex;gap:12px;align-items:flex-start;background:var(--blatt);border:1px solid var(--linie);border-left:5px solid var(--c,var(--linie));border-radius:12px;padding:12px;margin:8px 0}
+.neu-dlg{border:0;border-radius:16px;padding:20px 20px 16px;width:min(92vw,460px);max-height:84vh;overflow:auto;background:var(--blatt);color:var(--tinte);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.neu-dlg::backdrop{background:rgba(10,20,24,.55)}
+.neu-dlg h2{font-family:var(--anz);font-size:24px;margin:0 0 12px}
+.neu-dlg h3{font-size:17px;margin:14px 0 0}
+.neu-dlg .sub{margin:2px 0 6px}
+.neu-dlg ul{margin:0;padding-left:20px;display:grid;gap:7px;line-height:1.45;font-size:15px}
+.neu-dlg .btn{width:100%;margin-top:18px}
 .neue-version{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--tinte);color:#fff;border:0;border-radius:999px;padding:12px 20px;font:600 15px/1.2 var(--text);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100vw - 32px)}
 .li.stk{flex-wrap:wrap;row-gap:8px}
 .li.stk .grow{flex:1 1 calc(100% - 24px);min-width:0}
@@ -1388,7 +1395,8 @@ function renderPokale(){
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
   <li><b>Aufstieg.</b> Deine Tore zählen für die Liga, Gegentore nicht. In jeder neuen Liga gibt es ein neues Trikot.</li>
   <li><b>Spiel verlegen.</b> Einmal pro Woche darfst du sagen: Heute geht gar nichts. Dann gibt es keine Wertung, nur was morgen fällig ist, bleibt. Das Wochenspiel zählt einen Spieltag weniger.</li>
-  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></div>`;
+  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div>
+  <div class="foot"><button class="lnk" data-act="neu">Was ist neu?</button></div></div>`;
   const T=iso(today()),w=weekInfo();
   const prize=w.prize?(w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`)
     :w.possible?`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`:'Diese Woche reicht es nicht mehr für die Prämie. Am Montag geht es neu los.';
@@ -1675,6 +1683,7 @@ document.addEventListener('click',e=>{
     case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks.filter(x=>x.examId===id&&!x.done).forEach(x=>removeTask(x.id));S.tasks=S.tasks.filter(x=>x.examId!==id||x.done);ui.ask=null;save();break;
     case'ask':ui.ask=b.dataset.v+(id||'');break;
     case'askx':ui.ask=null;break;
+    case'neu':newsDialog(newsFor(NEUES));return;
     case'pdel':removeTask(id);ui.ask=null;ui.msg='Eintrag gelöscht. Er zählt weder als erledigt noch als nicht geschafft.';ui.msgType='okn';save();break;
     case'exedit':ui.edit=ui.edit==='x-'+id?null:'x-'+id;break;
     case'kbrun':runKB();return;
@@ -1800,10 +1809,69 @@ async function init(){
     await loadFam();
   }
   render();push();
+  setTimeout(showNews,700);
   const refresh=async()=>{if(ui.fb||ui.edit||ui.quiz||document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
     try{const a=await pull(false),b=await loadFam();if(a||b)render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
   setInterval(refresh,45000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh()});
+}
+/* ===== Was ist neu? ===== */
+// Nach einem Update einmal pro Gerät zeigen, was dazugekommen ist. Neue Einträge oben anfügen, die id muss größer
+// sein als alle bisherigen. eltern:1 zeigt einen Punkt nur auf den Geräten der Eltern.
+const NEWS_KEY='lp-neu-gesehen';
+const NEUES=[
+  {id:'2026-11-17d',datum:'17. November, abends',titel:'Neuigkeiten nach Updates',punkte:[
+    {t:'Nach einem Update zeigt dieses Fenster, was neu ist. Unter „Pokale“ ganz unten bei den Spielregeln öffnet „Was ist neu?“ es jederzeit wieder.'}]},
+  {id:'2026-11-17c',datum:'17. November, abends',titel:'Eigenes Handy und neues Icon',punkte:[
+    {t:'Der Lernmodus zählt nur auf deinem Handy. Schauen Mama oder Papa gleichzeitig rein und schließen die App, gibt es kein Gegentor.'},
+    {t:'Erlaubte Lern-Apps und Websites, zum Beispiel die Latein-App, zählen nicht als Ablenkung. Ihr tragt sie unter Optionen ein.',eltern:1},
+    {t:'Neues Icon: ein Handball mit Fünfeckmuster fliegt aus einem Buch ins Tor. Damit es auf dem Home-Bildschirm erscheint, das Symbol dort einmal löschen und neu anlegen.'},
+    {t:'Push-Nachrichten kommen zuverlässiger an.',eltern:1}]},
+  {id:'2026-11-17b',datum:'17. November, vormittags',titel:'Heimspiel gegen den Schweinehund',punkte:[
+    {t:'Dein Lerntag ist jetzt ein Handballspiel gegen den Schweinehund, die Stimme im Kopf, die sagt: „Mach das später“ oder „Ich hab heute keine Lust“. Erledigte Aufgaben sind deine Tore.'},
+    {t:'Die Heute-Seite ist ruhiger: ein Bildschirm, eine Sache.'},
+    {t:'Spiel verlegen: Einmal pro Woche darf ein richtig schlechter Tag ausfallen, ohne Strafe. Nur Hausaufgaben für morgen und das Lernen für eine Prüfung morgen bleiben.'}]},
+  {id:'2026-11-17a',datum:'17. November, nachts',titel:'Lernmodus und gemeinsame Termine',punkte:[
+    {t:'Lernmodus: Während du lernst, bleibt der Bildschirm an. Bist du länger als eine Minute in einer anderen App, gibt es ein Gegentor und Mama und Papa bekommen eine Nachricht.'},
+    {t:'Nach einer Pause kommt die Nachricht „Auszeit vorbei“.'},
+    {t:'Termine sind dieselben wie im Familienplan.'},
+    {t:'Den Anpfiff können Mama und Papa zurücksetzen. Pünktlich zählt er nur kurz vor dem geplanten Start.'},
+    {t:'Der Tagessieg zählt über den ganzen Tag, nicht nur ab dem Anpfiff.'},
+    {t:'Neu zum Ausprobieren: eine kurze Abfrage zum Lernstoff.'}]},
+  {id:'2026-11-16b',datum:'16. November, spät abends',titel:'Lernzeit, Pausen und Prüfungen',punkte:[
+    {t:'Die tägliche Lernzeit richtet sich nach der Studienlage: etwa eine Stunde, eine Einheit dauert höchstens 45 Minuten.'},
+    {t:'Zwischen den Einheiten gibt es Bewegungspausen mit Ideen, zum Beispiel 10 Minuten aufs Trampolin.'},
+    {t:'Bei einer Prüfung lässt sich ein Thema statt einer Buchseite angeben. Die App gleicht es mit dem Lehrplan für bayerische Gymnasien und dem Schulbuch ab. Ein Haken markiert Übungsblätter, die erledigt werden sollen.',eltern:1},
+    {t:'Eltern können Einträge löschen, ohne dass sie als erledigt oder nicht geschafft zählen, und Prüfungen nachträglich bearbeiten.',eltern:1},
+    {t:'Das Klassenbuch lässt sich aus einem Screenshot des Schulmanagers einlesen, damit die Lerninhalte genauer werden.',eltern:1},
+    {t:'Gibt es eine neue Version, erscheint unten ein Hinweis. Ein Tipp lädt sie.'}]},
+  {id:'2026-11-16a',datum:'16. November, abends',titel:'Neues Aussehen',punkte:[
+    {t:'Ruhigeres Aussehen wie im Familienplan.'},
+    {t:'Der Stundenplan hat eine eigene Seite, der Schulschluss wird daraus automatisch übernommen.'},
+    {t:'Die Trikots sind jetzt Shirt und Hose, neu ist das Champions-League-Trikot des THW Kiel 25/26.'},
+    {t:'Die Belohnungen sind einfacher erklärt.'},
+    {t:'Der Buß- und Bettag zählt als Lerntag.'},
+    {t:'Der Elternbereich ist in vier Bereiche geordnet.',eltern:1}]},
+];
+function newsFor(list){const adult=REMOTE&&!kidDevice();return list.map(n=>({...n,punkte:n.punkte.filter(p=>adult||!p.eltern)})).filter(n=>n.punkte.length)}
+function newsDialog(list){
+  if(!list.length||document.getElementById('neu-dlg'))return;
+  const d=document.createElement('dialog');d.id='neu-dlg';d.className='neu-dlg';
+  d.innerHTML=`<h2>Was ist neu?</h2>${list.map(n=>`<section><h3>${esc(n.titel)}</h3><p class="sub">${esc(n.datum)}</p><ul>${n.punkte.map(p=>`<li>${esc(p.t)}</li>`).join('')}</ul></section>`).join('')}<button class="btn primary" type="button">Alles klar</button>`;
+  d.querySelector('button').addEventListener('click',()=>d.close());
+  d.addEventListener('close',()=>d.remove());
+  document.body.appendChild(d);
+  try{d.showModal()}catch(e){d.setAttribute('open','')}
+  // Oben anfangen, nicht beim Knopf am Ende.
+  const h=d.querySelector('h2');h.tabIndex=-1;h.style.outline='none';h.focus();d.scrollTop=0;
+}
+function showNews(){
+  if(navigator.webdriver&&!localStorage.getItem('lp-neu-test'))return;
+  let seen=null;try{seen=localStorage.getItem(NEWS_KEY)}catch(e){}
+  const now=Date.now();
+  const list=seen?NEUES.filter(n=>n.id>seen):NEUES.filter(n=>Date.parse(n.id.slice(0,10)+'T00:00:00')>=now-7*864e5);
+  try{localStorage.setItem(NEWS_KEY,NEUES.reduce((m,n)=>n.id>m?n.id:m,''))}catch(e){}
+  newsDialog(newsFor(list));
 }
 /* ===== Neue Version: wie im Familienplan ===== */
 // Der Service Worker des Familienplans lädt neue Fassungen im Hintergrund und meldet sie. Ein Tipp lädt sie.
