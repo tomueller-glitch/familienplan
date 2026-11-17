@@ -1029,19 +1029,22 @@ Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem 
   }catch(e){ui.msg=aiError(e);ui.msgType='err'}
   ui.busy=null;render();
 }
+// Rückmeldung direkt beim Buch, nicht oben auf der Seite (dort war sie beim Lehrwerk nicht zu sehen).
+function tocMsg(id,text,type){ui.tocMsg={id,text,type};render()}
 async function scanToc(id){
   const b=S.books.find(x=>x.id===id),inp=document.getElementById('toc-'+id),files=[...((inp&&inp.files)||[])];
-  if(!b)return;if(!files.length){ui.msg='Bitte zuerst Fotos oder ein PDF vom Inhaltsverzeichnis auswählen.';ui.msgType='err';render();return}
+  if(!b)return;if(!files.length){tocMsg(id,'Bitte zuerst Fotos oder ein PDF vom Inhaltsverzeichnis auswählen.','err');return}
   // PDFs gehen unverändert mit (Claude liest sie als Dokument), Fotos werden verkleinert.
   const isPdf=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
   const big=files.find(f=>isPdf(f)&&f.size>5*1024*1024);
-  if(big){ui.msg=`„${big.name}“ ist zu groß (über 5 MB). Bitte nur die Seiten mit dem Inhaltsverzeichnis als PDF speichern oder Fotos nehmen.`;ui.msgType='err';render();return}
-  ui.busy='toc-'+id;render();
+  if(big){tocMsg(id,`„${big.name}“ ist zu groß (über 5 MB). Bitte nur die Seiten mit dem Inhaltsverzeichnis als PDF speichern oder Fotos nehmen.`,'err');return}
+  ui.busy='toc-'+id;ui.tocMsg={id,text:'Claude liest das Inhaltsverzeichnis. Das dauert bis zu einer Minute.',type:''};render();
   try{
     const imgs=await Promise.all(files.slice(0,4).map(f=>isPdf(f)?(f.type?f:new Blob([f],{type:'application/pdf'})):shrink(f)));
     const txt=await aiText(`Das sind Fotos oder PDF-Seiten vom Inhaltsverzeichnis des Schulbuchs "${b.title}" (${b.subject}). Schreibe das Inhaltsverzeichnis kompakt ab: eine Zeile pro Lektion oder Kapitel mit Nummer, Titel, Seite und, falls erkennbar, den Grammatik- oder Themenschwerpunkten. Nur die Liste, keine Einleitung.`,imgs);
-    b.toc=((b.toc?b.toc+'\n':'')+txt.trim()).slice(0,8000);ui.msg='Inhaltsverzeichnis gespeichert.';ui.msgType='okn';save();
-  }catch(e){ui.msg=aiError(e);ui.msgType='err'}
+    if(!txt.trim())throw{code:'error',msg:'Claude hat keinen Text zurückgegeben. Bitte schärfere Fotos versuchen.'};
+    b.toc=((b.toc?b.toc+'\n':'')+txt.trim()).slice(0,8000);ui.tocMsg={id,text:`Inhaltsverzeichnis gespeichert (${txt.trim().split('\n').length} Zeilen). Unter „Inhaltsverzeichnis ansehen“ kannst du es prüfen.`,type:'okn'};save();
+  }catch(e){ui.tocMsg={id,text:'Hat nicht geklappt: '+aiError(e),type:'err'}}
   ui.busy=null;render();
 }
 function reportStats(){
@@ -1527,7 +1530,11 @@ function renderEltern(plan){
   ${S.books.map(b=>`<div style="border-top:1px solid var(--bd);margin-top:10px;padding-top:8px"><div class="row"><span class="dot" style="background:${col(b.subject)}"></span><b class="grow">${esc(b.subject)}: ${esc(b.title)}</b><button class="btn sm danger" data-act="delbook" data-id="${b.id}">Löschen</button></div>
     <div class="sub">${b.isbn?'ISBN '+esc(b.isbn)+' · ':''}${b.toc?'Inhaltsverzeichnis gespeichert ('+String(b.toc).split('\n').length+' Zeilen)':'noch kein Inhaltsverzeichnis'}</div>
     <form data-form="chapter" data-id="${b.id}" class="row" style="margin-top:6px"><input name="chapter" value="${esc(b.chapter||'')}" placeholder="Aktuell: Lektion 41" style="flex:1"><button class="btn sm">Speichern</button></form>
-    ${AI_OK()?`<div class="row" style="margin-top:6px"><input type="file" id="toc-${b.id}" accept="image/*,application/pdf,.pdf" multiple style="flex:1"><button class="btn sm" data-act="toc" data-id="${b.id}">${ui.busy==='toc-'+b.id?'Moment …':'Inhaltsverzeichnis lesen'}</button></div>`:''}</div>`).join('')}
+    ${AI_OK()?`<div class="row" style="margin-top:6px"><input type="file" id="toc-${b.id}" accept="image/*,application/pdf,.pdf" multiple style="flex:1"><button class="btn sm" data-act="toc" data-id="${b.id}"${ui.busy==='toc-'+b.id?' disabled':''}>${ui.busy==='toc-'+b.id?'Moment …':'Inhaltsverzeichnis lesen'}</button></div>`:''}
+    ${ui.tocMsg&&ui.tocMsg.id===b.id?`<div class="note ${ui.tocMsg.type||''}" style="margin-top:6px">${esc(ui.tocMsg.text)}</div>`:''}
+    <details style="margin-top:6px"><summary class="sub" style="cursor:pointer">${b.toc?'Inhaltsverzeichnis ansehen oder ändern':'Inhaltsverzeichnis als Text einfügen'}</summary>
+      <form data-form="toctext" data-id="${b.id}"><textarea name="toc" rows="10" style="width:100%;margin-top:6px;font-size:14px" placeholder="Eine Zeile pro Kapitel, zum Beispiel: I Terme, 1 Terme mit Variablen, S. 6">${esc(b.toc||'')}</textarea>
+      <div class="row" style="margin-top:6px"><button class="btn sm primary">Speichern</button></div></form></details></div>`).join('')}
   <form data-form="book" style="margin-top:12px;border-top:1px solid var(--bd);padding-top:8px"><div class="g2"><label>Fach<select name="subject">${subjOpts()}</select></label><label>Titel<input name="title" required placeholder="Campus C2 neu, Ausgabe Bayern"></label></div>
   <div class="g2"><label>ISBN (optional)<input name="isbn" inputmode="numeric"></label><label>Aktuelle Lektion<input name="chapter" placeholder="Lektion 41"></label></div>
   <div class="row" style="margin-top:10px"><button class="btn">Lehrwerk hinzufügen</button></div></form></div>`;
@@ -1760,6 +1767,7 @@ document.addEventListener('submit',e=>{
     case'edit':{const t=S.tasks.find(x=>x.id===f.dataset.id);if(t&&v.title.trim())t.title=v.title.trim();ui.edit=null;break}
     case'grade':{const r=S.results.find(x=>x.id===f.dataset.id);if(r)r.grade=String(v.grade).trim().slice(0,4);ui.edit=null;break}
     case'book':S.books=S.books.filter(b=>b.subject!==v.subject);S.books.push({id:uid(),subject:v.subject,title:v.title.trim(),isbn:(v.isbn||'').replace(/[^0-9Xx-]/g,''),chapter:(v.chapter||'').trim(),toc:''});ui.msg='Lehrwerk gespeichert.';ui.msgType='okn';break;
+    case'toctext':{const b=S.books.find(x=>x.id===f.dataset.id);if(b){b.toc=String(v.toc||'').trim().slice(0,8000);ui.tocMsg={id:b.id,text:b.toc?`Inhaltsverzeichnis gespeichert (${b.toc.split('\n').length} Zeilen).`:'Inhaltsverzeichnis gelöscht.',type:'okn'}}break}
     case'chapter':{const b=S.books.find(x=>x.id===f.dataset.id);if(b)b.chapter=(v.chapter||'').trim();ui.msg='Aktuelle Lektion gespeichert.';ui.msgType='okn';break}
     case'appt':
       if(toMin(v.end)<=toMin(v.start)){ui.msg='Das Ende muss nach dem Beginn liegen.';ui.msgType='err';break}
@@ -1825,7 +1833,8 @@ async function init(){
 const NEWS_KEY='lp-neu-gesehen';
 const NEUES=[
   {id:'2026-11-18a',datum:'18. November',titel:'Inhaltsverzeichnis auch als PDF',punkte:[
-    {t:'Unter Eltern, Schule, Lehrwerke lässt sich das Inhaltsverzeichnis eines Schulbuchs jetzt auch als PDF einlesen, nicht nur als Foto. Das PDF darf bis zu 5 MB groß sein.',eltern:1}]},
+    {t:'Unter Eltern, Schule, Lehrwerke lässt sich das Inhaltsverzeichnis eines Schulbuchs jetzt auch als PDF einlesen, nicht nur als Foto. Das PDF darf bis zu 5 MB groß sein.',eltern:1},
+    {t:'Die Rückmeldung beim Einlesen steht jetzt direkt beim Buch. Das Inhaltsverzeichnis lässt sich dort auch ansehen, korrigieren oder als Text einfügen.',eltern:1}]},
   {id:'2026-11-17d',datum:'17. November, abends',titel:'Neuigkeiten nach Updates',punkte:[
     {t:'Nach einem Update zeigt dieses Fenster, was neu ist. Unter „Pokale“ ganz unten bei den Spielregeln öffnet „Was ist neu?“ es jederzeit wieder.'}]},
   {id:'2026-11-17c',datum:'17. November, abends',titel:'Eigenes Handy und neues Icon',punkte:[
