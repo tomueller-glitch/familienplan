@@ -1955,19 +1955,20 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
   const brk = lp.brk;
   if (kid && brk && brk.date === day && Number(brk.until) <= nowMs && nowMs - Number(brk.until) < 10 * 60000) {
     const next = openToday.find((t) => !doneToday.some((x) => x.id === t.id));
-    out.push({ key: `lp-pause:${brk.until}`, to: [kid.id], ttl: 600, msg: { title: 'Pause vorbei', body: next ? `Weiter geht's: ${names([next])}.` : 'Weiter geht\'s!', tag: 'lernplaner', url } });
+    out.push({ key: `lp-pause:${brk.until}`, to: [kid.id], ttl: 600, msg: { title: 'Auszeit vorbei', body: next ? `Weiter geht's: ${names([next])}.` : 'Weiter geht\'s!', tag: 'lernplaner', url } });
   }
 
   // Lernmodus: länger als eingestellt außerhalb der App (Pausenzeit zählt nicht).
   const lm = lp.lm;
-  if (lm && lm.on && lm.date === day && lm.awayAt) {
+  // Ludus Latinus oder ein Übungsblatt geöffnet: das ist Arbeit, keine Ablenkung.
+  if (lm && lm.on && lm.date === day && lm.awayAt && !lm.ext) {
     const from = Number(lm.awayAt);
     let gone = nowMs - from;
     if (brk && brk.at && brk.until) { const o = Math.min(nowMs, Number(brk.until)) - Math.max(from, Number(brk.at)); if (o > 0) gone -= o; }
     const limit = Math.max(2, Number(st.awayAlert) || 5) * 60000;
     if (gone >= limit && gone < 3 * 3600000) {
       const mins = Math.round(gone / 60000);
-      if (kid) out.push({ key: `lp-weg-kind:${from}`, to: [kid.id], ttl: 900, msg: { title: 'Zurück zum Lernplaner?', body: `Du bist seit ${mins} Minuten raus. Die nächste Aufgabe wartet, mit Fokus-Tor geht es weiter.`, tag: 'lernplaner', url } });
+      if (kid) out.push({ key: `lp-weg-kind:${from}`, to: [kid.id], ttl: 900, msg: { title: 'Zurück zum Lernplaner?', body: `Du bist seit ${mins} Minuten raus. Der Schweinehund wartet nur darauf. Zurück an den Schreibtisch!`, tag: 'lernplaner', url } });
       if (adults.length) out.push({ key: `lp-weg:${from}`, to: adults, ttl: 1800, msg: { title: `Lernmodus: ${kname} ist raus`, body: `Seit etwa ${mins} Minuten nicht im Lernplaner.`, tag: 'lernplaner-eltern', url } });
     }
   }

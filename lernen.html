@@ -198,13 +198,38 @@ details.grp[open] summary{margin-bottom:6px}
 .quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
 .quiz .qa{background:var(--leise);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:16px}
 .qdet{margin:0 0 8px 20px}.qdet summary{font-size:14px;color:var(--tinte2);cursor:pointer}
-.tafel{display:flex;align-items:center;gap:12px;width:100%;background:var(--tafel);color:#fff;border:0;border-radius:16px;padding:12px 16px;margin:10px 0 6px;text-align:left;font:inherit;cursor:pointer}
-div.tafel{cursor:default}
-.tafel .t-num{font:700 40px/1 var(--anz);min-width:.6em}
-.tafel .t-lab{font-size:13px;line-height:1.25;color:#A9C2C9}
-.tafel .t-mid{flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0}
+.tafel{display:block;width:100%;background:var(--court) center/100% 100% no-repeat,var(--tafel);background-blend-mode:normal;color:#fff;border:0;border-radius:16px;padding:12px 16px 12px;margin:10px 0 4px;text-align:left;font:inherit;cursor:pointer;position:relative;overflow:hidden}
+.tafel::before{content:"";position:absolute;inset:0;background:var(--tafel);opacity:.86;pointer-events:none}
+.tafel>*{position:relative}
+.t-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+.t-team{display:flex;flex-direction:column;min-width:0}
+.t-team.r{align-items:flex-end;text-align:right}
+.t-team.r .t-name{justify-content:flex-end}
+.t-side{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8FB0B8}
+.t-name{display:flex;align-items:center;gap:6px;font:700 16px/1.15 var(--anz);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-kit svg{width:20px;height:26px;display:block}
+.t-score{display:flex;align-items:center;gap:4px;font:700 44px/1 var(--anz);font-variant-numeric:tabular-nums}
+.t-score b{min-width:.62em;text-align:center;background:rgba(0,0,0,.28);border-radius:8px;padding:2px 6px}
+.t-score i{font-style:normal;color:#8FB0B8;font-size:34px}
+.t-row2{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:#A9C2C9}
+.t-state{flex:1}
+.t-more{text-decoration:underline;text-underline-offset:3px}
+.t-rule{font-size:13px;color:var(--tinte2);margin:0 6px 6px}
+.bericht .sb-row{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--linie);font-size:15px}
+.bericht .k-lab+.sb-row{border-top:0}
+.sb-t{color:var(--tinte2);font-size:13px;width:3em;flex:none}
+.sb-s{font:700 16px/1 var(--anz);width:2.6em;flex:none;font-variant-numeric:tabular-nums}
+.sb-row.opp{color:var(--tinte2)}
+.sb-rules{margin-top:12px;padding-top:10px;border-top:1px dashed var(--linie);display:grid;gap:6px;font-size:14px;color:var(--tinte2)}
+.sb-rules b{color:var(--tinte)}
+.introk{border:2px solid var(--fill)}
+.intro-l{margin:0;padding-left:20px;display:grid;gap:8px;font-size:15px;line-height:1.4}
+.chances{display:grid;gap:8px;margin:14px 0 2px;font-size:14px;color:var(--tinte2)}
+.chances div{display:flex;gap:10px;align-items:flex-start}
+.ball{flex:none;width:16px;height:16px;border-radius:50%;margin-top:1px;background:radial-gradient(circle at 35% 35%,#fff 0 18%,transparent 19%),var(--fill);box-shadow:inset 0 0 0 1.5px rgba(0,0,0,.25)}
+.ball.opp{background:var(--linie)}
 .pips{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
-.pips i{width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.16)}
+.pips i{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.16)}
 .pips i.on{background:var(--fill)}
 .pbar{display:block;width:100%;max-width:180px;height:8px;border-radius:4px;background:rgba(255,255,255,.16);overflow:hidden}
 .pbar i{display:block;height:100%;background:var(--fill)}
@@ -251,6 +276,9 @@ body.lm nav.tabs,body.lm .hdr-r a{display:none}
 .rulesd summary h2{display:inline;margin:0}.rulesd[open] summary{margin-bottom:10px}
 .rulesd summary::after{content:"Zeigen";float:right;font-size:14px;color:var(--tinte2);text-decoration:underline}
 .rulesd[open] summary::after{content:"Zuklappen"}
+.rgrid{display:grid;gap:12px;margin:12px 0}
+.rgrid h3{display:flex;align-items:center;gap:8px;font:700 17px/1.2 var(--anz);margin:0 0 4px}
+.rgrid ul{margin:0;padding-left:20px;display:grid;gap:4px;font-size:15px}
 .rules{margin:0 0 8px;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}
 .rules b{font-family:var(--anz);font-size:16px}
 .badge b{display:block;font:700 17px/1.2 var(--anz);color:var(--tinte)}
@@ -266,6 +294,7 @@ body.lm nav.tabs,body.lm .hdr-r a{display:none}
 .jer.lock .jn{color:var(--tinte2)}
 pre.rep{white-space:pre-wrap;font:15px/1.5 var(--text);margin:0}
 #toast{position:fixed;left:50%;top:80px;transform:translateX(-50%);background:var(--tafel);color:#fff;padding:14px 26px;border-radius:16px;font:700 30px/1 var(--anz);text-align:center;z-index:9;animation:pop 2.4s ease forwards;pointer-events:none;border-bottom:4px solid var(--fill)}
+#toast.opp{background:#fff;color:var(--tinte);box-shadow:0 8px 24px rgba(0,0,0,.18)}#toast.opp small{color:var(--tinte2)}
 #toast small{display:block;font:500 14px/1.3 var(--text);margin-top:4px;color:#D6E3E7}
 @keyframes pop{0%{opacity:0;transform:translate(-50%,10px) scale(.85)}12%{opacity:1;transform:translate(-50%,0) scale(1.05)}20%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){#toast{animation:none}details.card summary::after{transition:none}}
@@ -386,10 +415,10 @@ function aiError(e){
 }
 
 /* ===== Datenmodell ===== */
-const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',help:'help',books:'book',results:'result',lessons:'lesson'};
+const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',conc:'conc',help:'help',books:'book',results:'result',lessons:'lesson'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
 const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable','lm','brk'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],conc:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -711,12 +740,18 @@ function queueOf(day){
 /* ===== Punkte und Siege ===== */
 const totalGoals=()=>S.goals.reduce((a,g)=>a+g.n,0);
 const goalsOn=di=>S.goals.filter(g=>g.date===di).reduce((a,g)=>a+g.n,0);
+// Jeder Lerntag ist ein Heimspiel gegen den Schweinehund. Er trifft nur, wenn man sich ablenken lässt oder zu spät anfängt.
+const concOn=di=>S.conc.filter(c=>c.date===di).length;
+const GOAL_NAME={'Tor!':'Tor','Pünktlicher Anpfiff':'Tempogegenstoß','Fokus-Tor':'Kempa-Trick','Kabinen-Check':'Kabinen-Check','Spielanalyse':'Spielanalyse','Mannschaftsbesprechung':'Mannschaftsbesprechung'};
+const GOAL_WHY={'Pünktlicher Anpfiff':'pünktlich angefangen','Fokus-Tor':'ganze Aufgabe ohne Ablenkung'};
+const goalName=w=>GOAL_NAME[w]||w;
+function concede(why){S.conc.push({id:uid(),date:iso(today()),why,at:Date.now()});toastQ={opp:true,n:1,why}}
 function liga(){const n=totalGoals();let i=0;LIGA.forEach((l,k)=>{if(n>=l[1])i=k});return{i,name:LIGA[i][0],n,next:LIGA[i+1]}}
 let toastQ=null;
 function award(n,why,taskId){
   const before=liga().i;
-  S.goals.push({id:uid(),date:iso(today()),n,why,taskId:taskId||null});
-  toastQ=toastQ?{n:toastQ.n+n,why:toastQ.why+' · '+why}:{n,why};
+  S.goals.push({id:uid(),date:iso(today()),n,why,taskId:taskId||null,at:Date.now()});
+  const nm=goalName(why);toastQ=toastQ&&!toastQ.opp?{n:toastQ.n+n,why:toastQ.why+' · '+nm}:{n,why:nm};
   const L=liga();if(L.i>before){const th=THEMES.find(x=>x.lvl===L.i);ui.msg='Aufstieg in die '+L.name+'!'+(th?' Neues Trikot freigeschaltet: '+th.n+'.':'');ui.msgType='okn'}
 }
 function checksDone(di){if(!S.settings.checksOn)return true;const c=S.checks[di]||{};return CHECKS.every(([k])=>c[k])}
@@ -725,7 +760,10 @@ function checkDayWin(){
   // Maßstab ist der ganze Tag ab Lernbeginn: Wer spät anfängt, bekommt den Rest nicht als „passt nicht mehr“ geschenkt.
   const day=simulate({fullDay:true})[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
-  if(!day.items.length&&doneToday>0&&checksDone(T)){S.wins[T]=true;ui.msg='Tagessieg! Alles geschafft, was heute dran war.';ui.msgType='okn'}
+  if(!day.items.length&&doneToday>0&&checksDone(T)){
+    if(goalsOn(T)>concOn(T)){S.wins[T]=true;ui.msg=`Abpfiff! Sieg ${goalsOn(T)}:${concOn(T)} gegen den Schweinehund.`;ui.msgType='okn'}
+    else{ui.msg=`Alles geschafft, aber ${goalsOn(T)}:${concOn(T)}: Der Schweinehund hat zu oft getroffen. Diesmal kein Tagessieg.`;ui.msgType='warn'}
+  }
 }
 /* ===== Lernmodus ===== */
 // Eine Web-App kann das Verlassen nicht verhindern (dafür: Geführter Zugriff am iPhone). Sie merkt es aber,
@@ -736,10 +774,14 @@ function lmStop(msg){if(!S.lm)return;S.lm=Object.assign({},S.lm,{on:false,awayAt
 // Zeit, in der jemand weg war, ohne die Zeit einer Pause.
 function goneMs(from,to){const b=S.brk;let g=to-from;if(b&&b.at&&b.until){const o=Math.min(to,b.until)-Math.max(from,b.at);if(o>0)g-=o}return Math.max(0,g)}
 function lmHide(){if(!lmActive()||S.lm.awayAt)return;S.lm.awayAt=Date.now();writeCache();beam()}
+function lmExt(){if(lmActive()){S.lm.ext=Date.now();writeCache();beam()}}
 function lmShow(){
   if(!S.lm||!S.lm.awayAt)return;
-  const now=Date.now(),g=goneMs(S.lm.awayAt,now);S.lm.awayAt=null;
+  const now=Date.now(),g=goneMs(S.lm.awayAt,now),ext=S.lm.ext;S.lm.awayAt=null;
+  // Ludus Latinus oder ein Übungsblatt geöffnet: das ist Arbeit, keine Ablenkung.
+  if(ext){S.lm.ext=null;save();render();return}
   if(lmActive()&&g>=20000){S.lm.leaves++;S.lm.away+=g;S.lm.clean=false;ui.back=Math.max(1,Math.round(g/60000));
+    if(g>=60000)concede(`Abgelenkt: ${Math.round(g/60000)} Min. aus der App`);
     if(S.running)S.running=Object.assign({},S.running,{at:S.running.at+g})}
   save();render();
 }
@@ -776,13 +818,13 @@ function badges(){
     ['Erster Sieg','Einen Tagessieg holen',Math.min(1,wins.length),1],
     ['Siegesserie','3 Tagessiege hintereinander',Math.min(3,best),3],
     ['Wochensieger','Ein Wochenspiel gewinnen',Object.values(weeks).some(n=>n>=wg)?1:0,1],
-    ['Pünktlich','10-mal pünktlich angefangen',Math.min(10,cnt('Pünktlicher Anpfiff')),10],
+    ['Tempo-Spieler','10 Tempogegenstöße (pünktlich angefangen)',Math.min(10,cnt('Pünktlicher Anpfiff')),10],
     ['Fairplay','5-mal ehrlich „schwer“ gesagt',Math.min(5,S.tasks.filter(t=>t.done&&t.feel==='schwer').length),5],
     ['Ludus-Profi','10-mal Ludus Latinus gespielt',Math.min(10,S.tasks.filter(t=>t.kind==='daily'&&t.done).length),10],
     ['Kabinen-Chef','7-mal den Vokabel-Check gemacht',Math.min(7,Object.keys(S.checks).filter(d=>CHECKS.every(([k])=>S.checks[d][k])).length),7],
     ['Gut vorbereitet','Alle Lerneinheiten vor einer Prüfung geschafft',exDone?1:0,1],
     ['Taktiker','3-mal die Woche gemeinsam geplant',Math.min(3,Object.keys(S.meets).length),3],
-    ['Fokus-Profi','10 Fokus-Tore im Lernmodus',Math.min(10,cnt('Fokus-Tor')),10]
+    ['Kempa-König','10 Kempa-Tricks im Lernmodus',Math.min(10,cnt('Fokus-Tor')),10]
   ];
 }
 
@@ -1134,14 +1176,44 @@ function dayProgress(){
   const chk=S.settings.checksOn&&!full.free?1:0,chkDone=chk&&checksDone(T)?1:0;
   return{total:done+open+chk,done:done+chkDone};
 }
-// Schmale Anzeigetafel: Tore heute und ein Kästchen pro Schritt. Liga und Wochenspiel stehen unter Pokale.
+// Anzeigetafel wie in der Halle: Heim (du) gegen Gast (der Schweinehund), darunter in einem Satz, wofür es Tore gibt.
+const COURT=`url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-width="2"><rect x="6" y="6" width="388" height="188" rx="4"/><line x1="200" y1="6" x2="200" y2="194"/><circle cx="200" cy="100" r="3" fill="#fff"/><path d="M6 40 A60 60 0 0 1 66 100 A60 60 0 0 1 6 160"/><path d="M394 40 A60 60 0 0 0 334 100 A60 60 0 0 0 394 160"/><path d="M6 22 A88 88 0 0 1 94 100 A88 88 0 0 1 6 178" stroke-dasharray="7 7"/><path d="M394 22 A88 88 0 0 0 306 100 A88 88 0 0 0 394 178" stroke-dasharray="7 7"/></g></svg>')}")`;
+document.head.insertAdjacentHTML('beforeend',`<style>.tafel{--court:${COURT}}</style>`);
 function tafel(){
-  const T=iso(today()),p=dayProgress(),g=goalsOn(T),lm=lmActive();
+  const T=iso(today()),p=dayProgress(),g=goalsOn(T),c=concOn(T),th=THEMES[S.settings.theme]||THEMES[0];
   const prog=p.total&&p.total<=10?`<span class="pips" aria-hidden="true">${Array.from({length:p.total},(_,i)=>`<i class="${i<p.done?'on':''}"></i>`).join('')}</span>`
     :`<span class="pbar" aria-hidden="true"><i style="width:${p.total?Math.round(p.done/p.total*100):0}%"></i></span>`;
-  const txt=S.wins[T]?'Tagessieg!':p.total?`${p.done} von ${p.total} geschafft`:'heute frei';
-  const inner=`<span class="t-num">${g}</span><span class="t-lab">${g===1?'Tor':'Tore'}<br>heute</span><span class="t-mid">${prog}<span class="t-lab">${txt}</span></span>`;
-  return lm?`<div class="tafel" role="status">${inner}</div>`:`<button class="tafel" data-act="tab" data-v="pokale" aria-label="${g} Tore heute, ${txt}. Zu den Pokalen">${inner}</button>`;
+  const state=S.wins[T]?`Abpfiff: Sieg!`:!p.total?'Heute kein Spiel':!S.kick[T]?'Noch nicht angepfiffen':`${p.done} von ${p.total} geschafft`;
+  return `<button class="tafel" data-act="report" aria-expanded="${!!ui.report}" aria-label="Spielstand: du ${g}, Schweinehund ${c}. ${state}. Spielbericht ${ui.report?'zuklappen':'zeigen'}">
+    <span class="t-row"><span class="t-team"><span class="t-side">Heim</span><span class="t-name"><span class="t-kit">${kitSvg(th,'tf')}</span>Du</span></span>
+    <span class="t-score"><b>${g}</b><i>:</i><b>${c}</b></span>
+    <span class="t-team r"><span class="t-side">Gast</span><span class="t-name">Schweinehund</span></span></span>
+    <span class="t-row2">${prog}<span class="t-state">${state}</span><span class="t-more">Spielbericht</span></span></button>
+  <div class="t-rule">Jede erledigte Aufgabe ist ein Tor für dich. Der Schweinehund trifft, wenn du dich ablenken lässt.</div>`;
+}
+// Spielbericht: jedes Tor mit Uhrzeit, Zwischenstand und Grund.
+function spielbericht(){
+  const T=iso(today()),k=S.kick[T];
+  const ev=S.goals.filter(x=>x.date===T).map((x,i)=>({at:x.at||0,i,us:true,n:x.n,txt:x.why==='Tor!'?`Tor: ${((S.tasks.find(t=>t.id===x.taskId)||{}).title)||'Aufgabe erledigt'}`:`${goalName(x.why)}${GOAL_WHY[x.why]?': '+GOAL_WHY[x.why]:''}`}))
+    .concat(S.conc.filter(x=>x.date===T).map((x,i)=>({at:x.at||0,i:1000+i,us:false,n:1,txt:x.why})))
+    .sort((a,b)=>a.at-b.at||a.i-b.i);
+  let g=0,c=0;
+  const rows=ev.map(e=>{if(e.us)g+=e.n;else c+=e.n;const d=e.at?new Date(e.at):null;
+    return `<div class="sb-row ${e.us?'':'opp'}"><span class="sb-t">${d?hm(d.getHours()*60+d.getMinutes()):''}</span><span class="sb-s">${g}:${c}</span><span class="grow">${e.us?'':'<b>Schweinehund</b> '}${esc(e.txt)}</span></div>`}).join('');
+  return `<div class="card bericht"><div class="k-lab">Spielbericht${k?`, Anpfiff ${k}`:''}</div>${rows||'<div class="sub" style="margin-top:6px">Noch keine Tore. Mit dem Anpfiff geht es los.</div>'}
+    <div class="sb-rules"><div><b>Du triffst</b> mit jeder erledigten Aufgabe. Extra-Tore: Tempogegenstoß, wenn du pünktlich anfängst, und Kempa-Trick, wenn du im Lernmodus eine ganze Aufgabe ohne Ablenkung schaffst.</div>
+    <div><b>Der Schweinehund trifft</b>, wenn du im Lernmodus länger als eine Minute aus der App gehst oder mehr als eine halbe Stunde zu spät anfängst.</div>
+    <div><b>Sieg</b> heißt: alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.</div></div></div>`;
+}
+// Einmalige Einführung, bis er „Verstanden“ tippt.
+function introCard(){
+  if(S.meta.intro)return'';
+  return `<div class="card introk"><div class="k-lab">So geht das Spiel</div><div class="k-big">Jeder Lerntag ist ein Handballspiel</div>
+    <ol class="intro-l"><li><b>Du spielst gegen den Schweinehund.</b> Das ist die Stimme im Kopf, die sagt: „Mach das später.“</li>
+    <li><b>Jede erledigte Aufgabe ist ein Tor für dich.</b> Pünktlich anfangen und ohne Ablenkung durchziehen bringt Extra-Tore.</li>
+    <li><b>Der Schweinehund trifft,</b> wenn du dich ablenken lässt oder zu spät anfängst.</li>
+    <li><b>Schaffst du alles und hast mehr Tore, gewinnst du den Tag.</b> Mit deinen Toren steigst du in die nächste Liga auf.</li></ol>
+    <div class="act"><button class="btn primary xl" data-act="intro">Verstanden, los geht's</button></div></div>`;
 }
 function nextLine(rest){
   if(!rest.length)return'';
@@ -1156,9 +1228,9 @@ function focusActions(t){
 }
 function renderFocus(plan){
   const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmActive();
-  let h=tafel();
+  let h=tafel()+(ui.report?spielbericht():'')+introCard();
   if(lm){const L=S.lm;h+=`<div class="lmline">Lernmodus seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}</div>`}
-  if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. Die Zeit zählt nicht als Lernzeit, das Fokus-Tor für diese Aufgabe ist weg. Bei der nächsten klappt es. <button class="lnk" data-act="backok">Okay</button></div>`;
+  if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. ${ui.back>=1&&S.conc.some(c=>c.date===T&&Date.now()-c.at<120000)?'Der Schweinehund hat getroffen, und den':'Den'} Kempa-Trick gibt es für diese Aufgabe nicht mehr. Die Zeit zählt nicht als Lernzeit. <button class="lnk" data-act="backok">Weiter</button></div>`;
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox();
@@ -1171,7 +1243,7 @@ function renderFocus(plan){
   // 1. Pause läuft: nur die Pause
   const bk=S.brk;
   if(bk&&bk.date===T&&bk.until>Date.now()){
-    h+=`<div class="card pausek"><div class="k-lab">${bk.long?'Große Pause':'Bewegungspause'}, ${bk.len} Min.</div><div class="pidea">${esc(bk.idea)}</div>
+    h+=`<div class="card pausek"><div class="k-lab">${bk.long?'Halbzeit':'Auszeit'}, ${bk.len} Min. Bewegung</div><div class="pidea">${esc(bk.idea)}</div>
       <div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((bk.until-Date.now())/60000)+nowMin())} Uhr.${REMOTE?' Dann kommt eine Nachricht.':''}</div>
       <div class="act"><button class="btn primary xl" data-act="brkend">Pause vorbei</button><button class="lnk" data-act="brknew">Andere Idee</button></div></div>`;
     return h+nextLine(q)+foot();
@@ -1181,9 +1253,11 @@ function renderFocus(plan){
     const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null,n=nowMin(),min=q.reduce((a,x)=>a+x.P,0);
     const last=day.items.length?day.items[day.items.length-1]:null,ends=last?last.segs[last.segs.length-1][1]:null;
     const rv=pendingReviews().length;
-    h+=`<div class="card kickk"><div class="k-lab">Dein Spiel heute</div><div class="k-big">${q.length===1?'Eine Aufgabe':q.length+' Aufgaben'}, etwa ${min} Min.</div>
+    h+=`<div class="card kickk"><div class="k-lab">Heimspiel gegen den Schweinehund</div><div class="k-big">${q.length===1?'Eine Aufgabe':q.length+' Aufgaben'}, etwa ${min} Min.</div>
       <ol class="k-list">${rv?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kurze Spielanalyse</span><span class="n-min">1 Min.</span></li>`:''}${q.slice(0,5).map(x=>`<li><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span></li>`).join('')}${q.length>5?`<li class="n-more">und ${q.length-5} weitere</li>`:''}${S.settings.checksOn?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kabinen-Check</span></li>`:''}</ol>
-      <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${dl&&n<=dl&&n>=dl-105?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div></div></div>`;
+      <div class="chances"><div><span class="ball" aria-hidden="true"></span><span>${q.length+(S.settings.checksOn?1:0)} Tore für dich sind drin${dl&&n<=dl&&n>=dl-105?`, dazu ein Tempogegenstoß, wenn du bis ${hm(dl)} anfängst`:''}.</span></div>
+      <div><span class="ball opp" aria-hidden="true"></span><span>Der Schweinehund trifft, wenn du dich ablenken lässt${w.length&&n<=w[0][0]+30?` oder erst nach ${hm(w[0][0]+30)} anfängst`:''}.</span></div></div>
+      <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div></div></div>`;
     return h+foot();
   }
   // 3. Spielanalyse nach einer Prüfung
@@ -1196,8 +1270,8 @@ function renderFocus(plan){
       <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)} · ${cur.P} Min.${t.together?' · zusammen mit Mama oder Papa':''}</div>
       ${cur.over?'<div class="sub" style="margin-top:6px">Eigentlich ist für heute schon Schluss. Frag Mama oder Papa, ob das noch sein muss.</div>':''}
       ${t.examId&&(examOf(t)||{}).focus?`<div class="sub" style="margin-top:8px">Darum geht es: ${esc(examOf(t).focus.join(', '))}</div>`:''}
-      ${t.sheet?`<div style="margin-top:12px">${t.link?`<a class="btn" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
-      ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:12px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
+      ${t.sheet?`<div style="margin-top:12px">${t.link?`<a class="btn" data-act="ext" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
+      ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:12px"><a class="btn" data-act="ext" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
       ${t.kind==='lern'&&quizOk()?quizBlock(t):''}
       ${ui.fb===t.id?fbPanel(t,cur.P):ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length?'':focusActions(t)}</div>`;
     return h+nextLine(q.filter(x=>x!==cur))+foot();
@@ -1209,7 +1283,10 @@ function renderFocus(plan){
     return h+foot();
   }
   // 6. Fertig oder frei
-  if(!day.free)h+=`<div class="card endk">${S.wins[T]?'<div class="k-big">Tagessieg!</div><div class="sub">Alles geschafft. Stark gespielt!</div>':'<div class="k-big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>'}</div>`;
+  const g=goalsOn(T),c=concOn(T),alle=S.tasks.some(t=>t.done&&t.doneAt===T);
+  if(!day.free)h+=`<div class="card endk"><div class="k-lab">Abpfiff</div>${S.wins[T]?`<div class="k-big">Sieg ${g}:${c}!</div><div class="sub">Der Schweinehund hatte heute keine Chance. Stark gespielt!</div>`
+    :alle?`<div class="k-big">${g===c?'Unentschieden':'Niederlage'} ${g}:${c}</div><div class="sub">Alles geschafft, aber der Schweinehund hat zu oft getroffen. Morgen holst du dir den Sieg!</div>`
+    :'<div class="k-big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>'}</div>`;
   else h+=`<div class="card endk"><div class="k-big">Lernfrei</div><div class="sub">${esc(freeReason(today())||'Sonntag')}. Genieß den Tag!</div></div>`;
   return h+meetCard()+foot();
 }
@@ -1248,25 +1325,31 @@ function renderPokale(){
   const pct=L.next?Math.round((L.n-LIGA[L.i][1])/(L.next[1]-LIGA[L.i][1])*100):100;
   const nextJ=THEMES.find(t=>t.lvl>L.i);
   const wg=S.settings.winGoal,bt=S.settings.bedtimeMin;
-  const rules=`<details class="card rulesd"><summary><h2>So funktioniert das Spiel</h2></summary>
+  const rules=`<div class="card"><h2>So funktioniert das Spiel</h2><div class="sub">Jeder Lerntag ist ein Handballspiel: du gegen den Schweinehund. Das ist die Stimme im Kopf, die sagt: „Mach das später.“</div>
+  <div class="rgrid"><div><h3><span class="ball" aria-hidden="true"></span>Du triffst</h3><ul>
+    <li><b>Tor:</b> jede erledigte Aufgabe, der Kabinen-Check, die Spielanalyse nach einer Prüfung, die Besprechung am Wochenende</li>
+    <li><b>Tempogegenstoß:</b> pünktlich angefangen</li>
+    <li><b>Kempa-Trick:</b> im Lernmodus eine ganze Aufgabe ohne Ablenkung</li></ul></div>
+  <div><h3><span class="ball opp" aria-hidden="true"></span>Der Schweinehund trifft</h3><ul>
+    <li>wenn du im Lernmodus länger als eine Minute aus der App gehst. Auszeit, Halbzeit, Ludus Latinus und Übungsblätter zählen nicht.</li>
+    <li>wenn du mehr als eine halbe Stunde zu spät anfängst</li></ul></div></div>
   <ol class="rules">
-  <li><b>Tore.</b> Jede erledigte Aufgabe ist ein Tor. Auch der Kabinen-Check, ein pünktlicher Anpfiff, die Spielanalyse nach einer Prüfung und die Besprechung am Wochenende bringen je ein Tor. Im Lernmodus gibt es für jede Aufgabe ohne App-Wechsel ein Fokus-Tor dazu.</li>
-  <li><b>Tagessieg.</b> Du gewinnst den Tag, wenn alles erledigt ist, was heute dran war, und der Kabinen-Check gemacht ist.</li>
+  <li><b>Tagessieg.</b> Alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.</li>
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
-  <li><b>Aufstieg.</b> Mit deinen Toren steigst du in die nächste Liga auf. In jeder neuen Liga bekommst du ein neues Trikot.</li>
-  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></details>`;
+  <li><b>Aufstieg.</b> Deine Tore zählen für die Liga, Gegentore nicht. In jeder neuen Liga gibt es ein neues Trikot.</li>
+  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></div>`;
   const T=iso(today()),w=weekInfo();
   const prize=w.prize?(w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`)
     :w.possible?`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`:'Diese Woche reicht es nicht mehr für die Prämie. Am Montag geht es neu los.';
   let h=msgBox()+`<div class="card"><h2>Wochenspiel</h2><div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d)),won=S.wins[d];
-    return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`;
+    return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`+rules;
   h+=`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
   <div class="bar"><div style="width:${pct}%"></div></div>
   <div class="sub">${L.next?`Noch ${L.next[1]-L.n} Tore bis zum Aufstieg in die ${esc(L.next[0])}.`:'Ganz oben angekommen!'}${nextJ?` Nächstes Trikot: ${esc(nextJ.n)} in der ${esc(LIGA[nextJ.lvl][0])}.`:''}</div></div>`;
   h+=`<div class="card"><h2>Trikots</h2><div class="sub" style="margin-bottom:10px">Mit jedem Aufstieg kommt ein neues Trikot dazu. Die Kiel-Trikots gibt es in der 1. Bundesliga und im Europapokal.</div><div class="jgrid">`+
     THEMES.map((th,i)=>{const ok=L.i>=th.lvl;return `<button class="jer ${S.settings.theme===i?'on':''} ${ok?'':'lock'}" ${ok?`data-act="theme" data-i="${i}"`:'disabled'} aria-label="${esc(th.n+' '+th.d)}">${kitSvg(th,i)}<span class="jn">${esc(th.n)}</span>${(()=>{const t=ok?(th.d||'\u00a0'):'ab '+LIGA[th.lvl][0];return `<span class="js${t.length>13?' lg':''}">${esc(t)}</span>`})()}</button>`}).join('')+`</div></div>`;
   h+=`<div class="card"><h2>Abzeichen</h2><div class="badges">`+b.map(([n,d,c,z])=>`<div class="badge ${c>=z?'':'off'}"><b>${n}</b>${d}${c>=z?'<span class="bdone">Geschafft</span>':z>1?`<span class="bprog"><i style="width:${Math.round(c/z*100)}%"></i></span><span class="bcnt">${c} von ${z}</span>`:''}</div>`).join('')+`</div></div>`;
-  return h+rules;
+  return h;
 }
 function renderStundenplan(){
   const tt=S.timetable;
@@ -1333,11 +1416,12 @@ function renderEltern(plan){
   const tight=plan.slice(0,7).filter(d=>d.over.length);
   const sec={ueb:'',ein:'',schule:'',einst:''};
   const lmInfo=S.lm&&S.lm.date===T?`<div class="sub" style="margin-top:6px">Lernmodus ${S.lm.on?'läuft':'war an'} seit ${hm(Math.round((S.lm.since-today().getTime())/60000))} Uhr, ${S.lm.leaves?`${S.lm.leaves}-mal die App verlassen (${Math.round(S.lm.away/60000)} Min.)`:'App nicht verlassen'}${S.lm.awayAt?', gerade nicht in der App':''}.</div>`:'';
+  const gc=concOn(T),sc=`<div class="sub" style="margin-top:6px">Spielstand gegen den Schweinehund: ${goalsOn(T)}:${gc}${gc?` (Gegentore: ${esc(S.conc.filter(c=>c.date===T).map(c=>c.why).join('; '))})`:''}.</div>`;
   sec.ueb+=`<div class="card"><h2>Heute</h2>
   <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div>${S.kick[T]?(ui.ask==='kickreset'?`<div class="row" style="margin-top:6px"><button class="btn sm danger" data-act="kickreset">Wirklich zurücksetzen</button><button class="btn sm" data-act="askx">Nein</button></div>`:`<div class="row" style="margin-top:6px"><button class="btn sm" data-act="ask" data-v="kickreset">Anpfiff zurücksetzen</button></div>`):''}</div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
-  ${lmInfo}</div>`;
+  ${sc}${lmInfo}</div>`;
   sec.schule+=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Stundenplan</h2><button class="btn primary" data-act="sub" data-v="plan">${S.timetable?'Bearbeiten':'Eintragen'}</button></div>
   <div class="sub" style="margin-top:6px">${S.timetable?'Schulschluss diese Woche: '+[1,2,3,4,5].map(w=>{const d=addDays(monday(today()),w-1),fr=freeReason(d),e=schoolEndMin(d);return WD[w]+' '+(fr?'frei':e!=null?hm(e):'?')}).join(' · ')+(S.timetable.ab?' ('+weekType(today())+'-Woche)':''):'Noch kein Stundenplan. Daraus berechnet der Lernplaner den Schulschluss und das Abgabedatum von Hausaufgaben.'}</div></div>`;
   sec.ueb+=`<div class="card"><h2>Wochenspiel</h2><div>${w.won} von ${w.goal} Tagessiegen</div>
@@ -1471,7 +1555,7 @@ function render(){
   document.getElementById('app').innerHTML=ui.tab==='heute'?renderHeute(plan):ui.tab==='woche'?renderWoche(plan):ui.tab==='pokale'?renderPokale():renderEltern(plan);
   syncDot();keepAwake(lmActive());
   if(toastQ){const old=document.getElementById('toast');if(old)old.remove();
-    const d=document.createElement('div');d.id='toast';d.innerHTML=`+${toastQ.n} ${toastQ.n===1?'Tor':'Tore'}<small>${esc(toastQ.why)}</small>`;
+    const d=document.createElement('div');d.id='toast';if(toastQ.opp)d.className='opp';d.innerHTML=toastQ.opp?`Gegentor<small>Der Schweinehund trifft. ${esc(toastQ.why)}</small>`:`${toastQ.n===1?'Tor!':'+'+toastQ.n+' Tore'}<small>${esc(toastQ.why)}</small>`;
     document.body.appendChild(d);setTimeout(()=>d.remove(),2500);toastQ=null}
 }
 
@@ -1479,12 +1563,15 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=b.dataset.id;
   const t=id&&S.tasks.find(x=>x.id===id);
   switch(a){
+    case'ext':lmExt();return;
+    case'report':ui.report=!ui.report;break;
+    case'intro':S.meta.intro=true;save();break;
     case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;ui.sub='';window.scrollTo(0,0);break;
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
     case'focus':ui.focus=id;ui.fb=null;ui.reorder=false;window.scrollTo(0,0);break;
     case'reorder':ui.reorder=!ui.reorder;break;
-    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
+    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');else if(w.length&&n>w[0][0]+30)concede(`Zu spät angepfiffen (geplant ${hm(w[0][0])})`);save();break}
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
     case'fbdur':ui.fbDur=b.dataset.v;break;
@@ -1509,7 +1596,7 @@ document.addEventListener('click',e=>{
     case'quizend':ui.quiz=null;break;
     case'qdel':if(t&&t.quiz){t.quiz.qs.splice(+b.dataset.v,1);if(!t.quiz.qs.length)delete t.quiz;save()}break;
     case'qnew':if(t&&!ui.busy){delete t.quiz;genQuiz(t,false)}return;
-    case'kickreset':{const T=iso(today());delete S.kick[T];S.goals=S.goals.filter(g=>!(g.date===T&&g.why==='Pünktlicher Anpfiff'));
+    case'kickreset':{const T=iso(today());delete S.kick[T];S.goals=S.goals.filter(g=>!(g.date===T&&g.why==='Pünktlicher Anpfiff'));S.conc=S.conc.filter(c=>!(c.date===T&&/^Zu spät/.test(c.why)));
       if(S.lm&&S.lm.date===T)S.lm=null;if(S.brk&&S.brk.date===T)S.brk=null;S.running=null;ui.ask=null;
       ui.msg='Anpfiff, Lernmodus und laufende Zeit von heute sind zurückgesetzt.';ui.msgType='okn';save();beam();break}
     case'lmgo':lmStart();save();break;
