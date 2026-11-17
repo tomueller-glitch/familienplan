@@ -114,18 +114,33 @@ export async function encryptPayload(
 
 /* ---------- VAPID-Anmeldung nach RFC 8292 ---------- */
 
+// Apple: die Anmeldung (JWT) nicht öfter als einmal pro Stunde erneuern. Deshalb je Push-Dienst
+// eine Stunde lang dieselbe Anmeldung wiederverwenden, solange die Funktion läuft.
+const jwtCache = new Map<string, { at: number; header: string }>();
 export async function vapidHeader(endpoint: string, vapid: Vapid, nowSec = Math.floor(Date.now() / 1000)): Promise<string> {
+  const origin = new URL(endpoint).origin;
+  const hit = jwtCache.get(origin + vapid.publicKey);
+  if (hit && nowSec - hit.at < 55 * 60 && nowSec >= hit.at) return hit.header;
+  const header = await makeVapidHeader(origin, vapid, nowSec);
+  jwtCache.set(origin + vapid.publicKey, { at: nowSec, header });
+  return header;
+}
+async function makeVapidHeader(origin: string, vapid: Vapid, nowSec: number): Promise<string> {
   const pub = unb64u(vapid.publicKey);
   const jwk = { kty: 'EC', crv: 'P-256', d: vapid.privateKey, x: b64u(pub.slice(1, 33)), y: b64u(pub.slice(33, 65)) };
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   const head = b64u(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
-  const claims = b64u(enc.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: nowSec + 12 * 3600, sub: vapid.subject })));
+  const claims = b64u(enc.encode(JSON.stringify({ aud: origin, exp: nowSec + 12 * 3600, sub: vapid.subject })));
   const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(`${head}.${claims}`)));
   return `vapid t=${head}.${claims}.${b64u(sig)}, k=${vapid.publicKey}`;
 }
 
 // Schickt eine Nachricht an ein Gerät. Liefert den HTTP-Status des Push-Dienstes.
 export async function sendPush(sub: Sub, msg: Message, vapid: Vapid, ttl = 86400): Promise<number> {
+  return (await sendPushDetailed(sub, msg, vapid, ttl)).status;
+}
+// Wie sendPush, liefert zusätzlich den Grund, den der Push-Dienst bei einer Ablehnung nennt (Apple: {"reason": "..."}).
+export async function sendPushDetailed(sub: Sub, msg: Message, vapid: Vapid, ttl = 86400): Promise<{ status: number; reason: string }> {
   const body = await encryptPayload(sub, enc.encode(JSON.stringify(msg)));
   const res = await fetch(sub.endpoint, {
     method: 'POST',
@@ -140,8 +155,12 @@ export async function sendPush(sub: Sub, msg: Message, vapid: Vapid, ttl = 86400
     },
     body: ab(body),
   });
-  await res.body?.cancel();
-  return res.status;
+  let reason = '';
+  if (res.status >= 300) {
+    const txt = await res.text().catch(() => '');
+    try { reason = String(JSON.parse(txt).reason || ''); } catch { reason = txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80); }
+  } else await res.body?.cancel();
+  return { status: res.status, reason };
 }
 
 /* ---------- Datum und Uhrzeit in Deutschland ---------- */
@@ -2151,17 +2170,19 @@ async function deliver(store: ReturnType<typeof db>, subs: Row[], to: string[], 
   const now = new Date().toISOString();
   for (const s of subs.filter((x) => to.includes(x.person_id))) {
     try {
-      const status = await sendPush(s as Sub, msg, vapid, ttl);
+      const { status, reason } = await sendPushDetailed(s as Sub, msg, vapid, ttl);
       if (status === 404 || status === 410) { await store.dropSub(s.endpoint); continue; }
       if (status < 300) {
         sent++;
         await noteSub(store, s, { last_ok_at: now, last_status: status, last_error: '' }, { at: now, title: msg.title, ok: true });
       } else {
-        // 429 und 5xx sind vorübergehend: Die Nachricht wird im nächsten Lauf noch einmal versucht.
-        const again = status === 429 || status >= 500;
+        // 429, 5xx und Anmelde- oder Verbindungsprobleme sind vorübergehend: im nächsten Lauf noch einmal.
+        const again = status === 429 || status >= 500 || ['BadJwtToken', 'TooManyRequests', 'IdleTimeout', 'TooManyProviderTokenUpdates', 'ExpiredProviderToken'].includes(reason);
         if (again) transient = true;
-        console.warn('Push abgelehnt', status, new URL(s.endpoint).host);
-        await noteSub(store, s, { last_status: status, last_error: `abgelehnt, Status ${status} am ${now}` }, { at: now, title: msg.title, ok: false, why: `abgelehnt, Status ${status}`, again });
+        if (reason === 'BadJwtToken' || reason === 'ExpiredProviderToken') jwtCache.clear();
+        const why = `abgelehnt, Status ${status}${reason ? ` (${reason})` : ''}`;
+        console.warn('Push abgelehnt', status, reason, new URL(s.endpoint).host);
+        await noteSub(store, s, { last_status: status, last_error: `${why} am ${now}` }, { at: now, title: msg.title, ok: false, why, again });
       }
     } catch (e) {
       transient = true;
@@ -2335,14 +2356,14 @@ async function runTest(req: Request) {
   const store = db();
   const subs = await store.get(`ep_push_subs?select=*&endpoint=eq.${encodeURIComponent(endpoint || '')}`);
   if (!subs.length) return { status: 404, body: { error: 'Dieses Gerät ist noch nicht angemeldet.' } };
-  const status = await sendPush(subs[0] as Sub, { title: 'Familienplan', body: 'Testnachricht: Benachrichtigungen funktionieren auf diesem Gerät.', tag: 'test', url: './' }, vapidFromEnv(), 600);
+  const { status, reason } = await sendPushDetailed(subs[0] as Sub, { title: 'Familienplan', body: 'Testnachricht: Benachrichtigungen funktionieren auf diesem Gerät.', tag: 'test', url: './' }, vapidFromEnv(), 600);
   const at = new Date().toISOString();
   if (status === 404 || status === 410) {
     await store.dropSub(subs[0].endpoint);
     return { status: 502, body: { pushStatus: status, error: 'Der Push-Dienst kennt dieses Gerät nicht mehr. Bitte Benachrichtigungen aus- und wieder einschalten.' } };
   }
-  await noteSub(store, subs[0], status < 300 ? { last_ok_at: at, last_status: status, last_error: '' } : { last_status: status, last_error: `abgelehnt, Status ${status} am ${at}` },
-    status < 300 ? { at, title: 'Testnachricht', ok: true } : { at, title: 'Testnachricht', ok: false, why: `abgelehnt, Status ${status}` });
+  await noteSub(store, subs[0], status < 300 ? { last_ok_at: at, last_status: status, last_error: '' } : { last_status: status, last_error: `abgelehnt, Status ${status}${reason ? ` (${reason})` : ''} am ${at}` },
+    status < 300 ? { at, title: 'Testnachricht', ok: true } : { at, title: 'Testnachricht', ok: false, why: `abgelehnt, Status ${status}${reason ? ` (${reason})` : ''}` });
   return { status: status < 300 ? 200 : 502, body: { pushStatus: status, ...(status < 300 ? {} : { error: `Der Push-Dienst hat die Nachricht abgelehnt (Status ${status}).` }) } };
 }
 
