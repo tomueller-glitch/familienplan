@@ -1044,12 +1044,12 @@ const FACH_HINWEIS={
 };
 function fachHinweis(subject){return FACH_HINWEIS[subject]||(LANG.includes(subject)?`${subject}: Vokabeln und Grammatik der Lektionen, Übersetzen, Formen bilden.`:`${subject}: Fachbegriffe und Inhalte des Themas aktiv abfragen und erklären. Rechnen nur, wenn das Fach es verlangt.`)}
 function examMsg(id,text,type){ui.exMsg={id,text,type}}
-const examRefined=e=>e.ai==='ok'||!!e.lp||!!(e.focus&&e.focus.length);
+const examRefined=e=>e.ai==='ok'||(e.ai!==''&&e.ai!=='fehler'&&(!!e.lp||!!(e.focus&&e.focus.length)));
 function examStatus(e,ts){
   const m=ui.exMsg&&ui.exMsg.id===e.id?`<div class="note ${ui.exMsg.type||''}" style="margin-top:6px">${esc(ui.exMsg.text)}</div>`:'';
   if(ui.busy===e.id)return`<div class="note" style="margin-top:6px">Claude gleicht Thema, Lehrplan und Buch ab und plant die Schritte. Das dauert bis zu einer Minute.</div>`;
   if(m)return m;
-  if(examRefined(e)||!ts.some(t=>!t.done))return'';
+  if(!AI_OK()||examRefined(e)||!ts.some(t=>!t.done))return'';
   return`<div class="note warn" style="margin-top:6px">Die Lernschritte sind noch allgemein.${e.aiErr?' Letzter Versuch: '+esc(e.aiErr):''} Mit „Mit Claude planen“ werden sie auf Thema, Jahrgangsstufe und Lehrplan zugeschnitten.</div>`;
 }
 async function refineExam(id){
@@ -1814,6 +1814,8 @@ document.addEventListener('submit',e=>{
       const topic=(v.topic||'').trim(),notes=String(v.notes||'').trim().slice(0,1500),moved=v.date!==e.date||v.type!==e.type||wantSheet!==!!sh;
       const changed=moved||topic!==(e.topic||'')||notes!==(e.notes||'');
       if(topic!==(e.topic||'')){e.lp='';e.focus=[]}
+      // Die alte Anpassung durch Claude passt nicht mehr, sobald sich Thema, Infos oder Termin ändern.
+      if(changed){e.ai='';e.aiErr=''}
       Object.assign(e,{date:v.date,type:v.type,topic,notes});
       if(moved)replanExam(e,{sheet:wantSheet&&!(sh&&sh.done),link});else if(sh)sh.link=link;
       ui.edit=null;ui.msg=moved?'Prüfung geändert, die offenen Lerneinheiten sind neu verteilt.':'Prüfung geändert.';ui.msgType='okn';save();
@@ -1894,7 +1896,7 @@ const NEUES=[
   {id:'2026-11-18b',datum:'18. November',titel:'Lernschritte passen besser zum Fach',punkte:[
     {t:'Die Lernschritte für Prüfungen passen jetzt zum Fach: Rechnen nur in Mathe, Physik und Chemie, in Musik, Geschichte oder Biologie zum Beispiel Lernkarten, Hörbeispiele, Zeitleiste oder Skizzen. Das Thema steht direkt im Auftrag.'},
     {t:'Claude bekommt für jedes Fach einen Hinweis, was dort typischerweise geprüft wird, und soll in jedem Schritt den konkreten Inhalt nennen, also Werke, Begriffe oder Buchseiten statt allgemeiner Methoden.',eltern:1},
-    {t:'Bei jeder Prüfung unter Eltern, Schule steht jetzt, ob Claude die Schritte angepasst hat. Wenn nicht, steht dort der Grund und der Knopf „Mit Claude planen“.',eltern:1}]},
+    {t:'Bei jeder Prüfung unter Eltern, Schule steht jetzt, ob Claude die Schritte angepasst hat. Wenn nicht, steht dort der Grund und der Knopf „Mit Claude planen“. Ändert ihr Thema, Infos oder Termin, gilt die alte Anpassung nicht mehr, bis Claude neu geplant hat.',eltern:1}]},
   {id:'2026-11-18a',datum:'18. November',titel:'Inhaltsverzeichnis auch als PDF',punkte:[
     {t:'Unter Eltern, Schule, Lehrwerke lässt sich das Inhaltsverzeichnis eines Schulbuchs jetzt auch als PDF einlesen, nicht nur als Foto. Das PDF darf bis zu 5 MB groß sein.',eltern:1},
     {t:'Die Rückmeldung beim Einlesen steht jetzt direkt beim Buch. Das Inhaltsverzeichnis lässt sich dort auch ansehen, korrigieren oder als Text einfügen.',eltern:1}]},
