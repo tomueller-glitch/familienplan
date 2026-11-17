@@ -778,23 +778,30 @@ function checkDayWin(){
 // Eine Web-App kann das Verlassen nicht verhindern (dafür: Geführter Zugriff am iPhone). Sie merkt es aber,
 // rechnet die Zeit nicht als Lernzeit, belohnt Aufgaben ohne App-Wechsel und meldet längeres Wegbleiben.
 const lmActive=()=>!!(S.lm&&S.lm.on&&S.lm.date===iso(today()));
-function lmStart(){if(S.settings.focusMode===false||lmActive())return;S.lm={date:iso(today()),on:true,since:Date.now(),away:0,leaves:0,awayAt:null,clean:true};beam()}
+// Wem gehört dieses Gerät? Gleicher Speicher wie im Familienplan. Nur auf dem Gerät des Kindes
+// läuft der Lernmodus mit Erkennung von App-Wechseln; Eltern-Geräte beobachten nur.
+const ME_KEY='essensplan.ich';
+let devMe=null;try{devMe=localStorage.getItem(ME_KEY)}catch(e){}
+function setMe(id){devMe=id;try{localStorage.setItem(ME_KEY,id)}catch(e){}}
+const kidDevice=()=>!REMOTE||!S.settings.kidId||!persons.length||devMe===S.settings.kidId;
+const lmHere=()=>lmActive()&&kidDevice();
+function lmStart(){if(S.settings.focusMode===false||lmActive()||!kidDevice())return;S.lm={date:iso(today()),on:true,since:Date.now(),away:0,leaves:0,awayAt:null,clean:true};beam()}
 function lmStop(msg){if(!S.lm)return;S.lm=Object.assign({},S.lm,{on:false,awayAt:null,ended:Date.now()});if(msg){ui.msg=msg;ui.msgType='okn'}beam()}
 // Zeit, in der jemand weg war, ohne die Zeit einer Pause.
 function goneMs(from,to){const b=S.brk;let g=to-from;if(b&&b.at&&b.until){const o=Math.min(to,b.until)-Math.max(from,b.at);if(o>0)g-=o}return Math.max(0,g)}
-function lmHide(){if(!lmActive()||S.lm.awayAt)return;S.lm.awayAt=Date.now();writeCache();beam()}
-function lmExt(){if(lmActive()){S.lm.ext=Date.now();writeCache();beam()}}
+function lmHide(){if(!lmHere()||S.lm.awayAt)return;S.lm.awayAt=Date.now();writeCache();beam()}
+function lmExt(){if(lmHere()){S.lm.ext=Date.now();writeCache();beam()}}
 function lmShow(){
   if(!S.lm||!S.lm.awayAt)return;
   const now=Date.now(),g=goneMs(S.lm.awayAt,now),ext=S.lm.ext;S.lm.awayAt=null;
   // Ludus Latinus oder ein Übungsblatt geöffnet: das ist Arbeit, keine Ablenkung.
   if(ext){S.lm.ext=null;save();render();return}
-  if(lmActive()&&g>=20000){S.lm.leaves++;S.lm.away+=g;S.lm.clean=false;ui.back=Math.max(1,Math.round(g/60000));
+  if(lmHere()&&g>=20000){S.lm.leaves++;S.lm.away+=g;S.lm.clean=false;ui.back=Math.max(1,Math.round(g/60000));
     if(g>=60000)concede(`Abgelenkt: ${Math.round(g/60000)} Min. aus der App`);
     if(S.running)S.running=Object.assign({},S.running,{at:S.running.at+g})}
   save();render();
 }
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')lmHide();else{lmShow();keepAwake(lmActive())}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')lmHide();else{if(kidDevice())lmShow();keepAwake(lmHere())}});
 window.addEventListener('pagehide',lmHide);
 // Lernmodus und Pause sofort an den Server, damit die Push-Funktion Bescheid weiß, auch wenn die App gleich angehalten wird.
 function beam(){
@@ -1224,6 +1231,24 @@ function introCard(){
     <li><b>Schaffst du alles und hast mehr Tore, gewinnst du den Tag.</b> Mit deinen Toren steigst du in die nächste Liga auf.</li></ol>
     <div class="act"><button class="btn primary xl" data-act="intro">Verstanden, los geht's</button></div></div>`;
 }
+// Beim ersten Start auf einem Gerät: Wer benutzt es? Erwachsene brauchen die PIN.
+function whoCard(){
+  if(!REMOTE||!persons.length||!S.settings.kidId||(devMe&&persons.some(p=>p.id===devMe)&&!ui.who))return'';
+  const ask=ui.whoPin;
+  return `<div class="card kickk"><div class="k-lab">Dieses Gerät</div><div class="k-big">Wer benutzt dieses Handy?</div>
+    <div class="sub">Der Lernmodus mit Gegentoren läuft nur auf dem Gerät von ${esc((persons.find(p=>p.id===S.settings.kidId)||{}).name||'eurem Sohn')}. Auf euren Geräten könnt ihr zuschauen, ohne dass etwas zählt.</div>
+    <div class="row" style="margin-top:12px">${persons.map(p=>`<button class="btn ${devMe===p.id?'on':''}" data-act="who" data-id="${p.id}">${esc(p.name)}</button>`).join('')}</div>
+    ${ask?`<form data-form="whopin" style="margin-top:12px"><label>Eltern-PIN für ${esc((persons.find(p=>p.id===ask)||{}).name||'')}<input name="pin" type="password" inputmode="numeric" autocomplete="off" required></label><div class="row" style="margin-top:8px"><button class="btn primary">Bestätigen</button></div></form>`:''}
+    ${ui.who?'<div class="act"><button class="lnk" data-act="whox">Abbrechen</button></div>':''}</div>`;
+}
+function learnSites(){
+  const xs=String(S.settings.sites||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const i=l.lastIndexOf('|');const url=(i>=0?l.slice(i+1):l).trim(),name=(i>=0?l.slice(0,i):'').trim();
+    let host='';try{host=new URL(url).hostname.replace(/^www\./,'')}catch(e){return null}return{name:name||host,url}}).filter(x=>x&&/^https?:/.test(x.url));
+  if(S.settings.ludusUrl&&!xs.some(x=>x.url===S.settings.ludusUrl))xs.unshift({name:'Ludus Latinus',url:S.settings.ludusUrl});
+  return xs;
+}
+function sitesRow(){const xs=learnSites();if(!xs.length)return'';
+  return `<div class="next"><div class="n-lab">Lern-Apps (zählen nicht als Ablenkung)</div><div class="row">${xs.map(x=>`<a class="btn sm" data-act="ext" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join('')}</div></div>`}
 function nextLine(rest){
   if(!rest.length)return'';
   return `<div class="next"><div class="n-lab">Danach</div>`+rest.slice(0,3).map(x=>`<div class="n-it"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span>${ui.reorder?`<button class="btn sm" data-act="focus" data-id="${x.t.id}">Jetzt</button>`:''}</div>`).join('')+
@@ -1236,8 +1261,10 @@ function focusActions(t){
     :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">Schon erledigt</button></div>`;
 }
 function renderFocus(plan){
-  const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmActive();
-  let h=tafel()+(ui.report?spielbericht():'')+introCard();
+  const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmHere();
+  let h=whoCard();if(h)return h;
+  h=tafel()+(ui.report?spielbericht():'')+introCard();
+  if(lmActive()&&!lm){const L=S.lm,kn=(persons.find(p=>p.id===S.settings.kidId)||{}).name||'Euer Sohn';h+=`<div class="lmline">${esc(kn)} ist gerade im Lernmodus (seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}). Auf diesem Gerät zählt nichts davon.</div>`}
   if(lm){const L=S.lm;h+=`<div class="lmline">Lernmodus seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}</div>`}
   if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. ${ui.back>=1&&S.conc.some(c=>c.date===T&&Date.now()-c.at<120000)?'Der Schweinehund hat getroffen, und den':'Den'} Kempa-Trick gibt es für diese Aufgabe nicht mehr. Die Zeit zählt nicht als Lernzeit. <button class="lnk" data-act="backok">Weiter</button></div>`;
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich kannst du sie anpassen oder löschen.</div>`;
@@ -1246,7 +1273,7 @@ function renderFocus(plan){
   const foot=()=>{
     const done=S.tasks.filter(t=>t.done&&t.doneAt===T);
     const f=done.length?`<details class="doned"><summary>Erledigt heute (${done.length})</summary>`+done.map(t=>`<div class="n-it"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="n-min">${t.actual} Min.</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</details>`:'';
-    if(lm)return f+`<div class="foot"><button class="lnk" data-act="lmendask">Lernmodus beenden</button></div>`+(ui.lmEnd?`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`:'');
+    if(lm)return sitesRow()+f+`<div class="foot"><button class="lnk" data-act="lmendask">Lernmodus beenden</button></div>`+(ui.lmEnd?`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`:'');
     return f+(jokerUsed()||S.wins[T]||!q.length?'':'<div class="foot"><button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button></div>')+addButtons(true);
   };
   // 0. Spiel verlegen: Nachfrage oder verlegter Tag
@@ -1354,7 +1381,7 @@ function renderPokale(){
     <li><b>Tempogegenstoß:</b> pünktlich angefangen</li>
     <li><b>Kempa-Trick:</b> im Lernmodus eine ganze Aufgabe ohne Ablenkung</li></ul></div>
   <div><h3><span class="ball opp" aria-hidden="true"></span>Der Schweinehund trifft</h3><ul>
-    <li>wenn du im Lernmodus länger als eine Minute aus der App gehst. Auszeit, Halbzeit, Ludus Latinus und Übungsblätter zählen nicht.</li>
+    <li>wenn du im Lernmodus länger als eine Minute aus der App gehst. Auszeit, Halbzeit und alles, was du über die Knöpfe im Lernplaner öffnest (Ludus Latinus, Übungsblätter, Lern-Apps), zählen nicht.</li>
     <li>wenn du mehr als eine halbe Stunde zu spät anfängst</li></ul></div></div>
   <ol class="rules">
   <li><b>Tagessieg.</b> Alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.</li>
@@ -1534,6 +1561,8 @@ function renderEltern(plan){
   <label class="srow col"><span>Eigene Pausenideen<small>Eine pro Zeile, kommen zu den Vorschlägen dazu</small></span><textarea name="breakIdeas" rows="3" placeholder="Meerschweinchen füttern">${esc(st.breakIdeas||'')}</textarea></label>
   ${sr('Jahrgangsstufe',num('grade',st.grade||7,5,13),'. Klasse')}
   <h3 class="sh">Lernmodus</h3>
+  ${REMOTE&&persons.length?`<div class="srow"><span>Dieses Gerät gehört<small>Nur auf dem Gerät eures Sohnes zählen App-Wechsel</small></span><span>${esc((persons.find(p=>p.id===devMe)||{}).name||'noch niemandem')} <button type="button" class="btn sm" data-act="whoset">Ändern</button></span></div>`:''}
+  <label class="srow col"><span>Erlaubte Lern-Apps und Websites<small>Eine pro Zeile, z. B. „Latein | https://…netlify.app“. Öffnet er sie über den Knopf im Lernplaner, zählt das nicht als Ablenkung.</small></span><textarea name="sites" rows="3" placeholder="Latein-App | https://beispiel.netlify.app">${esc(st.sites||'')}</textarea></label>
   ${tog('Lernmodus beim Anpfiff','focusMode',st.focusMode!==false,'Nur noch die aktuelle Aufgabe, Beenden mit PIN, Fokus-Tore')}
   ${sr('Meldung an euch nach',num('awayAlert',st.awayAlert||5,2,30),'Min. außerhalb')}
   ${tog('Abfrage durch Claude (Test)','quizOn',st.quizOn!==false,'Fragen zu jeder Prüfungs-Lerneinheit')}
@@ -1566,8 +1595,8 @@ function render(){
   if(evaluateDays())ch=true;
   if(S.lm&&S.lm.on&&S.lm.date!==iso(today())){S.lm=Object.assign({},S.lm,{on:false});ch=true}
   if(lmActive()&&toWin()===0){lmStop('Alles geschafft! Der Lernmodus ist beendet.');ch=true}
-  if(lmActive()){ui.tab='heute';ui.full=false;ui.day=0}
-  document.body.classList.toggle('lm',lmActive());
+  if(lmHere()){ui.tab='heute';ui.full=false;ui.day=0}
+  document.body.classList.toggle('lm',lmHere());
   const plan=simulate(),T=iso(today());
   if(!plan[0].free){const tot=plan[0].used+plan[0].over.reduce((a,o)=>a+o.P,0)+S.tasks.filter(t=>t.done&&t.doneAt===T).reduce((a,t)=>a+(t.planned||0),0);
     const cur=S.days[T]||{};if(!cur.planned||tot>cur.planned){S.days[T]=Object.assign({},cur,{planned:tot});ch=true}}
@@ -1578,7 +1607,7 @@ function render(){
   document.getElementById('today').textContent=WDL[today().getDay()]+', '+today().getDate()+'. '+['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][today().getMonth()];
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.v===ui.tab));
   document.getElementById('app').innerHTML=ui.tab==='heute'?renderHeute(plan):ui.tab==='woche'?renderWoche(plan):ui.tab==='pokale'?renderPokale():renderEltern(plan);
-  syncDot();keepAwake(lmActive());
+  syncDot();keepAwake(lmHere());
   if(toastQ){const old=document.getElementById('toast');if(old)old.remove();
     const d=document.createElement('div');d.id='toast';if(toastQ.opp)d.className='opp';d.innerHTML=toastQ.opp?`Gegentor<small>Der Schweinehund trifft. ${esc(toastQ.why)}</small>`:`${toastQ.n===1?'Tor!':'+'+toastQ.n+' Tore'}<small>${esc(toastQ.why)}</small>`;
     document.body.appendChild(d);setTimeout(()=>d.remove(),2500);toastQ=null}
@@ -1590,6 +1619,9 @@ document.addEventListener('click',e=>{
   switch(a){
     case'ext':lmExt();return;
     case'report':ui.report=!ui.report;break;
+    case'who':{const p=persons.find(x=>x.id===id);if(!p)break;if(p.adult&&devMe!==id){ui.whoPin=id;break}setMe(id);ui.who=false;ui.whoPin=null;break}
+    case'whox':ui.who=false;ui.whoPin=null;break;
+    case'whoset':if(lmHere())break;ui.who=true;ui.tab='heute';window.scrollTo(0,0);break;
     case'jokerask':ui.joker=true;ui.jgrund=null;window.scrollTo(0,0);break;
     case'jokerx':ui.joker=false;break;
     case'jgrund':ui.jgrund=ui.jgrund===b.dataset.v?null:b.dataset.v;break;
@@ -1689,6 +1721,7 @@ document.addEventListener('submit',e=>{
       const row=famRow({title,start_time:v.start,end_time:v.end||null,home_time:v.home||null,pause_ferien:!!v.pf,
         weekdays:v.date?[(parse(v.date).getDay()+6)%7]:wds,valid_from:v.date||null,valid_to:v.date||null});
       (async()=>{try{await famSave([row]);ui.msg='Termin gespeichert, auch im Familienplan.';ui.msgType='okn'}catch(e){ui.msg='Speichern hat nicht geklappt.';ui.msgType='err'}render()})();return}
+    case'whopin':if(v.pin===String(S.settings.pin)){setMe(ui.whoPin);ui.who=false;ui.whoPin=null}else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'lmend':if(v.pin===String(S.settings.pin)){lmStop('Lernmodus beendet.');ui.lmEnd=false}else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'pin':if(v.pin===S.settings.pin)ui.unlocked=true;else{ui.msg='Die PIN stimmt nicht.';ui.msgType='err'}break;
     case'ha':if(!v.title.trim())return;addHA(v.subject,v.title.trim(),v.due,v.est);ui.addHA=false;ui.msg='Hausaufgabe gespeichert und eingeplant.';break;
@@ -1723,7 +1756,7 @@ document.addEventListener('submit',e=>{
     case'settings':{
       const st=Object.assign({},S.settings),se=Object.assign({},S.schoolEnd);
       st.afterSchool=+v.afterSchool||0;st.latest=v.latest||st.latest;st.weekendStart=v.weekendStart||st.weekendStart;
-      st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.focusMode=!!v.focusMode;st.awayAlert=Math.min(30,Math.max(2,+v.awayAlert||5));st.quizOn=!!v.quizOn;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
+      st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.focusMode=!!v.focusMode;st.sites=String(v.sites||'').slice(0,2000);st.awayAlert=Math.min(30,Math.max(2,+v.awayAlert||5));st.quizOn=!!v.quizOn;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
       st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
       st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
       if(v.pin&&v.pin.trim())st.pin=v.pin.trim();
