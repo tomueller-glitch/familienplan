@@ -40,3 +40,9 @@ console.log('Bettag',lernMessages(bt,persons,Date.parse('2026-11-18T10:10:00+01:
   const extra2=[{id:'brk',coll:'brk',data:{date:'2026-11-17',at:now-7*60000,until:now-1*60000,len:6,long:true}},{id:'lm',coll:'lm',data:{date:'2026-11-17',on:true,since:now-3600000,away:0,leaves:0,awayAt:now-7*60000}}];
   console.log('In der Pause raus',lernMessages(lpFromRows([...rows,...extra2]),persons,now).filter(x=>/lp-weg/.test(x.key)).length);
 }
+// Spiel verlegt: nur Elternnachricht
+{
+  const now=Date.parse('2026-11-17T15:30:00+01:00');
+  const m=lernMessages(lpFromRows([...rows,{id:'day:2026-11-17',coll:'day',data:{k:'2026-11-17',v:{verlegt:true,grund:'muede'}}}]),persons,now);
+  console.log('Verlegt',m.map(x=>`${x.key} -> ${x.to.join(',')} | ${x.msg.title}: ${x.msg.body}`));
+}

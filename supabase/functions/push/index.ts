@@ -1863,7 +1863,7 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
 export type LpData = {
   settings: Row; schoolEnd: Row; timetable: Row | null; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
   wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
-  lm?: Row | null; brk?: Row | null;
+  lm?: Row | null; brk?: Row | null; days?: Record<string, Row>;
 };
 
 export function lpFromRows(rows: Row[]): LpData {
@@ -1883,6 +1883,7 @@ export function lpFromRows(rows: Row[]): LpData {
     else if (r.coll === 'win') d.wins[v.k] = !!v.v;
     else if (r.coll === 'kick') d.kick[v.k] = String(v.v);
     else if (r.coll === 'meet') d.meets[v.k] = String(v.v);
+    else if (r.coll === 'day' && v && v.k) (d.days ||= {})[String(v.k)] = (v.v || {}) as Row;
     else if (r.coll === 'lm') d.lm = v;
     else if (r.coll === 'brk') d.brk = v;
   }
@@ -1922,6 +1923,13 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
   const adults = persons.filter((p) => p.adult).map((p) => p.id);
   const kname = kid ? kid.name : 'Euer Sohn';
   const url = './lernen.html';
+  // Spiel verlegt: keine Erinnerungen ans Kind, einmal Bescheid an die Eltern.
+  const vd = (lp.days || {})[day];
+  if (vd && vd.verlegt) {
+    const g: Record<string, string> = { muede: 'müde', krank: 'krank', aerger: 'Ärger oder Streit', kopf: 'zu viel im Kopf', lust: 'einfach keine Lust' };
+    if (adults.length) out.push({ key: `lp-verlegt:${day}`, to: adults, ttl: 6 * 3600, msg: { title: `${kname} hat heute das Spiel verlegt`, body: `${vd.grund ? `Grund: ${g[String(vd.grund)] || vd.grund}. ` : ''}Vielleicht kurz nachfragen, wie es geht.`, tag: 'lernplaner-eltern', url } });
+    return out;
+  }
   const tomorrow = addDays(day, 1);
   const nextWork = wdOf(tomorrow) === 6 && st.sundayFree !== false ? addDays(tomorrow, 1) : tomorrow;
   const examDate: Record<string, string> = Object.fromEntries(lp.exams.map((e) => [e.id, String(e.date)]));
@@ -2024,7 +2032,8 @@ async function loadLern(store: Store, today: string): Promise<LpData> {
     store.get(`${base}&coll=eq.task&data->>doneAt=eq.${today}`),
     store.get(`${base}&coll=in.(win,kick)&data->>k=gte.${addDays(mondayOf(today), -7)}`),
   ]);
-  return lpFromRows([...a, ...b, ...c, ...d]);
+  const e = await store.get(`${base}&coll=eq.day&data->>k=eq.${today}`).catch(() => []);
+  return lpFromRows([...a, ...b, ...c, ...d, ...e]);
 }
 
 /* ---------- Datenbank über die REST-Schnittstelle ---------- */

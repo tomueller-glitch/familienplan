@@ -607,7 +607,7 @@ function learn(k,r){r=Math.min(3,Math.max(.4,r));const p=S.pace[k]||{f:1,n:0};p.
 function evaluateDays(){
   const T=iso(today()),m=S.model;let ch=false;
   Object.keys(S.days).sort().forEach(d=>{const r=S.days[d];if(d>=T||r.eval)return;
-    const dd=parse(d);ch=true;r.eval=true;if(!isWeekday(dd))return;
+    const dd=parse(d);ch=true;r.eval=true;if(!isWeekday(dd)||r.verlegt)return;
     const done=S.tasks.filter(t=>t.done&&t.doneAt===d).reduce((a,t)=>a+(t.planned||0),0),won=!!S.wins[d];
     r.done=done;r.won=won;
     if(r.planned>0){
@@ -705,7 +705,7 @@ function simulate(opt){
     const d=addDays(t0,i),di=iso(d);
     let nx=addDays(d,1);if(isFree(nx))nx=addDays(nx,1);const nextWork=iso(nx);
     const{wins,appts,free}=windowsFor(d,i===0&&!opt.fullDay),cap=wins.map(w=>w.slice()),lim=dayLimit(d),base=i===0?doneToday:0;
-    const day={date:di,appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim,max:dayMax(d),run:0,breaks:[]};
+    const day={date:di,verlegt:verlegt(di),appts,free,items:[],over:[],capMin:wins.reduce((a,[s,e])=>a+e-s,0),used:0,lim,max:dayMax(d),run:0,breaks:[]};
     const ha=open.filter(t=>t.kind==='ha'&&!placed.has(t.id));
     const urgent=ha.filter(t=>t.due<=nextWork).sort(byDue);
     const daily=open.filter(t=>t.kind==='daily'&&t.date===di);
@@ -718,12 +718,17 @@ function simulate(opt){
       if(segs){day.items.push({t,segs,P});day.used+=P;placed.add(t.id)}
       else if(must){day.over.push({t,P});placed.add(t.id)}};
     urgent.forEach(t=>place(t,true));
+    if(verlegt(di)){
+      // Verlegtes Spiel: nur Hausaufgaben für morgen und Lernen für eine Prüfung morgen.
+      lern.filter(t=>exD[t.examId]<=nextWork).forEach(t=>place(t,true));
+    }else{
     daily.forEach(t=>place(t,true));
     // Zuerst, was heute sein muss (überfällig oder Prüfung morgen), dann der Rest bis zum Richtwert.
     const mustL=t=>exD[t.examId]<=nextWork||t.date<di;
     lern.filter(mustL).forEach(t=>place(t,true));
     lern.filter(t=>!mustL(t)).forEach(t=>place(t,false));
     rest.forEach(t=>place(t,false));
+    }
     day.items.sort((a,b)=>a.segs[0][0]-b.segs[0][0]);
     const lastEnd=Math.max(0,...day.items.map(it=>it.segs[it.segs.length-1][1]));
     day.breaks=day.breaks.filter(b=>b.s<lastEnd&&b.e>b.s);
@@ -742,6 +747,10 @@ const totalGoals=()=>S.goals.reduce((a,g)=>a+g.n,0);
 const goalsOn=di=>S.goals.filter(g=>g.date===di).reduce((a,g)=>a+g.n,0);
 // Jeder Lerntag ist ein Heimspiel gegen den Schweinehund. Er trifft nur, wenn man sich ablenken lässt oder zu spät anfängt.
 const concOn=di=>S.conc.filter(c=>c.date===di).length;
+// Spiel verlegen: einmal pro Woche ein schlechter Tag ohne Strafe. Nur was morgen fällig ist, bleibt.
+const verlegt=di=>!!(S.days[di]||{}).verlegt;
+function jokerUsed(){const m=monday(today());return[0,1,2,3,4,5,6].some(i=>verlegt(iso(addDays(m,i))))}
+const VGRUND={muede:'Müde',krank:'Krank',aerger:'Ärger oder Streit',kopf:'Zu viel im Kopf',lust:'Einfach keine Lust'};
 const GOAL_NAME={'Tor!':'Tor','Pünktlicher Anpfiff':'Tempogegenstoß','Fokus-Tor':'Kempa-Trick','Kabinen-Check':'Kabinen-Check','Spielanalyse':'Spielanalyse','Mannschaftsbesprechung':'Mannschaftsbesprechung'};
 const GOAL_WHY={'Pünktlicher Anpfiff':'pünktlich angefangen','Fokus-Tor':'ganze Aufgabe ohne Ablenkung'};
 const goalName=w=>GOAL_NAME[w]||w;
@@ -756,7 +765,7 @@ function award(n,why,taskId){
 }
 function checksDone(di){if(!S.settings.checksOn)return true;const c=S.checks[di]||{};return CHECKS.every(([k])=>c[k])}
 function checkDayWin(){
-  const T=iso(today());if(S.wins[T])return;
+  const T=iso(today());if(S.wins[T]||verlegt(T))return;
   // Maßstab ist der ganze Tag ab Lernbeginn: Wer spät anfängt, bekommt den Rest nicht als „passt nicht mehr“ geschenkt.
   const day=simulate({fullDay:true})[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
@@ -802,7 +811,7 @@ function toWin(){const T=iso(today()),day=simulate({fullDay:true})[0];if(S.wins[
   return day.items.length+(S.settings.checksOn&&!checksDone(T)?1:0)}
 function weekInfo(){
   const m=monday(today()),all=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
-  const days=all.filter(d=>!isFree(parse(d)));
+  const days=all.filter(d=>!isFree(parse(d))&&!verlegt(d));
   const won=days.filter(d=>S.wins[d]).length,goal=Math.max(1,Math.min(days.length,Math.round((+S.settings.winGoal||4)*days.length/5))),left=days.filter(d=>d>=T&&!S.wins[d]).length;
   return{key:iso(m),days:all,won,goal,left,prize:won>=goal,possible:won+left>=goal,redeemed:S.prizes[iso(m)]==='eingelöst'};
 }
@@ -1173,7 +1182,7 @@ function meetCard(){
 function dayProgress(){
   const T=iso(today()),full=simulate({fullDay:true})[0];
   const done=S.tasks.filter(t=>t.done&&t.doneAt===T).length,open=full.free?0:full.items.length;
-  const chk=S.settings.checksOn&&!full.free?1:0,chkDone=chk&&checksDone(T)?1:0;
+  const chk=S.settings.checksOn&&!full.free&&!verlegt(T)?1:0,chkDone=chk&&checksDone(T)?1:0;
   return{total:done+open+chk,done:done+chkDone};
 }
 // Anzeigetafel wie in der Halle: Heim (du) gegen Gast (der Schweinehund), darunter in einem Satz, wofür es Tore gibt.
@@ -1209,7 +1218,7 @@ function spielbericht(){
 function introCard(){
   if(S.meta.intro)return'';
   return `<div class="card introk"><div class="k-lab">So geht das Spiel</div><div class="k-big">Jeder Lerntag ist ein Handballspiel</div>
-    <ol class="intro-l"><li><b>Du spielst gegen den Schweinehund.</b> Das ist die Stimme im Kopf, die sagt: „Mach das später.“</li>
+    <ol class="intro-l"><li><b>Du spielst gegen den Schweinehund.</b> Das ist die Stimme im Kopf, die sagt: „Mach das später“ oder „Ich hab heute keine Lust“.</li>
     <li><b>Jede erledigte Aufgabe ist ein Tor für dich.</b> Pünktlich anfangen und ohne Ablenkung durchziehen bringt Extra-Tore.</li>
     <li><b>Der Schweinehund trifft,</b> wenn du dich ablenken lässt oder zu spät anfängst.</li>
     <li><b>Schaffst du alles und hast mehr Tore, gewinnst du den Tag.</b> Mit deinen Toren steigst du in die nächste Liga auf.</li></ol>
@@ -1238,8 +1247,22 @@ function renderFocus(plan){
     const done=S.tasks.filter(t=>t.done&&t.doneAt===T);
     const f=done.length?`<details class="doned"><summary>Erledigt heute (${done.length})</summary>`+done.map(t=>`<div class="n-it"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="n-min">${t.actual} Min.</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</details>`:'';
     if(lm)return f+`<div class="foot"><button class="lnk" data-act="lmendask">Lernmodus beenden</button></div>`+(ui.lmEnd?`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`:'');
-    return f+addButtons(true);
+    return f+(jokerUsed()||S.wins[T]||!q.length?'':'<div class="foot"><button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button></div>')+addButtons(true);
   };
+  // 0. Spiel verlegen: Nachfrage oder verlegter Tag
+  if(ui.joker&&!verlegt(T))return h+`<div class="card kickk"><div class="k-lab">Spiel verlegen</div><div class="k-big">Heute geht gar nichts?</div>
+    <div class="sub">Das kennt jeder Spieler. Einmal pro Woche darfst du ein Spiel verlegen, und du verlierst dabei nichts: Es gibt keine Gegentore, und das Wochenspiel zählt einfach einen Spieltag weniger.${q.some(x=>x.t.kind==='ha')?' Nur was morgen fällig ist, bleibt für heute.':''}</div>
+    <div class="sub" style="margin-top:12px">Magst du sagen, was los ist? Musst du nicht.</div>
+    <div class="row" style="margin-top:6px">${Object.entries(VGRUND).map(([k,l])=>`<button class="btn sm ${ui.jgrund===k?'on':''}" data-act="jgrund" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="act"><button class="btn primary xl" data-act="joker">Spiel verlegen</button><button class="lnk" data-act="jokerx">Doch spielen</button></div></div>`;
+  if(verlegt(T)){
+    const must=q.filter(x=>!x.over);
+    h+=`<div class="card endk"><div class="k-lab">Spiel verlegt</div><div class="k-big">Ruh dich aus</div><div class="sub">Morgen geht es weiter, frisch und ausgeruht. Die übrigen Aufgaben verteilt die App auf die nächsten Tage.</div>
+      ${must.length?`<div class="sub" style="margin-top:12px;text-align:left"><b>Nur das muss heute noch sein:</b></div><ol class="k-list" style="text-align:left">${must.map(x=>`<li><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span></li>`).join('')}</ol>`:''}
+      <div class="act"><button class="lnk" data-act="jokerundo">Doch spielen</button></div></div>`;
+    if(must.length&&ui.focus&&must.some(x=>x.t.id===ui.focus)){}
+    return h+(must.length?`<div class="card jetzt"><div class="j-top"><span class="dot" style="background:${col(must[0].t.subject)}"></span><span>Nur das Nötigste</span></div><div class="ft">${esc(must[0].t.title)}</div><div class="meta">${taskMeta(must[0].t)} · ${must[0].P} Min.</div>${ui.fb===must[0].t.id?fbPanel(must[0].t,must[0].P):focusActions(must[0].t)}</div>`:'')+foot();
+  }
   // 1. Pause läuft: nur die Pause
   const bk=S.brk;
   if(bk&&bk.date===T&&bk.until>Date.now()){
@@ -1257,7 +1280,7 @@ function renderFocus(plan){
       <ol class="k-list">${rv?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kurze Spielanalyse</span><span class="n-min">1 Min.</span></li>`:''}${q.slice(0,5).map(x=>`<li><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span></li>`).join('')}${q.length>5?`<li class="n-more">und ${q.length-5} weitere</li>`:''}${S.settings.checksOn?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kabinen-Check</span></li>`:''}</ol>
       <div class="chances"><div><span class="ball" aria-hidden="true"></span><span>${q.length+(S.settings.checksOn?1:0)} Tore für dich sind drin${dl&&n<=dl&&n>=dl-105?`, dazu ein Tempogegenstoß, wenn du bis ${hm(dl)} anfängst`:''}.</span></div>
       <div><span class="ball opp" aria-hidden="true"></span><span>Der Schweinehund trifft, wenn du dich ablenken lässt${w.length&&n<=w[0][0]+30?` oder erst nach ${hm(w[0][0]+30)} anfängst`:''}.</span></div></div>
-      <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div></div></div>`;
+      <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div>${jokerUsed()?'':'<button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button>'}</div></div>`;
     return h+foot();
   }
   // 3. Spielanalyse nach einer Prüfung
@@ -1325,7 +1348,7 @@ function renderPokale(){
   const pct=L.next?Math.round((L.n-LIGA[L.i][1])/(L.next[1]-LIGA[L.i][1])*100):100;
   const nextJ=THEMES.find(t=>t.lvl>L.i);
   const wg=S.settings.winGoal,bt=S.settings.bedtimeMin;
-  const rules=`<div class="card"><h2>So funktioniert das Spiel</h2><div class="sub">Jeder Lerntag ist ein Handballspiel: du gegen den Schweinehund. Das ist die Stimme im Kopf, die sagt: „Mach das später.“</div>
+  const rules=`<div class="card"><h2>So funktioniert das Spiel</h2><div class="sub">Jeder Lerntag ist ein Handballspiel: du gegen den Schweinehund. Das ist die Stimme im Kopf, die sagt: „Mach das später“ oder „Ich hab heute keine Lust“.</div>
   <div class="rgrid"><div><h3><span class="ball" aria-hidden="true"></span>Du triffst</h3><ul>
     <li><b>Tor:</b> jede erledigte Aufgabe, der Kabinen-Check, die Spielanalyse nach einer Prüfung, die Besprechung am Wochenende</li>
     <li><b>Tempogegenstoß:</b> pünktlich angefangen</li>
@@ -1337,12 +1360,13 @@ function renderPokale(){
   <li><b>Tagessieg.</b> Alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.</li>
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
   <li><b>Aufstieg.</b> Deine Tore zählen für die Liga, Gegentore nicht. In jeder neuen Liga gibt es ein neues Trikot.</li>
+  <li><b>Spiel verlegen.</b> Einmal pro Woche darfst du sagen: Heute geht gar nichts. Dann gibt es keine Wertung, nur was morgen fällig ist, bleibt. Das Wochenspiel zählt einen Spieltag weniger.</li>
   </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></div>`;
   const T=iso(today()),w=weekInfo();
   const prize=w.prize?(w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`)
     :w.possible?`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`:'Diese Woche reicht es nicht mehr für die Prämie. Am Montag geht es neu los.';
   let h=msgBox()+`<div class="card"><h2>Wochenspiel</h2><div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d)),won=S.wins[d];
-    return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`+rules;
+    return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':verlegt(d)?'verlegt':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`+rules;
   h+=`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
   <div class="bar"><div style="width:${pct}%"></div></div>
   <div class="sub">${L.next?`Noch ${L.next[1]-L.n} Tore bis zum Aufstieg in die ${esc(L.next[0])}.`:'Ganz oben angekommen!'}${nextJ?` Nächstes Trikot: ${esc(nextJ.n)} in der ${esc(LIGA[nextJ.lvl][0])}.`:''}</div></div>`;
@@ -1416,12 +1440,13 @@ function renderEltern(plan){
   const tight=plan.slice(0,7).filter(d=>d.over.length);
   const sec={ueb:'',ein:'',schule:'',einst:''};
   const lmInfo=S.lm&&S.lm.date===T?`<div class="sub" style="margin-top:6px">Lernmodus ${S.lm.on?'läuft':'war an'} seit ${hm(Math.round((S.lm.since-today().getTime())/60000))} Uhr, ${S.lm.leaves?`${S.lm.leaves}-mal die App verlassen (${Math.round(S.lm.away/60000)} Min.)`:'App nicht verlassen'}${S.lm.awayAt?', gerade nicht in der App':''}.</div>`:'';
+  const vd=S.days[T]||{},vinfo=vd.verlegt?`<div class="note warn" style="margin-top:8px">Heute hat er das Spiel verlegt${vd.grund?` (${esc(VGRUND[vd.grund]||vd.grund)})`:''}. Vielleicht kurz nachfragen, wie es ihm geht.</div>`:'';
   const gc=concOn(T),sc=`<div class="sub" style="margin-top:6px">Spielstand gegen den Schweinehund: ${goalsOn(T)}:${gc}${gc?` (Gegentore: ${esc(S.conc.filter(c=>c.date===T).map(c=>c.why).join('; '))})`:''}.</div>`;
   sec.ueb+=`<div class="card"><h2>Heute</h2>
   <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div>${S.kick[T]?(ui.ask==='kickreset'?`<div class="row" style="margin-top:6px"><button class="btn sm danger" data-act="kickreset">Wirklich zurücksetzen</button><button class="btn sm" data-act="askx">Nein</button></div>`:`<div class="row" style="margin-top:6px"><button class="btn sm" data-act="ask" data-v="kickreset">Anpfiff zurücksetzen</button></div>`):''}</div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
   ${tight.map(d=>`<div class="note warn">${fmt(d.date)}: ${d.over.reduce((a,o)=>a+o.P,0)} Min. passen nicht in den Plan.</div>`).join('')}
-  ${sc}${lmInfo}</div>`;
+  ${sc}${lmInfo}${vinfo}</div>`;
   sec.schule+=`<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Stundenplan</h2><button class="btn primary" data-act="sub" data-v="plan">${S.timetable?'Bearbeiten':'Eintragen'}</button></div>
   <div class="sub" style="margin-top:6px">${S.timetable?'Schulschluss diese Woche: '+[1,2,3,4,5].map(w=>{const d=addDays(monday(today()),w-1),fr=freeReason(d),e=schoolEndMin(d);return WD[w]+' '+(fr?'frei':e!=null?hm(e):'?')}).join(' · ')+(S.timetable.ab?' ('+weekType(today())+'-Woche)':''):'Noch kein Stundenplan. Daraus berechnet der Lernplaner den Schulschluss und das Abgabedatum von Hausaufgaben.'}</div></div>`;
   sec.ueb+=`<div class="card"><h2>Wochenspiel</h2><div>${w.won} von ${w.goal} Tagessiegen</div>
@@ -1565,6 +1590,12 @@ document.addEventListener('click',e=>{
   switch(a){
     case'ext':lmExt();return;
     case'report':ui.report=!ui.report;break;
+    case'jokerask':ui.joker=true;ui.jgrund=null;window.scrollTo(0,0);break;
+    case'jokerx':ui.joker=false;break;
+    case'jgrund':ui.jgrund=ui.jgrund===b.dataset.v?null:b.dataset.v;break;
+    case'joker':{const T=iso(today());if(jokerUsed())break;S.days[T]=Object.assign({},S.days[T]||{},{verlegt:true,grund:ui.jgrund||null,at:Date.now()});
+      ui.joker=false;if(S.lm&&S.lm.date===T)S.lm=Object.assign({},S.lm,{on:false});S.brk=null;S.running=null;save();beam();window.scrollTo(0,0);break}
+    case'jokerundo':{const T=iso(today()),d=Object.assign({},S.days[T]||{});delete d.verlegt;delete d.grund;delete d.at;S.days[T]=d;save();break}
     case'intro':S.meta.intro=true;save();break;
     case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;ui.sub='';window.scrollTo(0,0);break;
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
