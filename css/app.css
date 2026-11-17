@@ -740,6 +740,12 @@ details.notiz-neu { margin-top: 10px; }
 details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4px 0; }
 .notiz-form { margin-top: 6px; }
 .koch-notiz { margin-top: 18px; }
+.koch-braucht { margin: 0 0 14px; }
+.koch-braucht ul, .koch-alle ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; font-size: 18px; line-height: 1.35; }
+.koch-braucht b, .koch-alle b { font-weight: 700; white-space: nowrap; }
+.koch-alle { margin: 0 0 14px; }
+.koch-alle summary { cursor: pointer; color: var(--tinte-2, inherit); font-size: 15px; padding: 6px 0; text-decoration: underline; text-underline-offset: 3px; }
+.koch-alle ul { font-size: 16px; padding: 4px 0 6px; }
 .notiz-weg svg { stroke: currentColor; stroke-width: 2.4; fill: none; stroke-linecap: round; }
 /* Abstand, wenn eine Überschrift direkt auf einen Kasten folgt (zum Beispiel „Die Woche“ nach „Heute Abend für morgen“) */
 .kasten-text + .abschnitt, .kasten-text + h2, details.kasten-text + .abschnitt { margin-top: 26px; }

@@ -3322,6 +3322,15 @@ function timerBar() {
     <button class="weg" data-action="timer-weg" data-id="${t.id}" aria-label="Timer ${esc(t.label)} beenden">${CROSS}</button></div>`).join('')}</div>`;
 }
 
+// Im Kochschritt: die Zutaten dieses Schritts mit Menge (bei Gästen hochgerechnet), darunter alle zum Aufklappen.
+const QTY_RE = /^([\d½¼¾⅓⅔,./]+(?:\s*(?:bis|-)\s*[\d½¼¾,./]+)?\s*(?:kg|g|ml|l|EL|TL|Dosen?|Prisen?|Packungen?|Pck\.?|Bund|Gläser|Glas|Scheiben?|Würfel|Kopf|Köpfe|Stück|Becher|Handvoll|Msp\.?|Zehen?)?)\s+(.+)$/;
+const ingLine = (text) => { const m = QTY_RE.exec(text); return m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(text); };
+function cookStepIngredients(step, dish, ings) {
+  const here = L.stepIngredientIdx(step, dish.ingredients || []).map((i) => ings[i]).filter(Boolean);
+  return `${here.length ? `<div class="kasten-text koch-braucht"><strong>Dafür brauchst du</strong><ul>${here.map((x) => `<li>${ingLine(x.text)}</li>`).join('')}</ul></div>` : ''}
+    ${ings.length ? `<details class="koch-alle"><summary>Alle Zutaten (${ings.length})</summary><ul>${ings.map((x) => `<li>${ingLine(x.text)}</li>`).join('')}</ul></details>` : ''}`;
+}
+
 function sheetCook({ id, day }) {
   const dish = dishById(id) || (state.tempDishes || {})[id];
   if (!dish) return { over: '', title: 'Nicht gefunden', body: '' };
@@ -3336,6 +3345,7 @@ function sheetCook({ id, day }) {
       ${recipeNotes(dish.id).length ? `<div class="kasten-text notizen"><strong>Letztes Mal notiert</strong><ul class="notiz-liste">${recipeNotes(dish.id).map((x) => `<li><span class="notiz-text">${esc(x.text)}</span></li>`).join('')}</ul></div>` : ''}
       <div class="zutaten-liste koch-zutaten">${ings.map((x) => `<label class="zutat"><input type="checkbox" data-action="koch-zutat" data-i="${x.i}"${state.cookChecked.includes(x.i) ? ' checked' : ''}><span class="z-text"><span class="z-name">${esc(x.text)}</span></span></label>`).join('')}</div>`
     : `<p class="koch-text">${esc(steps[n - 1])}</p>
+      ${cookStepIngredients(steps[n - 1], dish, ings)}
       ${stepTimers(steps[n - 1]).map((t) => `<button class="knopf zweit timer-knopf" data-action="timer" data-sec="${t.sec}" data-label="${esc(`Schritt ${n}: ${t.label}`)}">Timer ${esc(t.label)}</button>`).join('')}
       ${n === steps.length && dishById(dish.id) ? `<div class="koch-notiz">${notesHtml(dish)}</div>` : ''}`;
   return {

@@ -152,6 +152,41 @@ function nameLabel(n, q, u) {
 }
 
 // Zutat als Text fürs Rezept: "800 g Bio-Hackfleisch vom Rind"
+// Welche Zutaten kommen in einem Kochschritt vor? Abgleich über die Hauptwörter des Zutatennamens
+// (großgeschriebene Wörter ohne „Bio“ und Mengenwörter), tolerant bei Mehrzahl und zusammengesetzten Wörtern:
+// „Karotten“ findet „Bio-Karotte“, „Brühe“ findet „Gemüsebrühe“, „Hack“ findet „Hackfleisch“.
+const ING_SKIP = new Set(['bio', 'el', 'tl', 'dose', 'dosen', 'glas', 'gläser', 'packung', 'packungen', 'pck', 'prise', 'bund', 'stück', 'becher', 'handvoll', 'msp', 'scheibe', 'scheiben', 'zum', 'für', 'den', 'airfryer', 'thermomix', 'pfanne', 'topf', 'backofen']);
+const ING_REST = ['fleisch', 'brust', 'brüste', 'filet', 'filets', 'schenkel', 'keule', 'würfel', 'streifen', 'stücke', 'zehe', 'zehen', 'flocken', 'körner'];
+const ING_PART = ['saft', 'fleisch', 'schale', 'abrieb', 'stücke', 'würfel', 'scheiben', 'streifen', 'spalten', 'ringe', 'hälften'];
+const ingWords = (t) => String(t || '').toLowerCase().split(/[^a-zäöüß]+/).filter(Boolean);
+function ingKeys(name) {
+  const raw = String(name || '').replace(/\([^)]*\)/g, ' ').split(/[\s\-–,/]+/).filter(Boolean);
+  let keys = raw.filter((w) => /^[A-ZÄÖÜ]/.test(w)).map((w) => w.toLowerCase().replace(/[^a-zäöüß]/g, '')).filter((w) => w.length >= 2 && !ING_SKIP.has(w));
+  if (!keys.length) keys = ingWords(name).filter((w) => w.length >= 4 && !ING_SKIP.has(w));
+  return keys;
+}
+function wordHits(k, w) {
+  if (k === w) return true;
+  if (w === 'öl' && k.endsWith('öl')) return true;                         // Öl findet Olivenöl, Rapsöl
+  if (k.length <= 3 || w.length <= 3) return [k + 'er', k + 'n', k + 's', k + 'en'].includes(w) || [w + 'er', w + 'n', w + 's', w + 'en'].includes(k);
+  const [s, l] = k.length <= w.length ? [k, w] : [w, k];
+  if (l.startsWith(s) && l.length - s.length <= 2) return true;            // Mehrzahl, Fälle
+  if (k.endsWith(w) && w.length >= 4) return true;                          // Brühe in Gemüsebrühe
+  if (w.endsWith(k) && k.length >= 5) return true;                          // Milch in Kokosmilch (Schritt nennt das Längere)
+  if (k.startsWith(w) && w.length >= 4 && ING_REST.some((r) => k.slice(w.length).startsWith(r))) return true; // Hack in Hackfleisch, Hähnchen in Hähnchenbrustfilet
+  if (w.startsWith(k) && k.length >= 4 && ING_PART.some((r) => w.slice(k.length).replace(/^n/, '') === r)) return true; // Zitronensaft, Avocadofleisch
+  return false;
+}
+export function stepIngredientIdx(step, ingredients) {
+  const words = ingWords(step);
+  const out = [];
+  (ingredients || []).forEach((ing, i) => {
+    const keys = ingKeys(ing && ing.n);
+    if (keys.some((k) => words.some((w) => wordHits(k, w)))) out.push(i);
+  });
+  return out;
+}
+
 export function fmtIngredient(ing) {
   const { q, u, n } = ing;
   if (q == null) return n;
