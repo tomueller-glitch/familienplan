@@ -84,7 +84,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -2176,7 +2176,7 @@ function fmtClock(ms) {
 function taskBadge() {
   if (!state.data.tasks.length) return 0;
   if (canPlan() && state.data.persons.some(isAdult)) return state.data.taskLog.filter((e) => e.status === 'offen').length;
-  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done).length;
+  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done).length + (kmFor(personById(state.me)) ? kmRedOpen() : 0);
   return 0;
 }
 
@@ -2319,7 +2319,10 @@ function fixedSections(fixed, today) {
 
 function kidTasks(person) {
   const today = L.todayISO();
-  const { fixed, extras } = A.tasksFor(state.data.tasks, state.data.taskLog, person.id, today);
+  const { fixed, extras: allExtras } = A.tasksFor(state.data.tasks, state.data.taskLog, person.id, today);
+  // Den Küchenmüll gibt es nur über die Ampel, nicht als Extra-Aufgabe.
+  const km = A.kmTask(state.data.tasks);
+  const extras = allExtras.filter((x) => !km || x.task.id !== km.id);
   const week = L.mondayOf(today);
   const doneWeek = state.data.taskLog.filter((e) => e.person_id === person.id && e.day >= week && e.day <= today && e.minutes !== 0)
     .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
@@ -2327,6 +2330,7 @@ function kidTasks(person) {
   const away = h && h.weg !== false ? h : null;
   return `${accountCard(person)}${bonusCard(person)}
     <h2 class="abschnitt">${L.fmtLong(today)}</h2>
+    ${away ? '' : kmCard(person)}
     ${away ? `<div class="kasten-text"><strong>${esc(away.name || 'Urlaub')}</strong>Bis ${esc(L.fmtLong(away.bis))} pausieren die festen Aufgaben. Wer trotzdem hilft, kann eine Extra-Aufgabe abhaken.</div>` : fixedSections(fixed, today)}
     ${fixed.some((f) => f.bin) || state.data.tasks.some((t) => t.schedule === 'tonne' && (t.who || []).includes(person.id)) ? reminderBox() : ''}
     ${extras.length ? `<h2 class="abschnitt abstand">Extra-Aufgaben</h2><p class="meta unter">Wenn es nötig ist und du Zeit hast.</p>${basicsHint(person, today, away)}<ul class="posten">${extras.map(extraRow).join('')}</ul>` : ''}
@@ -2358,7 +2362,8 @@ function parentTasks() {
     return `${accountCard(k, true).replace(/<\/div>\s*$/, '')}
       <p class="meta">${line}</p></div>`;
   }).join('');
-  return `${queue}<h2 class="abschnitt mit-info${pending.length ? ' abstand' : ''}">Minutenkonten ${infoBtn('konten', 'Wie die Minuten verfallen')}</h2>${infoText('konten', `Verdiente Minuten verfallen ${A.EXPIRY_HOURS} Stunden nach der Bestätigung. Beim Einlösen gehen die ältesten zuerst weg.`)}<div class="konten">${cards}</div>
+  const kmBox = kmParent();
+  return `${queue}${kmBox ? `<div${pending.length ? ' class="km-abstand"' : ''}>${kmBox}</div>` : ''}<h2 class="abschnitt mit-info${pending.length || kmBox ? ' abstand' : ''}">Minutenkonten ${infoBtn('konten', 'Wie die Minuten verfallen')}</h2>${infoText('konten', `Verdiente Minuten verfallen ${A.EXPIRY_HOURS} Stunden nach der Bestätigung. Beim Einlösen gehen die ältesten zuerst weg.`)}<div class="konten">${cards}</div>
     <div class="knopfreihe"><button class="knopf zweit" data-action="aufgaben-liste">Aufgaben verwalten</button></div>
     ${reminderBox()}${abfuhrBox(false)}`;
 }
@@ -2413,13 +2418,86 @@ function schoolCard() {
   </div>`;
 }
 
-function logTask(task, label) {
+/* ---------- Mülleimer in der Küche ---------- */
+// Ampel für Plastik- und Restmüll (Logik in js/aufgaben.js). Die Eltern schalten die Stufen, bei Gelb und Rot
+// melden die Kinder „Rausgebracht“, mit der Bestätigung springt der Eimer auf Grün. Bei Rot schickt die Push-Funktion
+// den Kindern eine Nachricht (7 bis 20:30 Uhr, sonst am nächsten Morgen).
+const KM_WORT = { rot: 'Voll', gelb: 'Fast voll', gruen: 'Noch Platz' };
+const KM_KIND = { rot: 'Bitte jetzt rausbringen.', gelb: 'Du kannst ihn schon rausbringen.', gruen: 'Gerade nichts zu tun.' };
+const KM_PUSH_VON = 7 * 60;
+const KM_PUSH_BIS = 20 * 60 + 30;
+const kmValue = () => KI.settingOf(state.data.settings, 'kuechenmuell');
+const kmKids = () => { const t = A.kmTask(state.data.tasks); return t ? A.assignees(t, L.todayISO()).filter((id) => kidsList().some((k) => k.id === id)) : []; };
+const kmFor = (person) => !!person && kmKids().includes(person.id);
+const kmLamps = (stufe) => A.STUFEN.map((x) => `<i class="km-l ${x}${x === stufe ? ' an' : ''}"></i>`).join('');
+function kmSince(x) {
+  if (!x.at) return '';
+  const ms = Date.parse(x.at);
+  return Number.isFinite(ms) ? `seit ${fmtClock(ms).replace(/^heute um /, '')}` : '';
+}
+function kmSave(changes) {
+  const cur = A.kmState(kmValue());
+  const now = nowStamp();
+  const value = { ...cur };
+  for (const [bin, stufe] of Object.entries(changes)) value[bin] = { stufe, at: now, by: state.me };
+  const row = { key: 'kuechenmuell', value, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'kuechenmuell'), row]; }, () => store.saveSettings([row]));
+}
+// Bestätigte Meldungen stellen ihren Eimer auf Grün.
+function kmConfirmed(entries) {
+  const st = A.kmState(kmValue());
+  const bins = [...new Set(entries.filter((e) => e.status === 'bestaetigt').map(A.kmBinOf).filter(Boolean))].filter((b) => st[b].stufe !== 'gruen');
+  if (bins.length) kmSave(Object.fromEntries(bins.map((b) => [b, 'gruen'])));
+}
+const kmRedOpen = () => A.kmView(kmValue(), state.data.taskLog).filter((x) => x.stufe === 'rot' && !x.pending).length;
+
+// Karte für das Kind, immer an derselben Stelle unter dem Datum.
+function kmCard(person) {
+  const task = A.kmTask(state.data.tasks);
+  if (!task || !kmFor(person)) return '';
+  const view = A.kmView(kmValue(), state.data.taskLog);
+  const calm = view.every((x) => x.stufe === 'gruen' && !x.pending);
+  const alarm = view.some((x) => x.stufe === 'rot' && !x.pending);
+  if (calm) {
+    return `<div class="km-karte ruhig"><div class="km-kopf"><strong>Mülleimer in der Küche</strong></div>
+      <div class="km-ruhig">${view.map((x) => `<span class="km-mini"><span class="km-ampel klein" role="img" aria-label="${esc(x.name)}: Grün, noch Platz">${kmLamps(x.stufe)}</span>${esc(x.name)}</span>`).join('')}</div>
+      <p class="km-text">Beide grün. Gerade nichts zu tun.</p></div>`;
+  }
+  const reward = task.minutes ? `, +${task.minutes} Min.` : '';
+  return `<div class="km-karte${alarm ? ' alarm' : ''}"><div class="km-kopf"><strong>Mülleimer in der Küche</strong>${alarm ? '<span>muss raus</span>' : ''}</div>
+    <div class="km-eimer-liste">${view.map((x) => `<div class="km-eimer s-${x.stufe}">
+      <span class="km-name">${esc(x.name)}</span>
+      <span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'gruen' ? 'Grün' : x.stufe === 'gelb' ? 'Gelb' : 'Rot'}, ${KM_WORT[x.stufe]}">${kmLamps(x.stufe)}</span>
+      ${x.pending ? `<p class="km-text"><b>Gemeldet.</b> ${x.pending.person_id === person.id ? 'Mama oder Papa schauen noch drüber.' : `${esc((personById(x.pending.person_id) || {}).name || 'Jemand')} hat ihn rausgebracht.`}</p>`
+        : `<p class="km-text"><b>${KM_WORT[x.stufe]}.</b> ${KM_KIND[x.stufe]}</p>`}
+      ${x.canReport ? `<button class="knopf klein breit${x.stufe === 'rot' ? '' : ' zweit'}" data-action="km-raus" data-bin="${x.bin}">Rausgebracht${reward}</button>` : ''}
+    </div>`).join('')}</div></div>`;
+}
+
+// Schalter für die Eltern: drei Lampen pro Eimer zum Antippen.
+function kmParent() {
+  if (!A.kmTask(state.data.tasks)) return '';
+  const view = A.kmView(kmValue(), state.data.taskLog);
+  const names = kmKids().map((id) => (personById(id) || {}).name).filter(Boolean);
+  const label = { rot: 'Rot, voll', gelb: 'Gelb, fast voll', gruen: 'Grün, noch Platz' };
+  return `<h2 class="abschnitt mit-info">Mülleimer in der Küche ${infoBtn('kuechenmuell', 'Wie die Müll-Ampel funktioniert')}</h2>
+    ${infoText('kuechenmuell', `Tippe auf die Farbe, die gerade passt. Bei Gelb und Rot können ${names.length ? esc(names.join(' und ')) : 'die Kinder'} den Eimer als rausgebracht melden, bei Grün nicht. Bei Rot kommt eine Push-Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Bestätigst du die Meldung, springt die Ampel von selbst auf Grün.`)}
+    <div class="km-karte eltern"><div class="km-eimer-liste">${view.map((x) => `<div class="km-eimer s-${x.stufe}">
+      <span class="km-name">${esc(x.name)}</span>
+      <div class="km-ampel knoepfe" role="group" aria-label="${esc(x.name)}">${A.STUFEN.map((st) => `<button class="km-l ${st}${st === x.stufe ? ' an' : ''}" data-action="km-stufe" data-bin="${x.bin}" data-stufe="${st}" aria-pressed="${st === x.stufe}" aria-label="${esc(x.name)}: ${label[st]}"></button>`).join('')}</div>
+      <p class="km-text"><b>${KM_WORT[x.stufe]}</b>${x.stufe !== 'gruen' && kmSince(x) ? `, ${esc(kmSince(x))}` : ''}</p>
+      ${x.pending ? `<p class="km-text">${esc((personById(x.pending.person_id) || {}).name || 'Jemand')} hat ihn rausgebracht. Oben bestätigen.</p>` : ''}
+    </div>`).join('')}</div></div>`;
+}
+
+function logTask(task, label, id) {
   const entry = {
-    id: L.uid(), person_id: state.me, task_id: task.id, day: L.todayISO(), label, minutes: task.minutes,
+    id: id || L.uid(), person_id: state.me, task_id: task.id, day: L.todayISO(), label, minutes: task.minutes,
     status: task.minutes || basicsConfirm() ? 'offen' : 'bestaetigt', created_at: nowStamp(), decided_by: null, decided_at: task.minutes || basicsConfirm() ? null : nowStamp(),
   };
   const left = A.minutesLeftToday(state.data.taskLog, state.me, capOf(personById(state.me)), L.todayISO());
   commit(() => { state.data.taskLog = [...state.data.taskLog, entry]; }, () => store.saveLog([entry]));
+  kmConfirmed([entry]);
   if (!task.minutes) { if (basicsConfirm()) toast('Erledigt, danke! Mama oder Papa schauen noch drüber.'); return; }
   if (!left) toast('Erledigt, danke! Dein Tageslimit ist schon erreicht, deshalb gibt es heute keine Minuten mehr dafür.');
   else if (left < task.minutes) toast(`Erledigt. Bis zum Tageslimit zählen heute nur noch ${left} Minuten.`);
@@ -2431,6 +2509,7 @@ function decide(ids, status) {
   const now = nowStamp();
   const rows = state.data.taskLog.filter((e) => ids.includes(e.id)).map((e) => ({ ...e, status, decided_by: state.me, decided_at: now }));
   commit(() => { state.data.taskLog = state.data.taskLog.map((e) => rows.find((r) => r.id === e.id) || e); }, () => store.saveLog(rows));
+  kmConfirmed(rows);
 }
 
 function sheetRedeem({ id }) {
@@ -4437,6 +4516,28 @@ const actions = {
   extra: ({ id }) => {
     const task = taskById(id);
     if (task && isKidMe()) logTask(task, task.name);
+  },
+  'km-raus': ({ bin }) => {
+    const task = A.kmTask(state.data.tasks);
+    const x = A.kmView(kmValue(), state.data.taskLog).find((v) => v.bin === bin);
+    if (!task || !x || !isKidMe()) return;
+    if (!x.canReport) { toast(x.pending ? 'Ist schon gemeldet.' : 'Der Eimer ist grün, gerade nichts zu tun.'); return; }
+    logTask(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid()));
+  },
+  'km-stufe': ({ bin, stufe }) => {
+    const cur = A.kmState(kmValue());
+    if (!cur[bin] || !A.STUFEN.includes(stufe) || cur[bin].stufe === stufe) return;
+    kmSave({ [bin]: stufe });
+    const name = (A.EIMER.find(([b]) => b === bin) || [])[1];
+    if (stufe === 'rot') {
+      const kids = kmKids().map((id) => (personById(id) || {}).name).filter(Boolean);
+      const n = new Date(nowMs());
+      const m = n.getHours() * 60 + n.getMinutes();
+      const when = m < KM_PUSH_VON ? 'um 7 Uhr' : m >= KM_PUSH_BIS ? 'morgen um 7 Uhr' : 'gleich';
+      toast(`${name} auf Rot. ${kids.length ? kids.join(' und ') : 'Die Kinder'} ${kids.length === 1 ? 'bekommt' : 'bekommen'} ${when} eine Nachricht.`);
+    } else if (stufe === 'gruen' && A.kmPending(state.data.taskLog, bin)) {
+      toast(`${name} auf Grün. Die Meldung wartet noch oben auf deine Bestätigung.`);
+    }
   },
   'log-ok': ({ id }) => decide([id], 'bestaetigt'),
   'log-nein': ({ id }) => decide([id], 'abgelehnt'),

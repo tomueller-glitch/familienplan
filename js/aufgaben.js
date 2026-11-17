@@ -172,3 +172,44 @@ export function minutesLeftToday(log, personId, cap, day) {
 }
 
 export const isSeasonless = (task) => !(task.months || []).length;
+
+/* ---------- Mülleimer in der Küche ---------- */
+// Ampel für Plastik- und Restmüll, gespeichert in ep_settings unter "kuechenmuell":
+// { plastik: { stufe: 'gruen'|'gelb'|'rot', at, by }, rest: { ... } }. Die Stufen schalten die Eltern.
+// Bei Gelb und Rot können die Kinder den Eimer als rausgebracht melden, bei Grün nicht.
+// Die Meldung trägt den Eimer in der Kennung (km-plastik-…), damit die Bestätigung ihn wieder auf Grün stellt.
+export const EIMER = [['plastik', 'Plastikmüll'], ['rest', 'Restmüll']];
+export const STUFEN = ['rot', 'gelb', 'gruen'];
+export const kmId = (bin, uid) => `km-${bin}-${uid}`;
+export const kmBinOf = (e) => { const m = /^km-(plastik|rest)-/.exec(String((e && e.id) || '')); return m ? m[1] : null; };
+
+// Die Aufgabe „Müll aus der Küche rausbringen“: Startaufgabe "muell", sonst eine Bei-Bedarf-Aufgabe mit Müll im Namen.
+export function kmTask(tasks) {
+  const live = (tasks || []).filter((t) => t.active !== false);
+  return live.find((t) => t.id === 'muell')
+    || live.find((t) => t.schedule === 'bedarf' && /müll|muell/i.test(t.name || '') && !/tonne/i.test(t.name || '')) || null;
+}
+
+export function kmState(value) {
+  const v = value && typeof value === 'object' ? value : {};
+  const out = {};
+  for (const [bin] of EIMER) {
+    const x = v[bin] && typeof v[bin] === 'object' ? v[bin] : {};
+    out[bin] = { stufe: STUFEN.includes(x.stufe) ? x.stufe : 'gruen', at: x.at || null, by: x.by || null };
+  }
+  return out;
+}
+
+// Offene Meldung für einen Eimer (wartet auf Bestätigung). Solange es sie gibt, fragt die App nicht noch einmal.
+export function kmPending(log, bin) {
+  return (log || []).filter((e) => kmBinOf(e) === bin && e.status === 'offen').pop() || null;
+}
+
+// Was ein Kind gerade tun kann: pro Eimer Stufe, offene Meldung und ob „Rausgebracht“ möglich ist.
+export function kmView(value, log) {
+  const st = kmState(value);
+  return EIMER.map(([bin, name]) => {
+    const pending = kmPending(log, bin);
+    return { bin, name, ...st[bin], pending, canReport: st[bin].stufe !== 'gruen' && !pending };
+  });
+}

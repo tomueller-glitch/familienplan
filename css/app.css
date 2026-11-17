@@ -819,3 +819,44 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .schul-karte .sk-fach { font-weight: 600; }
 .schul-karte .sk-liste small { color: var(--tinte-2); }
 .schul-karte .knopf { margin-top: 8px; text-decoration: none; display: inline-block; text-align: center; }
+
+/* Mülleimer in der Küche: Ampel pro Eimer. Rot links wie bei einer liegenden Verkehrsampel. */
+.km-karte { background: var(--blatt); border: 2px solid transparent; border-radius: 14px; padding: 10px 10px 12px; margin: 0 0 14px; }
+.km-karte.alarm { border-color: var(--rot); }
+.km-karte.eltern { padding: 10px; }
+.km-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 2px 4px 8px; }
+.km-kopf strong { font-size: 1.05rem; }
+.km-kopf span { font-size: .85rem; font-weight: 600; color: var(--rot); }
+.km-eimer-liste { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.km-eimer { display: grid; gap: 8px; align-content: start; justify-items: start; padding: 10px; border-radius: 10px; background: var(--wand); }
+.km-eimer.s-gelb { background: color-mix(in srgb, var(--gelb) 18%, var(--blatt)); }
+.km-eimer.s-rot { background: color-mix(in srgb, var(--rot) 11%, var(--blatt)); }
+.km-name { font: 700 21px/1.05 var(--anzeige); }
+.km-text { font-size: 15px; line-height: 1.35; }
+.km-text b { font-weight: 700; }
+.km-eimer .knopf { margin-top: 2px; }
+
+.km-ampel { display: inline-flex; gap: 6px; padding: 5px 8px; border-radius: 999px; background: #14323C; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.km-l { display: block; width: 22px; height: 22px; border-radius: 50%; }
+.km-l.rot { background: color-mix(in srgb, var(--rot) 30%, #0d2128); }
+.km-l.gelb { background: color-mix(in srgb, var(--gelb) 26%, #0d2128); }
+.km-l.gruen { background: color-mix(in srgb, var(--gruen) 34%, #0d2128); }
+.km-l.rot.an { background: #F0453B; box-shadow: 0 0 0 2px rgba(255, 255, 255, .22), 0 0 12px #F0453B; }
+.km-l.gelb.an { background: #FFC531; box-shadow: 0 0 0 2px rgba(255, 255, 255, .22), 0 0 12px #FFC531; }
+.km-l.gruen.an { background: #3FBF78; box-shadow: 0 0 0 2px rgba(255, 255, 255, .22), 0 0 12px #3FBF78; }
+
+.km-ampel.klein { gap: 4px; padding: 3px 5px; }
+.km-ampel.klein .km-l { width: 11px; height: 11px; }
+.km-ampel.klein .km-l.an { box-shadow: 0 0 6px #3FBF78; }
+.km-karte.ruhig { padding-bottom: 10px; }
+.km-ruhig { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 4px 6px; }
+.km-mini { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+.km-karte.ruhig .km-text { padding: 0 4px; color: var(--tinte-2); }
+
+.km-ampel.knoepfe { gap: 6px; padding: 6px; }
+.km-ampel.knoepfe .km-l { width: 38px; height: 38px; cursor: pointer; transition: transform .12s ease; }
+.km-ampel.knoepfe .km-l:active { transform: scale(.92); }
+.km-ampel.knoepfe .km-l:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.km-abstand { margin-top: 24px; }
+@media (max-width: 360px) { .km-ampel.knoepfe .km-l { width: 32px; height: 32px; } }
+@media (prefers-reduced-motion: reduce) { .km-ampel.knoepfe .km-l { transition: none; } }

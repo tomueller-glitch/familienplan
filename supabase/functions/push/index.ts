@@ -11,6 +11,7 @@
 //  - freitags einen Wochenplan-Entwurf von Claude (wenn ANTHROPIC_API_KEY gesetzt ist), siehe „Wochenplan mit Claude“.
 //  - abends eine Erinnerung an alle, die mitgegessen, aber das Abendessen noch nicht bewertet haben.
 //    Kinder etwa eine Stunde nach dem Essen, spätestens 20:15 Uhr, Erwachsene nach 90 Minuten. Abschaltbar.
+//  - den Kindern eine Nachricht, sobald Mama oder Papa einen Mülleimer in der Küche auf Rot stellen (Müll-Ampel),
 //  - Lernplaner (lernen.html): Anpfiff und Endspurt an das Kind, Erinnerung am Abend vor einer Prüfung,
 //    den Eltern den Stand am Abend, sofort Bescheid bei „schwer“, das gewonnene Wochenspiel und sonntags
 //    die Mannschaftsbesprechung. Abschaltbar im Lernplaner unter Einstellungen.
@@ -1931,6 +1932,46 @@ export function lpSchoolEnd(tt: Row | null, day: string): number | null {
   return last >= 0 && tt.times[last] ? hmMin(tt.times[last][1], 13 * 60) : null;
 }
 
+/* ---------- Mülleimer in der Küche ---------- */
+// Ampel aus ep_settings "kuechenmuell", gleiche Regeln wie in js/aufgaben.js (kmTask, kmBinOf).
+// Steht ein Eimer auf Rot und hat ihn noch niemand als rausgebracht gemeldet, bekommen die Kinder der Aufgabe
+// eine Nachricht. Nur zwischen 7 und 20:30 Uhr; wird es abends rot, kommt sie am nächsten Morgen.
+// Pro Umschalten auf Rot genau einmal (Schlüssel mit dem Zeitpunkt des Umschaltens).
+const KM_NAMEN: Record<string, string> = { plastik: 'Plastikmüll', rest: 'Restmüll' };
+export function kmTaskOf(tasks: Row[]): Row | null {
+  const live = (tasks || []).filter((t) => t.active !== false);
+  return live.find((t) => t.id === 'muell')
+    || live.find((t) => t.schedule === 'bedarf' && /müll|muell/i.test(t.name || '') && !/tonne/i.test(t.name || '')) || null;
+}
+export function muellMessages(value: Row | null, tasks: Row[], log: Row[], persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
+  const { day, min } = berlin(nowMs);
+  if (min < 7 * 60 || min >= 20 * 60 + 30) return [];
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return [];
+  const task = kmTaskOf(tasks);
+  const kids = persons.filter((p) => !p.adult).map((p) => p.id);
+  const to = task ? assignees(task, day).filter((id) => kids.includes(id)) : [];
+  if (!to.length) return [];
+  const v: Row = value && typeof value === 'object' ? value : {};
+  const red = Object.keys(KM_NAMEN).filter((bin) => {
+    const x = v[bin] || {};
+    const at = Date.parse(String(x.at || ''));
+    // Nur frisch umgeschaltet (letzte 24 Stunden) und noch ohne offene Meldung.
+    if (x.stufe !== 'rot' || !Number.isFinite(at) || at < nowMs - DAY) return false;
+    return !log.some((e) => String(e.id || '').startsWith(`km-${bin}-`) && e.status === 'offen');
+  });
+  if (!red.length) return [];
+  const names = red.map((b) => KM_NAMEN[b]);
+  return [{
+    key: `kuechenmuell:${red.map((b) => `${b}@${v[b].at}`).join('|')}`, to, ttl: 3 * 3600,
+    msg: {
+      title: names.length > 1 ? `${names.join(' und ')} sind voll` : `${names[0]} ist voll`,
+      body: `Bitte ${names.length > 1 ? 'beide Eimer' : 'den Eimer'} aus der Küche rausbringen und danach in der App auf „Rausgebracht“ tippen.`,
+      tag: 'kuechenmuell', url: './#aufgaben',
+    },
+  }];
+}
+
 export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
   const out: Due[] = [];
   const st: Row = { afterSchool: 60, latest: '19:30', weekendStart: '10:00', winGoal: 4, bedtimeMin: 30, sundayFree: true, pushOn: true, ...lp.settings };
@@ -2229,10 +2270,22 @@ async function runLernOnly(nowMs = Date.now()) {
   const [persons, subs, urlaubRow] = await Promise.all([
     store.get('ep_persons?select=*'),
     store.get('ep_push_subs?select=*'),
-    store.get('ep_settings?select=key,value&key=eq.urlaub').catch(() => []),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,kuechenmuell)').catch(() => []),
   ]);
-  const u = (urlaubRow[0] || {}).value;
+  const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
+  const u = setting('urlaub');
   const due = lernMessages(await loadLern(store, today), persons, nowMs, Array.isArray(u) ? u : []);
+  // Müll-Ampel: auch hier, damit die Nachricht bei Rot innerhalb einer Minute kommt.
+  try {
+    const km = setting('kuechenmuell');
+    if (km && Object.values(km as Row).some((x) => !!x && (x as Row).stufe === 'rot')) {
+      const [tasks, pending] = await Promise.all([
+        store.get('ep_tasks?select=*'),
+        store.get('ep_task_log?select=id,status&id=like.km-*&status=eq.offen'),
+      ]);
+      due.push(...muellMessages(km, tasks, pending, persons, nowMs, Array.isArray(u) ? u : []));
+    }
+  } catch (e) { console.warn('Müll-Ampel', String(e)); }
   const r = await sendDue(store, subs, due, vapidFromEnv());
   return { due: due.length, new: r.fresh, sent: r.sent, nur: 'lern' };
 }
@@ -2253,7 +2306,7 @@ async function runSchedule(nowMs = Date.now()) {
     store.get(`ep_shopping?select=*&due=eq.${today}&checked=is.false`).catch(() => []),
     store.get('ep_dishes?select=*'),
     store.get(`ep_ratings?select=day,person_id&day=eq.${today}`),
-    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben)').catch(() => []),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell)').catch(() => []),
     store.get(`ep_shopping?select=id,label,added_by,created_at,checked&added_by=not.is.null&created_at=gte.${encodeURIComponent(new Date(nowMs - 12 * 3600000).toISOString())}`).catch(() => []),
   ]);
   const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
@@ -2261,6 +2314,7 @@ async function runSchedule(nowMs = Date.now()) {
   const grundZuerst = (setting('aufgaben') || {}).grund_zuerst !== false;
   const erinnerung = (setting('aufgaben') || {}).erinnerung;
   const due = dueMessages({ persons, tasks, log, abfuhr, hearts, plan, shopping, dishes, ratings, urlaub, grundZuerst, added, erinnerung }, nowMs);
+  due.push(...muellMessages(setting('kuechenmuell'), tasks, log, persons, nowMs, urlaub));
   // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
   try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }
   // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.
