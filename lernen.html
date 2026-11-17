@@ -198,13 +198,59 @@ details.grp[open] summary{margin-bottom:6px}
 .quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
 .quiz .qa{background:var(--leise);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:16px}
 .qdet{margin:0 0 8px 20px}.qdet summary{font-size:14px;color:var(--tinte2);cursor:pointer}
+.tafel{display:flex;align-items:center;gap:12px;width:100%;background:var(--tafel);color:#fff;border:0;border-radius:16px;padding:12px 16px;margin:10px 0 6px;text-align:left;font:inherit;cursor:pointer}
+div.tafel{cursor:default}
+.tafel .t-num{font:700 40px/1 var(--anz);min-width:.6em}
+.tafel .t-lab{font-size:13px;line-height:1.25;color:#A9C2C9}
+.tafel .t-mid{flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0}
+.pips{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.pips i{width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.16)}
+.pips i.on{background:var(--fill)}
+.pbar{display:block;width:100%;max-width:180px;height:8px;border-radius:4px;background:rgba(255,255,255,.16);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--fill)}
+.lmline{font-size:13px;color:var(--tinte2);margin:0 4px 4px}
+.k-lab,.j-top{font-size:14px;font-weight:600;color:var(--tinte2)}
+.k-big{font:700 26px/1.1 var(--anz);margin:6px 0 12px}
+.k-list{list-style:none;padding:0;margin:0}
+.k-list li{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--linie);font-size:15px}
+.k-list li:first-child{border-top:0}
+.n-min{color:var(--tinte2);font-size:14px;white-space:nowrap}
+.n-more{color:var(--tinte2);font-size:14px}
+.jetzt,.kickk,.pausek,.endk{padding:20px 18px}
+.j-top{display:flex;align-items:center;gap:8px}
+.j-top .j-time{margin-left:auto;font-weight:500}
+.jetzt .ft{font:700 30px/1.08 var(--anz);margin:10px 0 6px}
+.jetzt .meta{color:var(--tinte2);font-size:15px}
+.act{margin-top:18px;display:flex;flex-direction:column;align-items:stretch;gap:4px}
+.btn.xl{font:700 22px/1 var(--anz);padding:16px;letter-spacing:.02em;text-align:center;border-radius:12px}
+.lnk{background:none;border:0;color:var(--tinte2);font:500 15px/1.3 var(--text);text-decoration:underline;text-underline-offset:3px;padding:8px 0;cursor:pointer}
+.act .lnk{align-self:center}
+.sub.c{text-align:center}
+.run{font:700 48px/1 var(--anz);text-align:center;margin-top:4px}
+.next{margin:16px 6px 0}
+.n-lab{font-size:13px;font-weight:600;color:var(--tinte2);margin-bottom:2px}
+.n-it{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--tinte2);font-size:15px}
+.next .lnk{padding:4px 0;font-size:14px}
+.doned{margin:16px 6px 0;color:var(--tinte2);font-size:14px}
+.doned summary{cursor:pointer;padding:4px 0}
+.foot{display:flex;flex-wrap:wrap;gap:0 18px;margin:18px 6px 0}
+.endk{text-align:center}
 .lmbar{display:flex;align-items:center;gap:10px;background:var(--tafel);color:#fff;border-radius:14px;padding:10px 14px;margin:0 0 10px}
 .lmbar b{display:block;font:700 18px/1.1 var(--anz)}.lmbar span{font-size:13px;color:#C9D8DC}
 .lmbar .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
 body.lm nav.tabs,body.lm .hdr-r a{display:none}
 .backk{border:2px solid var(--fill)}
-.pausek{border:2px dashed var(--linie)}
-.pausek .pidea{font:700 22px/1.2 var(--anz);margin:4px 0 6px}
+.pausek{text-align:center}
+.pausek .pidea{font:700 30px/1.15 var(--anz);margin:10px 0 8px}
+.wk{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.wk div{text-align:center;border-radius:10px;padding:8px 0;background:var(--leise);font-size:13px;color:var(--tinte2)}
+.wk div b{display:block;font:700 16px/1.2 var(--anz);color:var(--tinte);margin-top:2px}
+.wk .won{background:var(--fill);color:var(--on)}.wk .won b{color:var(--on)}
+.wk .now{box-shadow:inset 0 0 0 2px var(--tinte)}
+.rulesd summary{list-style:none;cursor:pointer}.rulesd summary::-webkit-details-marker{display:none}
+.rulesd summary h2{display:inline;margin:0}.rulesd[open] summary{margin-bottom:10px}
+.rulesd summary::after{content:"Zeigen";float:right;font-size:14px;color:var(--tinte2);text-decoration:underline}
+.rulesd[open] summary::after{content:"Zuklappen"}
 .rules{margin:0 0 8px;padding-left:22px;display:grid;gap:8px;font-size:15px;line-height:1.4}
 .rules b{font-family:var(--anz);font-size:16px}
 .badge b{display:block;font:700 17px/1.2 var(--anz);color:var(--tinte)}
@@ -1012,8 +1058,8 @@ function fbPanel(t,P){
   return `<div class="fb">`+(measured?`<div class="q">Gemessen: ${measured} Min. (geplant ${P})</div>`:
     `<div class="q">Wie lange hat es gedauert? Geplant waren ${P} Min.</div><div class="row">${b('fbdur','kurz','Kürzer',ui.fbDur)}${b('fbdur','ok','Ungefähr so',ui.fbDur)}${b('fbdur','lang','Länger',ui.fbDur)}</div>`)+
     `<div class="q">Wie schwer war es?</div><div class="row">${b('fbfeel','leicht','Leicht',ui.fbFeel)}${b('fbfeel','mittel','Mittel',ui.fbFeel)}${b('fbfeel','schwer','Schwer',ui.fbFeel)}</div>
-    <div class="sub" style="margin-top:6px">Ehrlich sein lohnt sich: Für „Schwer“ gibt es ein Fairplay-Tor und Hilfe beim nächsten Mal.</div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="fbsave">Erledigt</button><button class="btn" data-act="fbcancel">Abbrechen</button></div></div>`;
+    <div class="sub" style="margin-top:6px">Sag es ruhig ehrlich: Bei „Schwer“ hilft dir beim nächsten Mal jemand, und du verlierst nichts.</div>
+    <div class="act"><button class="btn primary xl" data-act="fbsave">Erledigt</button><button class="lnk" data-act="fbcancel">Zurück</button></div></div>`;
 }
 function timerRow(t){
   const run=S.running&&S.running.id===t.id;
@@ -1061,31 +1107,18 @@ function msgBox(){if(!ui.msg)return'';const h=`<div class="note ${ui.msgType||''
 function addButtons(withDay){
   let h=ui.scanOpen||ui.scan.status!=='idle'?scanCard():'';
   h+=ui.addHA?haForm():'';
-  h+=`<div class="more">${withDay?'<button class="btn" data-act="full">Tagesplan mit Uhrzeiten</button>':''}${ui.addHA?'':'<button class="btn" data-act="toggleha">Hausaufgabe eintragen</button>'}${AI_OK()&&!ui.scanOpen&&ui.scan.status==='idle'?'<button class="btn" data-act="scanopen">Hausaufgaben aus Screenshot</button>':''}</div>`;
+  h+=`<div class="foot">${withDay?'<button class="lnk" data-act="full">Tagesplan mit Uhrzeiten</button>':''}${ui.addHA?'':'<button class="lnk" data-act="toggleha">Hausaufgabe eintragen</button>'}${AI_OK()&&!ui.scanOpen&&ui.scan.status==='idle'?'<button class="lnk" data-act="scanopen">Hausaufgaben aus Screenshot</button>':''}</div>`;
   return h;
 }
 
 /* ===== Seiten ===== */
-function scoreboard(kick){
-  const T=iso(today()),w=weekInfo(),L=liga(),bt=+S.settings.bedtimeMin||30,tw=toWin();
-  let prize;
-  if(w.prize)prize=w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Wochenspiel gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`;
-  else if(w.possible)prize=`Wochenspiel: noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`;
-  else prize='Für die Siegprämie reicht es diese Woche nicht mehr. Am Montag geht es neu los.';
-  return `<section class="board" aria-label="Spielstand">
-  <div class="b-top"><div><div class="b-lab">Tore heute</div><div class="b-num">${goalsOn(T)}</div>${tw?`<div class="b-lab">Noch ${tw} bis zum Tagessieg</div>`:''}</div>
-  <div class="b-liga"><div class="b-lab">Deine Liga</div><div class="b-ligan">${esc(L.name)}</div>${L.next?`<div class="b-lab">Noch ${L.next[1]-L.n} Tore bis zum Aufstieg</div>`:''}</div></div>
-  <div class="b-week">${w.days.map((d,i)=>{const fr=isFree(parse(d));return `<div class="${S.wins[d]?'won':fr?'':d<T?'lost':''} ${d===T?'now':''}">${['Mo','Di','Mi','Do','Fr'][i]}<b>${S.wins[d]?'Sieg':fr?'frei':d<T?'0':'&nbsp;'}</b></div>`}).join('')}</div>
-  <div class="b-prize">${prize}</div>${kick||''}</section>`;
-}
-function reviewCards(){
-  return pendingReviews().map(e=>{const r=ui.rv[e.id]||{};
+function reviewCards(one){
+  return pendingReviews().slice(0,one?1:99).map(e=>{const r=ui.rv[e.id]||{};
     const b=(k,v,l)=>`<button class="btn sm ${r[k]===v?'on':''}" data-act="rv" data-id="${e.id}" data-k="${k}" data-v="${v}">${l}</button>`;
-    return `<div class="card" style="--c:${col(e.subject)}"><h2>Spielanalyse: ${esc(e.subject)} ${esc(e.type)}</h2>
+    return `<div class="card"><div class="k-lab">Spielanalyse</div><div class="k-big">${esc(e.subject)} ${esc(e.type)}</div>
     <div class="q" style="font-size:14px;margin-bottom:6px">Wie lief es?</div><div class="row">${b('feel','gut','Gut')}${b('feel','mittel','Ging so')}${b('feel','schlecht','Nicht gut')}</div>
     <div class="q" style="font-size:14px;margin:10px 0 6px">Hat die Vorbereitung gereicht?</div><div class="row">${b('prep','zuwenig','Zu wenig')}${b('prep','passt','Passte')}${b('prep','zuviel','Mehr als nötig')}</div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="rvsave" data-id="${e.id}">Speichern</button></div>
-    <div class="sub" style="margin-top:6px">Damit plant die App die nächste Prüfung in ${esc(e.subject)} besser.</div></div>`}).join('');
+    <div class="act"><button class="btn primary xl" data-act="rvsave" data-id="${e.id}">Speichern</button><div class="sub c">Damit plant die App die nächste Prüfung in ${esc(e.subject)} besser.</div></div></div>`}).join('');
 }
 function meetCard(){
   const d=today();if(!(d.getDay()===0||d.getDay()===6))return'';
@@ -1093,52 +1126,92 @@ function meetCard(){
   return `<div class="card"><h2>Mannschaftsbesprechung</h2><div class="sub">Schaut euch zusammen die nächste Woche an: Prüfungen, Training, volle Tage. Was soll anders laufen als diese Woche?</div>
   <div class="row" style="margin-top:10px"><button class="btn" data-act="tab" data-v="woche">Woche ansehen</button><button class="btn primary" data-act="meet" data-k="${key}">Besprechung gemacht</button></div></div>`;
 }
+/* ===== Heute: ein Bildschirm, eine Sache ===== */
+// Schritte des Tages: erledigte Aufgaben, noch geplante (Maßstab ganzer Tag) und der Kabinen-Check.
+function dayProgress(){
+  const T=iso(today()),full=simulate({fullDay:true})[0];
+  const done=S.tasks.filter(t=>t.done&&t.doneAt===T).length,open=full.free?0:full.items.length;
+  const chk=S.settings.checksOn&&!full.free?1:0,chkDone=chk&&checksDone(T)?1:0;
+  return{total:done+open+chk,done:done+chkDone};
+}
+// Schmale Anzeigetafel: Tore heute und ein Kästchen pro Schritt. Liga und Wochenspiel stehen unter Pokale.
+function tafel(){
+  const T=iso(today()),p=dayProgress(),g=goalsOn(T),lm=lmActive();
+  const prog=p.total&&p.total<=10?`<span class="pips" aria-hidden="true">${Array.from({length:p.total},(_,i)=>`<i class="${i<p.done?'on':''}"></i>`).join('')}</span>`
+    :`<span class="pbar" aria-hidden="true"><i style="width:${p.total?Math.round(p.done/p.total*100):0}%"></i></span>`;
+  const txt=S.wins[T]?'Tagessieg!':p.total?`${p.done} von ${p.total} geschafft`:'heute frei';
+  const inner=`<span class="t-num">${g}</span><span class="t-lab">${g===1?'Tor':'Tore'}<br>heute</span><span class="t-mid">${prog}<span class="t-lab">${txt}</span></span>`;
+  return lm?`<div class="tafel" role="status">${inner}</div>`:`<button class="tafel" data-act="tab" data-v="pokale" aria-label="${g} Tore heute, ${txt}. Zu den Pokalen">${inner}</button>`;
+}
+function nextLine(rest){
+  if(!rest.length)return'';
+  return `<div class="next"><div class="n-lab">Danach</div>`+rest.slice(0,3).map(x=>`<div class="n-it"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span>${ui.reorder?`<button class="btn sm" data-act="focus" data-id="${x.t.id}">Jetzt</button>`:''}</div>`).join('')+
+    (rest.length>3?`<div class="n-it n-more">und ${rest.length-3} weitere</div>`:'')+
+    `<button class="lnk" data-act="reorder">${ui.reorder?'Fertig':'Reihenfolge ändern'}</button></div>`;
+}
+function focusActions(t){
+  const run=S.running&&S.running.id===t.id;
+  return run?`<div class="act"><div class="run"><span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</div><div class="sub c">läuft</div><button class="btn primary xl" data-act="check" data-id="${t.id}">Fertig</button></div>`
+    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">Schon erledigt</button></div>`;
+}
 function renderFocus(plan){
-  const T=iso(today()),day=plan[0],q=queueOf(day);
-  const hasWork=q.length>0;
-  let kick='';
-  if(hasWork&&!S.kick[T]){
-    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null;
-    kick=`<button class="btn primary" data-act="kick">Anpfiff</button><div class="b-hint">${dl&&nowMin()<=dl&&nowMin()>=dl-105?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:`Heute ${q.length===1?'eine Aufgabe':q.length+' Aufgaben'}.`}</div>`;
-  }
-  let h='';
-  if(lmActive()){const L=S.lm;
-    h+=`<div class="lmbar"><div class="grow"><b>Lernmodus</b><span>seit ${hm(Math.round((L.since-new Date(today()).getTime())/60000))} Uhr, ${L.leaves?`${L.leaves}-mal raus, ${Math.round(L.away/60000)} Min.`:'noch nie raus'}</span></div><button class="btn sm" data-act="lmendask">Beenden</button></div>`;
-    if(ui.lmEnd)h+=`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`;
-    if(ui.back)h+=`<div class="card backk"><h2>Willkommen zurück!</h2><div class="sub">Du warst ${ui.back} Min. weg. Diese Zeit zählt nicht als Lernzeit, und für diese Aufgabe gibt es kein Fokus-Tor mehr. Bei der nächsten klappt es!</div><div class="row" style="margin-top:8px"><button class="btn" data-act="backok">Weiter</button></div></div>`;
-  }
-  h+=scoreboard(kick);
-  if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich (PIN 1234) kannst du sie anpassen oder löschen.</div>`;
+  const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmActive();
+  let h=tafel();
+  if(lm){const L=S.lm;h+=`<div class="lmline">Lernmodus seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}</div>`}
+  if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. Die Zeit zählt nicht als Lernzeit, das Fokus-Tor für diese Aufgabe ist weg. Bei der nächsten klappt es. <button class="lnk" data-act="backok">Okay</button></div>`;
+  if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox();
+  const foot=()=>{
+    const done=S.tasks.filter(t=>t.done&&t.doneAt===T);
+    const f=done.length?`<details class="doned"><summary>Erledigt heute (${done.length})</summary>`+done.map(t=>`<div class="n-it"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="n-min">${t.actual} Min.</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</details>`:'';
+    if(lm)return f+`<div class="foot"><button class="lnk" data-act="lmendask">Lernmodus beenden</button></div>`+(ui.lmEnd?`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`:'');
+    return f+addButtons(true);
+  };
+  // 1. Pause läuft: nur die Pause
   const bk=S.brk;
-  if(bk&&bk.date===T&&bk.until>Date.now())h+=`<div class="card pausek"><h2>${bk.long?'Große Pause':'Bewegungspause'}: ${bk.len} Min.</h2>
-    <div class="pidea">${esc(bk.idea)}</div><div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((bk.until-Date.now())/60000)+nowMin())} Uhr.${REMOTE?' Wenn die Pause vorbei ist, kommt eine Nachricht.':''}</div>
-    <div class="row" style="margin-top:10px"><button class="btn" data-act="brkend">Pause vorbei</button><button class="btn ghost" data-act="brknew">Andere Idee</button></div></div>`;
-  h+=reviewCards()+meetCard();
-  if(S.settings.checksOn&&!checksDone(T)&&!day.free){
-    const c=S.checks[T]||{};
-    h+=`<div class="card"><h2>Kabinen-Check</h2>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} aktuell?</span>${c[k]?`<span class="chip ${c[k]==='ok'?'ok':'wa'}">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn sm" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn sm" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
+  if(bk&&bk.date===T&&bk.until>Date.now()){
+    h+=`<div class="card pausek"><div class="k-lab">${bk.long?'Große Pause':'Bewegungspause'}, ${bk.len} Min.</div><div class="pidea">${esc(bk.idea)}</div>
+      <div class="sub">Ohne Handy. Weiter geht es um ${hm(Math.round((bk.until-Date.now())/60000)+nowMin())} Uhr.${REMOTE?' Dann kommt eine Nachricht.':''}</div>
+      <div class="act"><button class="btn primary xl" data-act="brkend">Pause vorbei</button><button class="lnk" data-act="brknew">Andere Idee</button></div></div>`;
+    return h+nextLine(q)+foot();
   }
+  // 2. Vor dem Anpfiff: was heute ansteht, ein Knopf
+  if(hasWork&&!S.kick[T]){
+    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null,n=nowMin(),min=q.reduce((a,x)=>a+x.P,0);
+    const last=day.items.length?day.items[day.items.length-1]:null,ends=last?last.segs[last.segs.length-1][1]:null;
+    const rv=pendingReviews().length;
+    h+=`<div class="card kickk"><div class="k-lab">Dein Spiel heute</div><div class="k-big">${q.length===1?'Eine Aufgabe':q.length+' Aufgaben'}, etwa ${min} Min.</div>
+      <ol class="k-list">${rv?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kurze Spielanalyse</span><span class="n-min">1 Min.</span></li>`:''}${q.slice(0,5).map(x=>`<li><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span></li>`).join('')}${q.length>5?`<li class="n-more">und ${q.length-5} weitere</li>`:''}${S.settings.checksOn?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kabinen-Check</span></li>`:''}</ol>
+      <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${dl&&n<=dl&&n>=dl-105?`Bis ${hm(dl)} anfangen bringt ein Extra-Tor.`:ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div></div></div>`;
+    return h+foot();
+  }
+  // 3. Spielanalyse nach einer Prüfung
+  const rv=reviewCards(true);
+  if(rv)return h+rv+nextLine(q)+foot();
+  // 4. Die Aufgabe, die jetzt dran ist
   if(hasWork){
     const cur=q.find(x=>x.t.id===ui.focus)||q[0],t=cur.t;
-    h+=`<div class="card focus" style="--c:${col(t.subject)}"><div class="label">${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}${cur.segs?' ab '+hm(cur.segs[0][0]):''}</div>
-      <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)}</div>
-      <div class="chips"><span class="chip">${cur.P} Min.</span>${t.together?'<span class="chip wa">Zusammen mit Mama oder Papa</span>':''}${cur.over?'<span class="chip er">passt eigentlich nicht mehr in den Tag</span>':''}</div>
-      ${t.sheet?`<div style="margin-top:10px">${t.link?`<a class="btn" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
+    h+=`<div class="card jetzt"><div class="j-top"><span class="dot" style="background:${col(t.subject)}"></span><span>${t.kind==='daily'?'Aufwärmen':'Jetzt dran'}</span>${cur.segs&&cur.segs[0][0]>nowMin()+45?`<span class="j-time">ab ${hm(cur.segs[0][0])}</span>`:''}</div>
+      <div class="ft">${esc(t.title)}</div><div class="meta">${taskMeta(t)} · ${cur.P} Min.${t.together?' · zusammen mit Mama oder Papa':''}</div>
+      ${cur.over?'<div class="sub" style="margin-top:6px">Eigentlich ist für heute schon Schluss. Frag Mama oder Papa, ob das noch sein muss.</div>':''}
       ${t.examId&&(examOf(t)||{}).focus?`<div class="sub" style="margin-top:8px">Darum geht es: ${esc(examOf(t).focus.join(', '))}</div>`:''}
-      ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:10px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
+      ${t.sheet?`<div style="margin-top:12px">${t.link?`<a class="btn" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
+      ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:12px"><a class="btn" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
       ${t.kind==='lern'&&quizOk()?quizBlock(t):''}
-      ${ui.fb===t.id?fbPanel(t,cur.P):ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length?'':timerRow(t)}</div>`;
-    const rest=q.filter(x=>x!==cur);
-    if(rest.length)h+=`<div class="card"><h2>Danach (${rest.length})</h2>`+rest.map(x=>`<div class="li"><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}<br><span class="sub">${esc(x.t.subject)} · ${x.P} Min.</span></span><button class="btn sm" data-act="focus" data-id="${x.t.id}">Zuerst</button></div>`).join('')+`</div>`;
-  }else if(!day.free){
-    h+=`<div class="card" style="text-align:center">${S.wins[T]?'<div class="big">Tagessieg!</div><div class="sub">Alles geschafft. Stark gespielt!</div>':checksDone(T)?'<div class="big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>':'<div class="sub">Nur noch der Kabinen-Check, dann ist der Tag gewonnen.</div>'}</div>`;
-  }else h+=`<div class="card">${esc(freeReason(today())||'Sonntag')}: heute ist lernfrei. Genieß den Tag!</div>`;
-  const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T);
-  if(doneToday.length)h+=`<div class="card"><h2>Erledigt</h2>`+doneToday.map(t=>`<div class="li"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="muted">(${t.actual} Min.)</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</div>`;
-  if(hasWork&&!lmActive()&&S.settings.focusMode!==false&&S.kick[T])h+=`<div class="card"><h2>Lernmodus</h2><div class="sub">Im Lernmodus gibt es für jede Aufgabe, bei der du die App nicht verlässt, ein Fokus-Tor.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="lmgo">Lernmodus starten</button></div></div>`;
-  return h+(lmActive()?'':addButtons(true));
+      ${ui.fb===t.id?fbPanel(t,cur.P):ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length?'':focusActions(t)}</div>`;
+    return h+nextLine(q.filter(x=>x!==cur))+foot();
+  }
+  // 5. Abpfiff: Kabinen-Check
+  if(!day.free&&S.settings.checksOn&&!checksDone(T)){
+    const c=S.checks[T]||{};
+    h+=`<div class="card kickk"><div class="k-lab">Abpfiff</div><div class="k-big">Kabinen-Check</div>`+CHECKS.map(([k,l])=>`<div class="li"><span class="grow">Vokabelkasten ${l} aktuell?</span>${c[k]?`<span class="chip">${c[k]==='ok'?'Ja':'Wird nachgetragen'}</span>`:`<button class="btn" data-act="vchk" data-k="${k}" data-v="1">Ja</button><button class="btn" data-act="vchk" data-k="${k}" data-v="0">Nein</button>`}</div>`).join('')+`</div>`;
+    return h+foot();
+  }
+  // 6. Fertig oder frei
+  if(!day.free)h+=`<div class="card endk">${S.wins[T]?'<div class="k-big">Tagessieg!</div><div class="sub">Alles geschafft. Stark gespielt!</div>':'<div class="k-big">Feierabend</div><div class="sub">Für heute ist nichts mehr geplant.</div>'}</div>`;
+  else h+=`<div class="card endk"><div class="k-big">Lernfrei</div><div class="sub">${esc(freeReason(today())||'Sonntag')}. Genieß den Tag!</div></div>`;
+  return h+meetCard()+foot();
 }
 function renderHeute(plan){
   if(ui.day===0&&!ui.full)return renderFocus(plan);
@@ -1167,7 +1240,7 @@ function renderWoche(plan){
     ${ex.map(e=>`<div class="chip wa" style="margin:4px 0">${esc(e.subject)} ${esc(e.type)}</div>`).join('')}
     ${d.appts.map(a=>`<div class="li muted">${a.start} ${esc(a.title)}</div>`).join('')}
     ${d.items.map(it=>`<div class="li"><span class="dot" style="background:${col(it.t.subject)}"></span><span class="grow">${esc(it.t.subject)}: ${esc(it.t.title)}</span><span class="sub">${it.P} Min.</span></div>`).join('')}
-    ${d.over.map(o=>`<div class="li"><span class="dot" style="background:${col(o.t.subject)}"></span><span class="grow">${esc(o.t.subject)}: ${esc(o.t.title)}<br><span class="chip er" style="margin-top:4px">passt nicht in den Tag</span></span><span class="sub">${o.P} Min.</span></div>`).join('')}
+    ${d.over.map(o=>`<div class="li"><span class="dot" style="background:${col(o.t.subject)}"></span><span class="grow">${esc(o.t.subject)}: ${esc(o.t.title)}<br><span class="chip" style="margin-top:4px">passt nicht in den Tag</span></span><span class="sub">${o.P} Min.</span></div>`).join('')}
     </div>`}).join('');
 }
 function renderPokale(){
@@ -1175,20 +1248,25 @@ function renderPokale(){
   const pct=L.next?Math.round((L.n-LIGA[L.i][1])/(L.next[1]-LIGA[L.i][1])*100):100;
   const nextJ=THEMES.find(t=>t.lvl>L.i);
   const wg=S.settings.winGoal,bt=S.settings.bedtimeMin;
-  let h=msgBox()+`<div class="card"><h2>So funktioniert das Spiel</h2>
+  const rules=`<details class="card rulesd"><summary><h2>So funktioniert das Spiel</h2></summary>
   <ol class="rules">
   <li><b>Tore.</b> Jede erledigte Aufgabe ist ein Tor. Auch der Kabinen-Check, ein pünktlicher Anpfiff, die Spielanalyse nach einer Prüfung und die Besprechung am Wochenende bringen je ein Tor. Im Lernmodus gibt es für jede Aufgabe ohne App-Wechsel ein Fokus-Tor dazu.</li>
   <li><b>Tagessieg.</b> Du gewinnst den Tag, wenn alles erledigt ist, was heute dran war, und der Kabinen-Check gemacht ist.</li>
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
   <li><b>Aufstieg.</b> Mit deinen Toren steigst du in die nächste Liga auf. In jeder neuen Liga bekommst du ein neues Trikot.</li>
-  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></div>
-  <div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
+  </ol><div class="sub">Wenn etwas schwer war, sag es ehrlich. Dann hilft dir jemand, und du verlierst nichts.</div></details>`;
+  const T=iso(today()),w=weekInfo();
+  const prize=w.prize?(w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`)
+    :w.possible?`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`:'Diese Woche reicht es nicht mehr für die Prämie. Am Montag geht es neu los.';
+  let h=msgBox()+`<div class="card"><h2>Wochenspiel</h2><div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d)),won=S.wins[d];
+    return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`;
+  h+=`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
   <div class="bar"><div style="width:${pct}%"></div></div>
   <div class="sub">${L.next?`Noch ${L.next[1]-L.n} Tore bis zum Aufstieg in die ${esc(L.next[0])}.`:'Ganz oben angekommen!'}${nextJ?` Nächstes Trikot: ${esc(nextJ.n)} in der ${esc(LIGA[nextJ.lvl][0])}.`:''}</div></div>`;
   h+=`<div class="card"><h2>Trikots</h2><div class="sub" style="margin-bottom:10px">Mit jedem Aufstieg kommt ein neues Trikot dazu. Die Kiel-Trikots gibt es in der 1. Bundesliga und im Europapokal.</div><div class="jgrid">`+
     THEMES.map((th,i)=>{const ok=L.i>=th.lvl;return `<button class="jer ${S.settings.theme===i?'on':''} ${ok?'':'lock'}" ${ok?`data-act="theme" data-i="${i}"`:'disabled'} aria-label="${esc(th.n+' '+th.d)}">${kitSvg(th,i)}<span class="jn">${esc(th.n)}</span>${(()=>{const t=ok?(th.d||'\u00a0'):'ab '+LIGA[th.lvl][0];return `<span class="js${t.length>13?' lg':''}">${esc(t)}</span>`})()}</button>`}).join('')+`</div></div>`;
   h+=`<div class="card"><h2>Abzeichen</h2><div class="badges">`+b.map(([n,d,c,z])=>`<div class="badge ${c>=z?'':'off'}"><b>${n}</b>${d}${c>=z?'<span class="bdone">Geschafft</span>':z>1?`<span class="bprog"><i style="width:${Math.round(c/z*100)}%"></i></span><span class="bcnt">${c} von ${z}</span>`:''}</div>`).join('')+`</div></div>`;
-  return h;
+  return h+rules;
 }
 function renderStundenplan(){
   const tt=S.timetable;
@@ -1404,7 +1482,8 @@ document.addEventListener('click',e=>{
     case'tab':ui.tab=b.dataset.v;ui.fb=null;ui.full=false;ui.day=0;ui.sub='';window.scrollTo(0,0);break;
     case'day':ui.day=+b.dataset.i;ui.fb=null;break;
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
-    case'focus':ui.focus=id;ui.fb=null;window.scrollTo(0,0);break;
+    case'focus':ui.focus=id;ui.fb=null;ui.reorder=false;window.scrollTo(0,0);break;
+    case'reorder':ui.reorder=!ui.reorder;break;
     case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');save();break}
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
