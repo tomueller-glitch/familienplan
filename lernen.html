@@ -1192,7 +1192,7 @@ function tafel(){
   const T=iso(today()),p=dayProgress(),g=goalsOn(T),c=concOn(T),th=THEMES[S.settings.theme]||THEMES[0];
   const prog=p.total&&p.total<=10?`<span class="pips" aria-hidden="true">${Array.from({length:p.total},(_,i)=>`<i class="${i<p.done?'on':''}"></i>`).join('')}</span>`
     :`<span class="pbar" aria-hidden="true"><i style="width:${p.total?Math.round(p.done/p.total*100):0}%"></i></span>`;
-  const state=S.wins[T]?`Abpfiff: Sieg!`:!p.total?'Heute kein Spiel':!S.kick[T]?'Noch nicht angepfiffen':`${p.done} von ${p.total} geschafft`;
+  const state=S.wins[T]?`Abpfiff: Sieg!`:verlegt(T)?'Spiel verlegt':!p.total?'Heute kein Spiel':!S.kick[T]?'Noch nicht angepfiffen':`${p.done} von ${p.total} geschafft`;
   return `<button class="tafel" data-act="report" aria-expanded="${!!ui.report}" aria-label="Spielstand: du ${g}, Schweinehund ${c}. ${state}. Spielbericht ${ui.report?'zuklappen':'zeigen'}">
     <span class="t-row"><span class="t-team"><span class="t-side">Heim</span><span class="t-name"><span class="t-kit">${kitSvg(th,'tf')}</span>Du</span></span>
     <span class="t-score"><b>${g}</b><i>:</i><b>${c}</b></span>
