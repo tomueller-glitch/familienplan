@@ -46,3 +46,13 @@ console.log('Bettag',lernMessages(bt,persons,Date.parse('2026-11-18T10:10:00+01:
   const m=lernMessages(lpFromRows([...rows,{id:'day:2026-11-17',coll:'day',data:{k:'2026-11-17',v:{verlegt:true,grund:'muede'}}}]),persons,now);
   console.log('Verlegt',m.map(x=>`${x.key} -> ${x.to.join(',')} | ${x.msg.title}: ${x.msg.body}`));
 }
+// Lerneinheit zu kurz: Eltern entscheiden.
+{
+  const now=Date.parse('2026-11-18T16:40:00+01:00');
+  const rows2=[...rows,{id:'task:k1',coll:'task',data:{id:'k1',kind:'lern',subject:'Mathe',title:'Terme üben',done:false,date:'2026-11-18',check:{date:'2026-11-18',at:now-60000,actual:9,planned:30,why:'kurz'}}},
+    {id:'task:k2',coll:'task',data:{id:'k2',kind:'lern',subject:'Musik',title:'Beethoven Karten',done:false,date:'2026-11-18',check:{date:'2026-11-18',at:now-120000,actual:25,planned:25,why:'ohne'}}}];
+  const lp2=lpFromRows(rows2);
+  console.log('Prüfen offen:',lp2.open.some((t:any)=>t.id==='k1'),'wartend:',(lp2.checks||[]).length);
+  console.log('Prüfen:',lernMessages(lp2,persons,now).filter(x=>x.key.startsWith('lp-pruefen')).map(x=>`${x.to.join(',')} | ${x.msg.title} | ${x.msg.body}`).join('\n  '));
+  console.log('nachts:',lernMessages(lp2,persons,Date.parse('2026-11-18T22:00:00+01:00')).filter(x=>x.key.startsWith('lp-pruefen')).length);
+}

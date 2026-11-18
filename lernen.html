@@ -120,6 +120,7 @@ button{font:inherit;cursor:pointer;color:inherit}
 .fb .q{font-size:15px;margin:8px 0 6px}
 /* Formulare */
 label{display:block;font-size:14px;color:var(--tinte2);margin:10px 0 0}
+[hidden]{display:none!important}
 input,select,textarea{display:block;width:100%;max-width:100%;min-width:0;font:16px/1.3 var(--text);padding:9px 11px;margin-top:4px;border:1px solid var(--linie);border-radius:10px;background:var(--blatt);color:var(--tinte)}
 input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-height:42px;text-align:left}
 input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left}
@@ -203,11 +204,14 @@ details.grp[open] summary{margin-bottom:6px}
 .quiz{margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
 .quiz .qh{font-size:13px;color:var(--tinte2);font-weight:600}
 .quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
+.chk-box{border:2px solid var(--wa);background:var(--wabg)}
+.fb.early .q{font-size:22px}
 .kk-row{display:flex;align-items:center;gap:12px;margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
 .kk-bar{height:6px;border-radius:3px;background:var(--leise);margin-top:6px;overflow:hidden}
-.kk-bar span{display:block;height:100%;background:var(--ok,#2E8B57);border-radius:3px}
+.kk-bar span{display:block;height:100%;background:var(--ok);border-radius:3px}
 .kk-card{border:1px solid var(--linie);border-radius:12px;padding:14px 14px 4px;background:var(--blatt);margin:6px 0 10px;box-shadow:0 1px 0 var(--linie)}
-.kk-heft{cursor:pointer}
+.kk-heft{cursor:pointer;margin:0}
+.kk-links{gap:6px 18px;flex-wrap:wrap;align-items:center}
 .quiz .qa{background:var(--leise);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:16px}
 .qdet{margin:0 0 8px 20px}.qdet summary{font-size:14px;color:var(--tinte2);cursor:pointer}
 .tafel{display:block;width:100%;background:var(--court) center/100% 100% no-repeat,var(--tafel);background-blend-mode:normal;color:#fff;border:0;border-radius:16px;padding:12px 16px 12px;margin:10px 0 4px;text-align:left;font:inherit;cursor:pointer;position:relative;overflow:hidden}
@@ -736,7 +740,7 @@ function simulate(opt){
   opt=opt||{};
   const t0=today(),T=iso(t0),out=[],placed=new Set(),exD={};
   S.exams.forEach(e=>exD[e.id]=e.date);
-  const open=S.tasks.filter(t=>!t.done&&!(t.examId&&(exD[t.examId]||'')<=T));
+  const open=S.tasks.filter(t=>!t.done&&!t.check&&!(t.examId&&(exD[t.examId]||'')<=T));
   const byDue=(a,b)=>a.due.localeCompare(b.due);
   const doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).reduce((a,t)=>a+(t.planned||0),0);
   for(let i=0;i<14;i++){
@@ -795,9 +799,9 @@ const goalName=w=>GOAL_NAME[w]||w;
 function concede(why){S.conc.push({id:uid(),date:iso(today()),why,at:Date.now()});toastQ={opp:true,n:1,why}}
 function liga(){const n=totalGoals();let i=0;LIGA.forEach((l,k)=>{if(n>=l[1])i=k});return{i,name:LIGA[i][0],n,next:LIGA[i+1]}}
 let toastQ=null;
-function award(n,why,taskId){
+function award(n,why,taskId,date){
   const before=liga().i;
-  S.goals.push({id:uid(),date:iso(today()),n,why,taskId:taskId||null,at:Date.now()});
+  S.goals.push({id:uid(),date:date||iso(today()),n,why,taskId:taskId||null,at:Date.now()});
   const nm=goalName(why);toastQ=toastQ&&!toastQ.opp?{n:toastQ.n+n,why:toastQ.why+' · '+nm}:{n,why:nm};
   const L=liga();if(L.i>before){const th=THEMES.find(x=>x.lvl===L.i);ui.msg='Aufstieg in die '+L.name+'!'+(th?' Neues Trikot freigeschaltet: '+th.n+'.':'');ui.msgType='okn'}
 }
@@ -806,6 +810,8 @@ function checkDayWin(){
   const T=iso(today());if(S.wins[T]||verlegt(T))return;
   // Maßstab ist der ganze Tag ab Lernbeginn: Wer spät anfängt, bekommt den Rest nicht als „passt nicht mehr“ geschenkt.
   const day=simulate({fullDay:true})[0],doneToday=S.tasks.filter(t=>t.done&&t.doneAt===T).length;
+  // Eine Lerneinheit, die auf Mama oder Papa wartet, hält den Sieg auf, bis sie bestätigt ist.
+  if(pendingChecks().length)return;
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
   if(!day.items.length&&doneToday>0&&checksDone(T)){
     if(goalsOn(T)>concOn(T)){S.wins[T]=true;ui.msg=`Abpfiff! Sieg ${goalsOn(T)}:${concOn(T)} gegen den Schweinehund.`;ui.msgType='okn'}
@@ -853,7 +859,7 @@ function beam(){
 let wl=null;
 async function keepAwake(on){try{if(on&&!wl&&'wakeLock' in navigator&&document.visibilityState==='visible'){wl=await navigator.wakeLock.request('screen');wl.addEventListener('release',()=>{wl=null})}else if(!on&&wl){const w=wl;wl=null;await w.release()}}catch(e){wl=null}}
 function toWin(){const T=iso(today()),day=simulate({fullDay:true})[0];if(S.wins[T]||day.free)return 0;
-  return day.items.length+(S.settings.checksOn&&!checksDone(T)?1:0)}
+  return day.items.length+pendingChecks().length+(S.settings.checksOn&&!checksDone(T)?1:0)}
 function weekInfo(){
   const m=monday(today()),all=[0,1,2,3,4].map(i=>iso(addDays(m,i))),T=iso(today());
   const days=all.filter(d=>!isFree(parse(d))&&!verlegt(d));
@@ -883,13 +889,64 @@ function badges(){
 }
 
 /* ===== Aktionen ===== */
+/* ===== Lernzeit prüfen ===== */
+// Lern-Aufgaben zählen nur mit der Uhr und ab zwei Dritteln der geplanten Zeit. Zeit außerhalb der App zieht der
+// Lernmodus schon ab. Kürzer oder ohne Uhr („ohne Handy gelernt“) geht an die Eltern: „Zählt“ gibt das Tor,
+// „Nochmal“ plant die Aufgabe neu ein. Kein Gegentor, damit sich Ehrlichkeit lohnt.
+const NEED_SHARE=2/3;
+const needMin=(t,P)=>Math.max(1,Math.ceil((P||planMin(t))*NEED_SHARE));
+const runMin=()=>S.running?Math.max(0,Math.round((Date.now()-S.running.at)/60000)):0;
+const pendingChecks=()=>S.tasks.filter(t=>!t.done&&t.check);
+function sendToCheck(t,P,actual,why){
+  if(S.running&&S.running.id===t.id)S.running=null;
+  const T=iso(today());
+  t.check={date:T,at:Date.now(),actual,planned:P,why,feel:ui.fbFeel||'mittel'};
+  if(ui.fbFeel==='schwer')S.help.push({id:uid(),date:T,subject:t.subject,title:t.title});
+  ui.fb=null;ui.early=null;if(ui.focus===t.id)ui.focus=null;
+  ui.msg=why==='ohne'?'Eingetragen. Wenn Mama oder Papa bestätigen, dass du ohne Handy gelernt hast, gibt es das Tor.':`Eingetragen: ${actual} von ${P} Minuten. Mama oder Papa schauen kurz drüber, dann gibt es das Tor.`;ui.msgType='okn';
+  save();beam();
+}
+function decideCheck(id,ok){
+  const t=S.tasks.find(x=>x.id===id);if(!t||!t.check)return;const c=t.check,T=iso(today());
+  if(ok){
+    // Die Planung lernt hier nicht mit, sonst würden kurze Einheiten die geplanten Zeiten nach unten ziehen.
+    Object.assign(t,{done:true,doneAt:c.date,actual:c.actual,planned:c.planned,feel:c.feel,checked:'ok',again:false,check:null});
+    award(PTS.task,'Tor!',t.id,c.date);
+    if(c.date===T)checkDayWin();
+    ui.msg='Bestätigt, das Tor zählt.';ui.msgType='okn';
+  }else{
+    t.check=null;t.again=true;
+    ui.msg='Die Aufgabe ist wieder offen und wird neu eingeplant.';ui.msgType='okn';
+  }
+  save();
+}
+function checkLine(t){const c=t.check||{};return c.why==='ohne'?`ohne Handy gelernt, nach eigener Angabe etwa ${c.actual} Min.`:`${c.actual} von ${c.planned} Min. mit der Uhr gelernt`}
+// Für die Eltern: wartende Lerneinheiten mit „Zählt“ und „Nochmal“.
+function checkBox(){
+  const ps=pendingChecks();if(!ps.length)return'';
+  return `<div class="card chk-box"><h2>Zu bestätigen</h2><div class="sub">Diese Lerneinheiten waren kürzer als zwei Drittel der geplanten Zeit oder ohne Uhr. Das Tor gibt es mit eurer Bestätigung.</div>
+    ${ps.map(t=>`<div class="li stk"><span class="grow"><b>${esc(t.subject)}:</b> ${esc(t.title)}<br><span class="sub">${esc(checkLine(t))}${t.check.date!==iso(today())?`, am ${fmt(t.check.date)}`:''}${t.check.feel==='schwer'?', fand es schwer':''}</span></span>
+      <span class="acts"><button class="btn sm primary" data-act="chkok" data-id="${t.id}">Zählt</button><button class="btn sm" data-act="chkno" data-id="${t.id}">Nochmal</button></span></div>`).join('')}</div>`;
+}
+function earlyPanel(t,P){
+  const m=runMin(),need=needMin(t,P),ex=examOf(t);
+  const idea=ex&&cardsOf(ex.id).length?'Mach zum Beispiel eine Runde Karteikarten.':quizOk()&&t.kind==='lern'?'Mach zum Beispiel die Abfrage zu dieser Einheit.':'Schreib zum Beispiel ohne Heft auf, was du weißt, und vergleiche danach.';
+  return `<div class="fb early"><div class="q">Noch ${Math.max(1,need-m)} ${need-m===1?'Minute':'Minuten'}</div>
+    <div class="sub">Geplant sind ${P} Minuten, das Tor gibt es ab ${need}. Gelernt wird beim aktiven Üben, nicht beim Durchblättern. ${idea}</div>
+    <div class="act"><button class="btn primary xl" data-act="earlyback">Weiterlernen</button><button class="lnk" data-act="earlydone" data-id="${t.id}">Ich bin wirklich fertig</button></div></div>`;
+}
+
 function finish(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const P=planMin(t);let actual;
+  if(t.kind==='lern'){
+    const run=S.running&&S.running.id===id;
+    if(!run||runMin()<needMin(t,P)){sendToCheck(t,P,run?Math.max(1,runMin()):Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]||1)),run?'kurz':'ohne');return}
+  }
   if(S.running&&S.running.id===id){actual=Math.max(1,Math.round((Date.now()-S.running.at)/60000));S.running=null}
   else actual=Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]));
   if(!t.fixed){const r=actual/t.est;learn(paceKey(t),r);learn(t.subject,r);learn('_all',r)}
-  Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel});
+  Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel,again:false});
   award(PTS.task,'Tor!',t.id);
   if(lmActive()){if(S.lm.clean)award(1,'Fokus-Tor',t.id);S.lm.clean=true}
   if(ui.fbFeel==='schwer'){
@@ -1290,7 +1347,7 @@ function learnTools(t){
   const heftK=ex&&AI_OK()&&!ex.heft?`<label class="lnk kk-heft" data-act="ext">Hefteintrag fotografieren<input type="file" accept="image/*" multiple data-heftk="${ex.id}" hidden></label>`:'';
   if(ui.busy==='heft'+(ex&&ex.id))return `<div class="quiz"><div class="sub">Claude liest den Hefteintrag, einen Moment …</div></div>`;
   if(ex&&cardsOf(ex.id).length)return cardBlock(t);
-  return (quizOk()?quizBlock(t):'')+(ex&&AI_OK()&&!(ui.quiz&&ui.quiz.id===t.id)?`<div class="row" style="margin-top:6px"><button class="lnk" data-act="cardgenk" data-id="${ex.id}">Karteikarten erstellen lassen</button>${heftK}</div>`:'');
+  return (quizOk()?quizBlock(t):'')+(ex&&AI_OK()&&!(ui.quiz&&ui.quiz.id===t.id)?`<div class="row kk-links" style="margin-top:6px"><button class="lnk" data-act="cardgenk" data-id="${ex.id}">Karteikarten erstellen lassen</button>${heftK}</div>`:'');
 }
 const tasksBusy=t=>(ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length)||(ui.cs&&ui.cs.task===t.id&&ui.cs.pos<ui.cs.order.length);
 
@@ -1316,14 +1373,16 @@ function taskMeta(t){
   if(t.kind==='daily')return 'Latein · jeden Tag zum Aufwärmen';
   if(t.kind==='ha')return `${esc(t.subject)} · Hausaufgabe bis ${fmt(t.due)}`;
   const e=examOf(t);
-  return `${esc(t.subject)} · Schritt ${t.part||''}${t.parts?' von '+t.parts:''} für ${e?esc(e.type)+' am '+fmt(e.date)+(e.topic?' ('+esc(e.topic)+')':''):'die Prüfung'}`;
+  return `${t.again?'<b>Nochmal mit der Uhr</b> · ':''}${esc(t.subject)} · Schritt ${t.part||''}${t.parts?' von '+t.parts:''} für ${e?esc(e.type)+' am '+fmt(e.date)+(e.topic?' ('+esc(e.topic)+')':''):'die Prüfung'}`;
 }
 function timeLine(segs,P){return `${segs.map(x=>hm(x[0])).join(' und ')} · ${P} Min.${segs.length>1?` in ${segs.length} Blöcken mit Pause`:''}`}
 function fbPanel(t,P){
   const run=S.running&&S.running.id===t.id,measured=run?Math.max(1,Math.round((Date.now()-S.running.at)/60000)):null;
   const b=(act,v,l,cur)=>`<button class="btn sm ${cur===v?'on':''}" data-act="${act}" data-v="${v}">${l}</button>`;
+  const lern=t.kind==='lern',toCheck=lern&&(!run||measured<needMin(t,P));
   return `<div class="fb">`+(measured?`<div class="q">Gemessen: ${measured} Min. (geplant ${P})</div>`:
-    `<div class="q">Wie lange hat es gedauert? Geplant waren ${P} Min.</div><div class="row">${b('fbdur','kurz','Kürzer',ui.fbDur)}${b('fbdur','ok','Ungefähr so',ui.fbDur)}${b('fbdur','lang','Länger',ui.fbDur)}</div>`)+
+    `<div class="q">${lern?'Ohne Handy gelernt? ':''}Wie lange hat es gedauert? Geplant waren ${P} Min.</div><div class="row">${b('fbdur','kurz','Kürzer',ui.fbDur)}${b('fbdur','ok','Ungefähr so',ui.fbDur)}${b('fbdur','lang','Länger',ui.fbDur)}</div>`)+
+    (toCheck?`<div class="note" style="margin-top:8px">${run?'Das war kürzer als geplant.':'Ohne Uhr zählt die Lernzeit nicht von selbst.'} Mama oder Papa schauen kurz drüber, dann gibt es das Tor.</div>`:'')+
     `<div class="q">Wie schwer war es?</div><div class="row">${b('fbfeel','leicht','Leicht',ui.fbFeel)}${b('fbfeel','mittel','Mittel',ui.fbFeel)}${b('fbfeel','schwer','Schwer',ui.fbFeel)}</div>
     <div class="sub" style="margin-top:6px">Sag es ruhig ehrlich: Bei „Schwer“ hilft dir beim nächsten Mal jemand, und du verlierst nichts.</div>
     <div class="act"><button class="btn primary xl" data-act="fbsave">Erledigt</button><button class="lnk" data-act="fbcancel">Zurück</button></div></div>`;
@@ -1331,7 +1390,7 @@ function fbPanel(t,P){
 function timerRow(t){
   const run=S.running&&S.running.id===t.id;
   return run?`<div class="row" style="margin-top:10px"><span class="chip wa">läuft seit <span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</span><button class="btn primary" data-act="check" data-id="${t.id}">Fertig</button></div>`
-    :`<div class="row" style="margin-top:10px"><button class="btn primary" data-act="start" data-id="${t.id}">Start</button><button class="btn" data-act="check" data-id="${t.id}">Schon erledigt</button></div>`;
+    :`<div class="row" style="margin-top:10px"><button class="btn primary" data-act="start" data-id="${t.id}">Start</button><button class="btn" data-act="check" data-id="${t.id}">${t.kind==='lern'?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
 }
 function renderTaskCard(t,P,segs){
   let h=`<div class="item" style="--c:${col(t.subject)}">
@@ -1467,7 +1526,7 @@ function nextLine(rest){
 function focusActions(t){
   const run=S.running&&S.running.id===t.id;
   return run?`<div class="act"><div class="run"><span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</div><div class="sub c">läuft</div><button class="btn primary xl" data-act="check" data-id="${t.id}">Fertig</button></div>`
-    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">Schon erledigt</button></div>`;
+    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">${t.kind==='lern'?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
 }
 function renderFocus(plan){
   const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmHere();
@@ -1476,6 +1535,7 @@ function renderFocus(plan){
   if(lmActive()&&!lm){const L=S.lm,kn=(persons.find(p=>p.id===S.settings.kidId)||{}).name||'Euer Sohn';h+=`<div class="lmline">${esc(kn)} ist gerade im Lernmodus (seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}). Auf diesem Gerät zählt nichts davon.</div>`}
   if(lm){const L=S.lm;h+=`<div class="lmline">Lernmodus seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}</div>`}
   if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. ${ui.back>=1&&S.conc.some(c=>c.date===T&&Date.now()-c.at<120000)?'Der Schweinehund hat getroffen, und den':'Den'} Kempa-Trick gibt es für diese Aufgabe nicht mehr. Die Zeit zählt nicht als Lernzeit. <button class="lnk" data-act="backok">Weiter</button></div>`;
+  if(pendingChecks().length)h+=kidDevice()?`<div class="note">Wartet auf Mama oder Papa: ${esc(pendingChecks().map(t=>t.subject+', '+t.title).join('; '))}. Wenn sie bestätigen, gibt es das Tor.</div>`:checkBox();
   if(S.meta.sample)h+=`<div class="note">Das sind Beispieldaten. Im Elternbereich kannst du sie anpassen oder löschen.</div>`;
   else if(!S.meta.setup)h+=`<div class="note warn">Bitte im Elternbereich Schulschluss und Trainingszeiten prüfen und speichern.</div>`;
   h+=msgBox();
@@ -1532,7 +1592,7 @@ function renderFocus(plan){
       ${t.sheet?`<div style="margin-top:12px">${t.link?`<a class="btn" data-act="ext" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
       ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:12px"><a class="btn" data-act="ext" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
       ${t.kind==='lern'?learnTools(t):''}
-      ${ui.fb===t.id?fbPanel(t,cur.P):tasksBusy(t)?'':focusActions(t)}</div>`;
+      ${ui.fb===t.id?fbPanel(t,cur.P):ui.early===t.id?earlyPanel(t,cur.P):tasksBusy(t)?'':focusActions(t)}</div>`;
     return h+nextLine(q.filter(x=>x!==cur))+foot();
   }
   // 5. Abpfiff: Kabinen-Check
@@ -1587,6 +1647,7 @@ function renderPokale(){
   const rules=`<div class="card"><h2>So funktioniert das Spiel</h2><div class="sub">Jeder Lerntag ist ein Handballspiel: du gegen den Schweinehund. Das ist die Stimme im Kopf, die sagt: „Mach das später“ oder „Ich hab heute keine Lust“.</div>
   <div class="rgrid"><div><h3><span class="ball" aria-hidden="true"></span>Du triffst</h3><ul>
     <li><b>Tor:</b> jede erledigte Aufgabe, der Kabinen-Check, die Spielanalyse nach einer Prüfung, die Besprechung am Wochenende</li>
+<li><b>Lernen zählt mit der Uhr:</b> Bei Lern-Aufgaben gibt es das Tor ab zwei Dritteln der geplanten Zeit. Bist du früher fertig oder hast ohne Handy gelernt, schauen Mama oder Papa kurz drüber.</li>
     <li><b>Tempogegenstoß:</b> pünktlich angefangen</li>
     <li><b>Kempa-Trick:</b> im Lernmodus eine ganze Aufgabe ohne Ablenkung</li></ul></div>
   <div><h3><span class="ball opp" aria-hidden="true"></span>Der Schweinehund trifft</h3><ul>
@@ -1679,6 +1740,7 @@ function renderEltern(plan){
   const lmInfo=S.lm&&S.lm.date===T?`<div class="sub" style="margin-top:6px">Lernmodus ${S.lm.on?'läuft':'war an'} seit ${hm(Math.round((S.lm.since-today().getTime())/60000))} Uhr, ${S.lm.leaves?`${S.lm.leaves}-mal die App verlassen (${Math.round(S.lm.away/60000)} Min.)`:'App nicht verlassen'}${S.lm.awayAt?', gerade nicht in der App':''}.</div>`:'';
   const vd=S.days[T]||{},vinfo=vd.verlegt?`<div class="note warn" style="margin-top:8px">Heute hat er das Spiel verlegt${vd.grund?` (${esc(VGRUND[vd.grund]||vd.grund)})`:''}. Vielleicht kurz nachfragen, wie es ihm geht.</div>`:'';
   const gc=concOn(T),sc=`<div class="sub" style="margin-top:6px">Spielstand gegen den Schweinehund: ${goalsOn(T)}:${gc}${gc?` (Gegentore: ${esc(S.conc.filter(c=>c.date===T).map(c=>c.why).join('; '))})`:''}.</div>`;
+  sec.ueb+=checkBox();
   sec.ueb+=`<div class="card"><h2>Heute</h2>
   <div class="stats"><div><div class="v">${doneT.length}<small> von ${doneT.length+openT}</small></div><div class="sub">erledigt, ${S.kick[T]?'Anpfiff '+S.kick[T]:'noch nicht angefangen'}</div>${S.kick[T]?(ui.ask==='kickreset'?`<div class="row" style="margin-top:6px"><button class="btn sm danger" data-act="kickreset">Wirklich zurücksetzen</button><button class="btn sm" data-act="askx">Nein</button></div>`:`<div class="row" style="margin-top:6px"><button class="btn sm" data-act="ask" data-v="kickreset">Anpfiff zurücksetzen</button></div>`):''}</div><div><div class="v">${wk.reduce((a,t)=>a+(t.actual||0),0)}<small> Min.</small></div><div class="sub">gelernt in 7 Tagen, ${wk.length} Aufgaben</div></div></div>
   ${overdue.map(t=>`<div class="note err">Noch offen, war fällig am ${fmt(t.due)}: ${esc(t.subject)}, ${esc(t.title)}</div>`).join('')}
@@ -1851,7 +1913,14 @@ document.addEventListener('click',e=>{
     case'reorder':ui.reorder=!ui.reorder;break;
     case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');else if(w.length&&n>w[0][0]+30)concede(`Zu spät angepfiffen (geplant ${hm(w[0][0])})`);save();break}
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
-    case'check':ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
+    case'check':{const ct=S.tasks.find(x=>x.id===id);
+      // Läuft die Uhr bei einer Lern-Aufgabe noch keine zwei Drittel der Zeit: erst ermutigen weiterzumachen.
+      if(ct&&ct.kind==='lern'&&S.running&&S.running.id===id&&runMin()<needMin(ct,planMin(ct))){ui.early=id;ui.fb=null;break}
+      ui.early=null;ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break}
+    case'earlyback':ui.early=null;break;
+    case'earlydone':ui.early=null;ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
+    case'chkok':if(!kidDevice()||ui.unlocked)decideCheck(id,true);break;
+    case'chkno':if(!kidDevice()||ui.unlocked)decideCheck(id,false);break;
     case'fbdur':ui.fbDur=b.dataset.v;break;
     case'fbfeel':ui.fbFeel=b.dataset.v;break;
     case'fbsave':finish(ui.fb);break;
@@ -2044,6 +2113,11 @@ async function init(){
 // sein als alle bisherigen. eltern:1 zeigt einen Punkt nur auf den Geräten der Eltern.
 const NEWS_KEY='lp-neu-gesehen';
 const NEUES=[
+  {id:'2026-11-18d',datum:'18. November, mittags',titel:'Lernen zählt mit der Uhr',punkte:[
+    {t:'Bei Lern-Aufgaben gibt es das Tor ab zwei Dritteln der geplanten Zeit, gemessen mit „Start“. Zeit in anderen Apps zählt nicht mit.'},
+    {t:'Bist du früher fertig, zeigt die App, wie viele Minuten noch fehlen, und schlägt etwas vor, zum Beispiel Karteikarten. Mit „Ich bin wirklich fertig“ schauen Mama oder Papa kurz drüber. Es gibt kein Gegentor, nur das Tor kommt erst mit ihrer Bestätigung.'},
+    {t:'Statt „Schon erledigt“ steht bei Lern-Aufgaben „Ohne Handy gelernt“. Auch das bestätigen Mama oder Papa.'},
+    {t:'Zu bestätigen: Ihr bekommt eine Nachricht und seht die Einheit oben auf der Heute-Seite und unter Eltern, Überblick, mit der gemessenen Zeit. „Zählt“ gibt das Tor, „Nochmal“ plant die Einheit neu ein. Bis dahin wartet der Tagessieg.',eltern:1}]},
   {id:'2026-11-18c',datum:'18. November',titel:'Hefteinträge und Karteikarten',punkte:[
     {t:'Karteikarten in der App: Bei einer Lerneinheit für eine Prüfung gibt es jetzt Karteikarten. Erst überlegen, dann umdrehen und ehrlich sagen, ob du es wusstest. Was sitzt, rückt ein Fach weiter und kommt seltener. Was nicht sitzt, kommt am nächsten Tag wieder.'},
     {t:'Fehlt ein Hefteintrag, kannst du ihn bei der Lerneinheit fotografieren. Claude schreibt ihn ab und macht Karteikarten daraus.'},

@@ -1893,6 +1893,8 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
 
 export type LpData = {
   settings: Row; schoolEnd: Row; timetable: Row | null; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
+  /** Lerneinheiten, die auf die Bestätigung der Eltern warten (zu kurz oder ohne Uhr). */
+  checks?: Row[];
   wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
   lm?: Row | null; brk?: Row | null; days?: Record<string, Row>;
 };
@@ -1908,7 +1910,7 @@ export function lpFromRows(rows: Row[]): LpData {
     if (r.coll === 'settings') d.settings = v;
     else if (r.coll === 'schoolEnd') d.schoolEnd = v;
     else if (r.coll === 'timetable') d.timetable = v;
-    else if (r.coll === 'task') (v.done ? d.done : d.open).push(v);
+    else if (r.coll === 'task') { if (v.done) d.done.push(v); else if (v.check) (d.checks ||= []).push(v); else d.open.push(v); }
     else if (r.coll === 'exam') d.exams.push(v);
     else if (r.coll === 'help') d.help.push(v);
     else if (r.coll === 'win') d.wins[v.k] = !!v.v;
@@ -2057,6 +2059,15 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
     const g: Record<string, string> = { muede: 'müde', krank: 'krank', aerger: 'Ärger oder Streit', kopf: 'zu viel im Kopf', lust: 'einfach keine Lust' };
     if (adults.length) out.push({ key: `lp-verlegt:${day}`, to: adults, ttl: 6 * 3600, msg: { title: `${kname} hat heute das Spiel verlegt`, body: `${vd.grund ? `Grund: ${g[String(vd.grund)] || vd.grund}. ` : ''}Vielleicht kurz nachfragen, wie es geht.`, tag: 'lernplaner-eltern', url } });
     return out;
+  }
+  // Lerneinheit zu kurz oder ohne Uhr: die Eltern entscheiden, ob sie zählt. Eine Nachricht pro Meldung, nicht nachts.
+  if (adults.length && min >= 7 * 60 && min < 21 * 60 + 30) {
+    for (const t of lp.checks || []) {
+      const c: Row = t.check || {};
+      if (!c.at || nowMs - Number(c.at) > DAY) continue;
+      const how = c.why === 'ohne' ? `ohne Handy gelernt, nach eigener Angabe etwa ${c.actual} Min.` : `${c.actual} von ${c.planned} Min. mit der Uhr gelernt`;
+      out.push({ key: `lp-pruefen:${t.id}:${c.at}`, to: adults, ttl: 6 * 3600, msg: { title: `Zählt das? ${t.subject}: ${how.split(',')[0]}`, body: `${kname}: ${t.title}. ${how.charAt(0).toUpperCase()}${how.slice(1)}${how.endsWith('.') ? '' : '.'} Im Lernplaner mit „Zählt“ oder „Nochmal“ entscheiden.`, tag: 'lernplaner-pruefen', url } });
+    }
   }
   const tomorrow = addDays(day, 1);
   const nextWork = wdOf(tomorrow) === 6 && st.sundayFree !== false ? addDays(tomorrow, 1) : tomorrow;

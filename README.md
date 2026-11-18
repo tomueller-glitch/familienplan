@@ -380,6 +380,7 @@ lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der
 - „Pause vorbei“ und Lernmodus-Meldungen kommen pünktlich mit einem zweiten Zeitplan im Minutentakt (`lernplaner-minute` in `supabase/cron.sql` bzw. `push-einrichten.html`). Ohne ihn kommen sie mit bis zu fünf Minuten Verspätung.
 
 - Hefteinträge: Fotos oder ein PDF pro Prüfung, Claude schreibt sie ab (`ex.heft`). Sie sind danach die wichtigste Quelle für Lernschritte, Abfrage und Karteikarten.
+- Lernzeit: Lern-Aufgaben zählen nur mit der Uhr und ab zwei Dritteln der geplanten Zeit (`NEED_SHARE`). Kürzer oder „ohne Handy gelernt“ setzt `t.check`, die Eltern entscheiden mit „Zählt“ oder „Nochmal“ (Push `lp-pruefen`). Bis dahin wartet der Tagessieg.
 - Karteikarten: eigene Sammlung `card` in `lp_data`, Lernkartei mit fünf Fächern (Fach 1 täglich, dann nach 1, 2, 4 und 7 Tagen). Karten von Prüfungen, die länger als 60 Tage vorbei sind, räumt die App weg.
 
 ## Foto als Nachweis und Wochenrückblick
