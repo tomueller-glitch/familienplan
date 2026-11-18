@@ -16,3 +16,16 @@ show('… am Morgen 7:00', muellMessages({ plastik: { stufe: 'rot', at: iso(at('
 show('rot seit zwei Tagen', muellMessages(red, tasks, [], persons, at('16:01', '2026-11-19')));
 show('verreist', muellMessages(red, tasks, [], persons, at('16:01'), [{ von: '2026-11-16', bis: '2026-11-20', weg: true }]));
 show('ohne Müll-Aufgabe', muellMessages(red, [], [], persons, at('16:01')));
+
+// Spülmaschine: Nachricht, wenn sie fertig ist (von Hand auf Rot oder zur Endzeit).
+import { spuelMessages } from '../supabase/functions/push/index.ts';
+const smTasks = [{ id: 'spuelmaschine', name: 'Spülmaschine ausräumen', schedule: 'bedarf', who: ['p3', 'p4'], active: true, minutes: 10 }];
+const sm = (name: string, d: ReturnType<typeof spuelMessages>) => show('Spül: ' + name, d);
+sm('läuft, Ende 14:30, um 14:00', spuelMessages({ stufe: 'gelb', at: iso(at('12:00')), bis: iso(at('14:30')) }, smTasks, [], persons, at('14:00')));
+sm('läuft, Ende 14:30, um 14:31', spuelMessages({ stufe: 'gelb', at: iso(at('12:00')), bis: iso(at('14:30')) }, smTasks, [], persons, at('14:31')));
+sm('von Hand fertig 15:00', spuelMessages({ stufe: 'rot', at: iso(at('15:00')) }, smTasks, [], persons, at('15:01')));
+sm('schon gemeldet', spuelMessages({ stufe: 'rot', at: iso(at('15:00')) }, smTasks, [{ id: 'sm-1', status: 'offen' }], persons, at('15:05')));
+sm('Ende 22:00, nachts', spuelMessages({ stufe: 'gelb', at: iso(at('20:00')), bis: iso(at('22:00')) }, smTasks, [], persons, at('22:05')));
+sm('… am Morgen 7:00', spuelMessages({ stufe: 'gelb', at: iso(at('20:00')), bis: iso(at('22:00')) }, smTasks, [], persons, at('07:00', '2026-11-18')));
+sm('wird eingeräumt', spuelMessages({ stufe: 'gruen', at: iso(at('15:00')) }, smTasks, [], persons, at('15:01')));
+sm('ohne Aufgabe', spuelMessages({ stufe: 'rot', at: iso(at('15:00')) }, [], [], persons, at('15:01')));

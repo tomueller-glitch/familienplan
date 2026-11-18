@@ -213,3 +213,38 @@ export function kmView(value, log) {
     return { bin, name, ...st[bin], pending, canReport: st[bin].stufe !== 'gruen' && !pending };
   });
 }
+
+/* ---------- Spülmaschine ---------- */
+// Ampel wie beim Müll, gespeichert in ep_settings unter "spuelmaschine": { stufe, at, by, bis }.
+// Grün: wird eingeräumt, nichts zu tun. Gelb: läuft, bis = geplantes Ende. Rot: fertig, bitte ausräumen.
+// Steht sie auf Gelb mit Endzeit und ist die Zeit vorbei, gilt ab dann Rot, ohne dass jemand schalten muss.
+// Ausräumen lässt sich nur bei Rot melden. Die Meldung trägt die Kennung sm-…, die Bestätigung stellt auf Grün.
+export const smId = (uid) => `sm-${uid}`;
+export const isSm = (e) => /^sm-/.test(String((e && e.id) || ''));
+
+// Die Aufgabe „Spülmaschine ausräumen“: Startaufgabe "spuelmaschine", sonst eine Bei-Bedarf-Aufgabe mit Spül… im Namen.
+export function smTask(tasks) {
+  const live = (tasks || []).filter((t) => t.active !== false);
+  return live.find((t) => t.id === 'spuelmaschine')
+    || live.find((t) => t.schedule === 'bedarf' && /spülmasch|spuelmasch|geschirrspül/i.test(t.name || '')) || null;
+}
+
+export function smState(value, nowMs = Date.now()) {
+  const x = value && typeof value === 'object' ? value : {};
+  const stufe = STUFEN.includes(x.stufe) ? x.stufe : 'gruen';
+  const end = Date.parse(x.bis || '');
+  if (stufe === 'gelb' && Number.isFinite(end) && end <= nowMs) {
+    return { stufe: 'rot', at: new Date(end).toISOString(), by: x.by || null, bis: x.bis, auto: true };
+  }
+  return { stufe, at: x.at || null, by: x.by || null, bis: stufe === 'gelb' && Number.isFinite(end) ? x.bis : null, auto: false };
+}
+
+export function smPending(log) {
+  return (log || []).filter((e) => isSm(e) && e.status === 'offen').pop() || null;
+}
+
+export function smView(value, log, nowMs = Date.now()) {
+  const st = smState(value, nowMs);
+  const pending = smPending(log);
+  return { ...st, name: 'Spülmaschine', pending, canReport: st.stufe === 'rot' && !pending };
+}

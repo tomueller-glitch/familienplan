@@ -41,6 +41,7 @@ export function weekReview(data, week, opts = {}) {
       extras: mine.filter((e) => e.status === 'bestaetigt' && e.minutes > 0 && !A.isBonus(e)).length,
       rejected: mine.filter((e) => e.status === 'abgelehnt').length,
       muell: mine.filter((e) => A.kmBinOf(e) && e.status === 'bestaetigt').length,
+      spuel: mine.filter((e) => A.isSm(e) && e.status === 'bestaetigt').length,
     };
   });
 

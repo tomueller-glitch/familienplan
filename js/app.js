@@ -87,7 +87,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -1903,7 +1903,7 @@ function sheetReview() {
   const kinder = v.kinder.length ? `<h3 class="abteilung">Aufgaben der Kinder</h3><ul class="rb-kinder">${v.kinder.map((k) => `<li><strong>${esc(k.name)}</strong>
     <span>${k.basicsDue ? `Grundaufgaben an ${k.basicsOk} von ${k.basicsDue} Tagen geschafft` : 'Keine Grundaufgaben'}${k.bonus ? `, Wochenbonus ${k.bonus} Min.` : ''}.</span>
     <span>${k.extras ? `${k.extras} ${k.extras === 1 ? 'Extra-Aufgabe' : 'Extra-Aufgaben'}, ${k.earned} Min. verdient` : 'Keine Extra-Aufgaben'}${k.redeemed ? `, ${k.redeemed} Min. eingelöst` : ''}.</span>
-    ${k.muell || k.rejected ? `<span>${[k.muell ? `Müll ${k.muell}-mal rausgebracht` : '', k.rejected ? `${k.rejected}-mal nicht anerkannt` : ''].filter(Boolean).join(', ')}.</span>` : ''}</li>`).join('')}</ul>` : '';
+    ${k.muell || k.spuel || k.rejected ? `<span>${[k.muell ? `Müll ${k.muell}-mal rausgebracht` : '', k.spuel ? `Spülmaschine ${k.spuel}-mal ausgeräumt` : '', k.rejected ? `${k.rejected}-mal nicht anerkannt` : ''].filter(Boolean).join(', ')}.</span>` : ''}</li>`).join('')}</ul>` : '';
   const l = r.lern;
   const lernen = l === undefined && state.lp ? '<h3 class="abteilung">Lernen</h3><p class="meta">Wird geladen …</p>'
     : l ? `<h3 class="abteilung">Lernen</h3><ul class="rb-kinder"><li>
@@ -2279,7 +2279,7 @@ function fmtClock(ms) {
 function taskBadge() {
   if (!state.data.tasks.length) return 0;
   if (canPlan() && state.data.persons.some(isAdult)) return state.data.taskLog.filter((e) => e.status === 'offen').length;
-  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done).length + (kmFor(personById(state.me)) ? kmRedOpen() : 0);
+  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done).length + (kmFor(personById(state.me)) ? kmRedOpen() : 0) + (smFor(personById(state.me)) ? smRedOpen() : 0);
   return 0;
 }
 
@@ -2428,7 +2428,8 @@ function kidTasks(person) {
   const { fixed, extras: allExtras } = A.tasksFor(state.data.tasks, state.data.taskLog, person.id, today);
   // Den Küchenmüll gibt es nur über die Ampel, nicht als Extra-Aufgabe.
   const km = A.kmTask(state.data.tasks);
-  const extras = allExtras.filter((x) => !km || x.task.id !== km.id);
+  const sm = A.smTask(state.data.tasks);
+  const extras = allExtras.filter((x) => (!km || x.task.id !== km.id) && (!sm || x.task.id !== sm.id));
   const week = L.mondayOf(today);
   const doneWeek = state.data.taskLog.filter((e) => e.person_id === person.id && e.day >= week && e.day <= today && e.minutes !== 0)
     .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
@@ -2469,7 +2470,7 @@ function parentTasks() {
     return `${accountCard(k, true).replace(/<\/div>\s*$/, '')}
       <p class="meta">${line}</p></div>`;
   }).join('');
-  const kmBox = kmParent();
+  const kmBox = kmParent() + smParent();
   return `${queue}${kmBox ? `<div${pending.length ? ' class="km-abstand"' : ''}>${kmBox}</div>` : ''}<h2 class="abschnitt mit-info${pending.length || kmBox ? ' abstand' : ''}">Minutenkonten ${infoBtn('konten', 'Wie die Minuten verfallen')}</h2>${infoText('konten', `Verdiente Minuten verfallen ${A.EXPIRY_HOURS} Stunden nach der Bestätigung. Beim Einlösen gehen die ältesten zuerst weg.`)}<div class="konten">${cards}</div>
     <div class="knopfreihe"><button class="knopf zweit" data-action="aufgaben-liste">Aufgaben verwalten</button></div>
     ${reminderBox()}${abfuhrBox(false)}`;
@@ -2555,30 +2556,105 @@ function kmConfirmed(entries) {
   const st = A.kmState(kmValue());
   const bins = [...new Set(entries.filter((e) => e.status === 'bestaetigt').map(A.kmBinOf).filter(Boolean))].filter((b) => st[b].stufe !== 'gruen');
   if (bins.length) kmSave(Object.fromEntries(bins.map((b) => [b, 'gruen'])));
+  smConfirmed(entries);
 }
 const kmRedOpen = () => A.kmView(kmValue(), state.data.taskLog).filter((x) => x.stufe === 'rot' && !x.pending).length;
 
-// Karte für das Kind, immer an derselben Stelle unter dem Datum.
+/* ---------- Spülmaschine ---------- */
+// Ampel wie beim Müll (Logik in js/aufgaben.js): Grün wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen.
+// Mit Endzeit springt Gelb von selbst auf Rot, dann schickt die Push-Funktion den Kindern eine Nachricht.
+const SM_WORT = { rot: 'Fertig', gelb: 'Läuft', gruen: 'Wird eingeräumt' };
+const smValue = () => KI.settingOf(state.data.settings, 'spuelmaschine');
+const smKids = () => { const t = A.smTask(state.data.tasks); return t ? A.assignees(t, L.todayISO()).filter((id) => kidsList().some((k) => k.id === id)) : []; };
+const smFor = (person) => !!person && smKids().includes(person.id);
+const smNow = () => A.smView(smValue(), state.data.taskLog, nowMs());
+const clockOf = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function smSave(stufe, bis = null) {
+  const cur = A.smState(smValue(), nowMs());
+  const keepAt = stufe === 'gelb' && cur.stufe === 'gelb' && !cur.auto;
+  const value = { stufe, at: keepAt ? cur.at : nowStamp(), by: keepAt ? cur.by : state.me, bis: stufe === 'gelb' ? bis : null };
+  const row = { key: 'spuelmaschine', value, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'spuelmaschine'), row]; }, () => store.saveSettings([row]));
+}
+function smConfirmed(entries) {
+  if (entries.some((e) => A.isSm(e) && e.status === 'bestaetigt') && A.smState(smValue(), nowMs()).stufe !== 'gruen') smSave('gruen');
+}
+const smRedOpen = () => { const v = smNow(); return v.stufe === 'rot' && !v.pending ? 1 : 0; };
+// Läuft sie mit Endzeit, zur Endzeit einmal neu zeichnen, damit die Ampel ohne Neuladen auf Rot springt.
+let smTimer = null;
+function smWatch(v) {
+  const end = v.stufe === 'gelb' && v.bis ? Date.parse(v.bis) - nowMs() : -1;
+  if (smTimer && smTimer.bis === v.bis) return;
+  if (smTimer) clearTimeout(smTimer.id);
+  smTimer = end > 0 && end < 12 * 3600000 ? { bis: v.bis, id: setTimeout(() => { smTimer = null; render(); }, end + 1000) } : null;
+}
+
+// Karte für das Kind, immer an derselben Stelle unter dem Datum: Mülleimer und Spülmaschine.
 function kmCard(person) {
-  const task = A.kmTask(state.data.tasks);
-  if (!task || !kmFor(person)) return '';
-  const view = A.kmView(kmValue(), state.data.taskLog);
-  const calm = view.every((x) => x.stufe === 'gruen' && !x.pending);
-  const alarm = view.some((x) => x.stufe === 'rot' && !x.pending);
+  const kmT = A.kmTask(state.data.tasks);
+  const smT = A.smTask(state.data.tasks);
+  const bins = kmT && kmFor(person) ? A.kmView(kmValue(), state.data.taskLog) : [];
+  const sm = smT && smFor(person) ? smNow() : null;
+  if (!bins.length && !sm) return '';
+  if (sm) smWatch(sm);
+  const title = bins.length && sm ? 'In der Küche' : bins.length ? 'Mülleimer in der Küche' : 'Spülmaschine';
+  const smCalm = !sm || (sm.stufe !== 'rot' && !sm.pending);
+  const calm = bins.every((x) => x.stufe === 'gruen' && !x.pending) && smCalm;
+  const binAlarm = bins.some((x) => x.stufe === 'rot' && !x.pending);
+  const smAlarm = !!sm && sm.stufe === 'rot' && !sm.pending;
+  const smBis = sm && sm.stufe === 'gelb' && sm.bis ? clockOf(sm.bis) : '';
   if (calm) {
-    return `<div class="km-karte ruhig"><div class="km-kopf"><strong>Mülleimer in der Küche</strong></div>
-      <div class="km-ruhig">${view.map((x) => `<span class="km-mini"><span class="km-ampel klein" role="img" aria-label="${esc(x.name)}: Grün, noch Platz">${kmLamps(x.stufe)}</span>${esc(x.name)}</span>`).join('')}</div>
-      <p class="km-text">Beide grün. Gerade nichts zu tun.</p></div>`;
+    const minis = [...bins.map((x) => ({ name: x.name, stufe: x.stufe, label: 'Grün, noch Platz' })), ...(sm ? [{ name: 'Spülmaschine', stufe: sm.stufe, label: sm.stufe === 'gelb' ? 'Gelb, läuft' : 'Grün, wird eingeräumt' }] : [])];
+    const text = sm && sm.stufe === 'gelb'
+      ? `Die Spülmaschine läuft${smBis ? ` bis etwa ${smBis} Uhr` : ''}. Sonst gerade nichts zu tun.`
+      : bins.length && !sm ? 'Beide grün. Gerade nichts zu tun.' : 'Alles grün. Gerade nichts zu tun.';
+    return `<div class="km-karte ruhig"><div class="km-kopf"><strong>${title}</strong></div>
+      <div class="km-ruhig">${minis.map((x) => `<span class="km-mini"><span class="km-ampel klein" role="img" aria-label="${esc(x.name)}: ${x.label}">${kmLamps(x.stufe)}</span>${esc(x.name)}</span>`).join('')}</div>
+      <p class="km-text">${text}</p></div>`;
   }
-  const reward = task.minutes ? `, +${task.minutes} Min.` : '';
-  return `<div class="km-karte${alarm ? ' alarm' : ''}"><div class="km-kopf"><strong>Mülleimer in der Küche</strong>${alarm ? '<span>muss raus</span>' : ''}</div>
-    <div class="km-eimer-liste">${view.map((x) => `<div class="km-eimer s-${x.stufe}">
+  const kmReward = kmT && kmT.minutes ? `, +${kmT.minutes} Min.` : '';
+  const smReward = smT && smT.minutes ? `, +${smT.minutes} Min.` : '';
+  const who = (pending) => (pending.person_id === person.id ? 'Mama oder Papa schauen noch drüber.' : `${esc((personById(pending.person_id) || {}).name || 'Jemand')} hat`);
+  const tiles = bins.map((x) => `<div class="km-eimer s-${x.stufe}">
       <span class="km-name">${esc(x.name)}</span>
       <span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'gruen' ? 'Grün' : x.stufe === 'gelb' ? 'Gelb' : 'Rot'}, ${KM_WORT[x.stufe]}">${kmLamps(x.stufe)}</span>
-      ${x.pending ? `<p class="km-text"><b>Gemeldet.</b> ${x.pending.person_id === person.id ? 'Mama oder Papa schauen noch drüber.' : `${esc((personById(x.pending.person_id) || {}).name || 'Jemand')} hat ihn rausgebracht.`}</p>`
+      ${x.pending ? `<p class="km-text"><b>Gemeldet.</b> ${x.pending.person_id === person.id ? who(x.pending) : `${who(x.pending)} ihn rausgebracht.`}</p>`
         : `<p class="km-text"><b>${KM_WORT[x.stufe]}.</b> ${KM_KIND[x.stufe]}</p>`}
-      ${x.canReport ? `<button class="knopf klein breit${x.stufe === 'rot' ? '' : ' zweit'}" data-action="km-raus" data-bin="${x.bin}">Rausgebracht${reward}</button>` : ''}
-    </div>`).join('')}</div></div>`;
+      ${x.canReport ? `<button class="knopf klein breit${x.stufe === 'rot' ? '' : ' zweit'}" data-action="km-raus" data-bin="${x.bin}">Rausgebracht${kmReward}</button>` : ''}
+    </div>`);
+  if (sm) {
+    const smText = sm.stufe === 'rot' ? 'Bitte jetzt ausräumen.' : sm.stufe === 'gelb' ? (smBis ? `Fertig gegen ${smBis} Uhr. Dann kommt eine Nachricht.` : 'Wenn sie fertig ist, kommt eine Nachricht.') : 'Gerade nichts zu tun.';
+    tiles.push(`<div class="km-eimer s-${sm.stufe}${bins.length % 2 === 0 ? ' breit' : ''}">
+      <span class="km-name">Spülmaschine</span>
+      <span class="km-ampel" role="img" aria-label="Spülmaschine: ${sm.stufe === 'gruen' ? 'Grün' : sm.stufe === 'gelb' ? 'Gelb' : 'Rot'}, ${SM_WORT[sm.stufe]}">${kmLamps(sm.stufe)}</span>
+      ${sm.pending ? `<p class="km-text"><b>Gemeldet.</b> ${sm.pending.person_id === person.id ? who(sm.pending) : `${who(sm.pending)} sie ausgeräumt.`}</p>`
+        : `<p class="km-text"><b>${SM_WORT[sm.stufe]}.</b> ${smText}</p>`}
+      ${sm.canReport ? `<button class="knopf klein breit" data-action="sm-raus">Ausgeräumt${smReward}</button>` : ''}
+    </div>`);
+  }
+  const flag = binAlarm && smAlarm ? 'jetzt dran' : binAlarm ? 'muss raus' : smAlarm ? 'bitte ausräumen' : '';
+  return `<div class="km-karte${flag ? ' alarm' : ''}"><div class="km-kopf"><strong>${title}</strong>${flag ? `<span>${flag}</span>` : ''}</div>
+    <div class="km-eimer-liste">${tiles.join('')}</div></div>`;
+}
+
+// Schalter für die Eltern: drei Lampen, bei Gelb dazu die Endzeit.
+function smParent() {
+  if (!A.smTask(state.data.tasks)) return '';
+  const v = smNow();
+  smWatch(v);
+  const names = smKids().map((id) => (personById(id) || {}).name).filter(Boolean);
+  const label = { rot: 'Rot, fertig zum Ausräumen', gelb: 'Gelb, läuft', gruen: 'Grün, wird eingeräumt' };
+  const since = v.stufe === 'rot' && v.at ? `fertig seit ${clockOf(v.at)} Uhr` : v.stufe === 'gelb' ? (v.bis ? `fertig um ${clockOf(v.bis)} Uhr, dann springt sie von selbst auf Rot` : 'ohne Endzeit') : '';
+  const bisWert = v.stufe === 'gelb' && v.bis ? clockOf(v.bis) : '';
+  return `<h2 class="abschnitt mit-info abstand">Spülmaschine ${infoBtn('spuelmaschine', 'Wie die Spülmaschinen-Ampel funktioniert')}</h2>
+    ${infoText('spuelmaschine', `Grün: wird eingeräumt. Gelb: läuft. Rot: fertig zum Ausräumen. Nur bei Rot können ${names.length ? esc(names.join(' und ')) : 'die Kinder'} „Ausgeräumt“ melden. Stellst du bei Gelb eine Endzeit ein, springt die Ampel zu dieser Zeit von selbst auf Rot. Bei Rot kommt eine Push-Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Bestätigst du die Meldung, springt die Ampel auf Grün.`)}
+    <div class="km-karte eltern"><div class="km-eimer s-${v.stufe}">
+      <div class="km-ampel knoepfe" role="group" aria-label="Spülmaschine">${A.STUFEN.map((st) => `<button class="km-l ${st}${st === v.stufe ? ' an' : ''}" data-action="sm-stufe" data-stufe="${st}" aria-pressed="${st === v.stufe}" aria-label="Spülmaschine: ${label[st]}"></button>`).join('')}</div>
+      <p class="km-text"><b>${SM_WORT[v.stufe]}</b>${since ? `, ${esc(since)}` : ''}</p>
+      ${v.stufe === 'gelb' ? `<div class="sm-ende"><span class="km-text">Fertig in</span>${[60, 120, 180, 240].map((m) => `<button class="knopf zweit klein" data-action="sm-bis" data-wert="${m}">${m / 60} Std.</button>`).join('')}
+        <label class="sm-zeit-l">oder um <input type="time" class="sm-zeit" value="${bisWert}" aria-label="Endzeit der Spülmaschine"></label></div>` : ''}
+      ${v.pending ? `<p class="km-text">${esc((personById(v.pending.person_id) || {}).name || 'Jemand')} hat sie ausgeräumt. Oben bestätigen.</p>` : ''}
+    </div></div>`;
 }
 
 // Schalter für die Eltern: drei Lampen pro Eimer zum Antippen.
@@ -3368,6 +3444,7 @@ function sheetAppWishes() {
 
 const HELP_KIDS = [
   ['Aufgaben und Bildschirmzeit', 'Unter „Aufgaben“ stehen deine Aufgaben für heute. Grundaufgaben wie Tisch decken gehören einfach dazu. Was noch offen ist, steht ganz oben in der Woche, und nachmittags und abends kommt eine Erinnerung. Mama oder Papa schauen auch bei Grundaufgaben drüber. Für Extra-Aufgaben gibt es Minuten Bildschirmzeit, sobald Mama oder Papa sie bestätigen. Die Minuten gibt es erst, wenn deine Grundaufgaben für heute erledigt sind. Verdiente Minuten verfallen nach drei Tagen, oben siehst du dein Konto.'],
+  ['Spülmaschine', 'Neben den Mülleimern siehst du die Ampel der Spülmaschine. Grün heißt: wird eingeräumt. Gelb heißt: läuft noch, wenn sie fertig ist, kommt eine Nachricht aufs Handy. Rot heißt: fertig, bitte ausräumen. Danach auf „Ausgeräumt“ tippen. Bestätigen Mama oder Papa, gibt es die Minuten und die Ampel springt auf Grün.'],
   ['Foto als Nachweis', 'Bei manchen Aufgaben möchten Mama oder Papa ein Foto sehen. Dann öffnet sich beim Abhaken die Kamera. Mach ein Foto, auf dem man sieht, dass es erledigt ist, und tipp auf „Erledigt melden“.'],
   ['Mülleimer in der Küche', 'Unter „Aufgaben“ siehst du direkt unter dem Datum die Ampel für Plastikmüll und Restmüll. Grün heißt: noch Platz, gerade nichts zu tun. Gelb heißt: fast voll, du kannst ihn schon rausbringen. Rot heißt: voll, bitte jetzt rausbringen, dazu kommt eine Nachricht aufs Handy. Danach auf „Rausgebracht“ tippen. Bestätigen Mama oder Papa, gibt es die Minuten und die Ampel springt auf Grün.'],
   ['Tonne', 'Bist du mit der Tonne dran, kommt am Vorabend ab 18 Uhr eine Erinnerung. Hak die Aufgabe ab, wenn die Tonne an der Straße steht. Um 21 Uhr schauen Mama und Papa nach.'],
@@ -3384,12 +3461,13 @@ const HELP_ADULTS = [
   ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
+  ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
   ['Müll-Ampel in der Küche', 'Unter „Aufgaben“ schaltet ihr für Plastikmüll und Restmüll die Ampel: einfach auf Rot, Gelb oder Grün tippen. Bei Grün können die Kinder den Eimer nicht melden, bei Gelb und Rot schon („Rausgebracht“, mit den Minuten der Aufgabe „Müll aus der Küche rausbringen“). Bei Rot bekommen die Kinder eine Push-Nachricht, zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Bestätigt ihr die Meldung, springt die Ampel von selbst auf Grün.'],
   ['Lernplaner', 'Der Lernplaner (lernen.html) plant Hausaufgaben, Prüfungslernen und Pausen für das Schulkind. Unter „Aufgaben“ zeigt die Karte „Schule“ den Stand des Tages, das Wochenspiel und was als schwer markiert wurde, „Lernplaner öffnen“ führt hinein. Termine aus dem Lernplaner und die Termine der Familie sind dieselben, sie stehen in beiden Apps.'],
   ['Ausgaben', 'Kassenzettel fotografieren, prüfen, speichern. Die App sortiert in Kategorien, lernt aus euren Korrekturen, hakt Gekauftes auf der Einkaufsliste ab und setzt Vorräte auf „da“. Dazu Monatsbudget, Jahresüberblick mit Bio-Anteil und das Preisgedächtnis.'],
-  ['Benachrichtigungen', 'Im Familie-Fenster (oben rechts auf euren Namen) schaltet jedes Gerät seine Push-Nachrichten ein: Morgenüberblick, Kochen anfangen, Vorabend, Einkauf, neue Einträge auf der Liste, Bewerten, Tonne, Aufgaben zum Bestätigen, Grundaufgaben der Kinder, die Müll-Ampel, der Wochenrückblick am Sonntag und der Wochenplan von Claude. Die Nachrichten des Lernplaners stellt ihr im Lernplaner unter Einstellungen ein. Dort steht auch, wann die letzte Nachricht angekommen ist. Fehlen Nachrichten auf dem iPhone, in den iOS-Einstellungen unter Mitteilungen und beim Fokus nachsehen.'],
+  ['Benachrichtigungen', 'Im Familie-Fenster (oben rechts auf euren Namen) schaltet jedes Gerät seine Push-Nachrichten ein: Morgenüberblick, Kochen anfangen, Vorabend, Einkauf, neue Einträge auf der Liste, Bewerten, Tonne, Aufgaben zum Bestätigen, Grundaufgaben der Kinder, die Ampeln für Müll und Spülmaschine, der Wochenrückblick am Sonntag und der Wochenplan von Claude. Die Nachrichten des Lernplaners stellt ihr im Lernplaner unter Einstellungen ein. Dort steht auch, wann die letzte Nachricht angekommen ist. Fehlen Nachrichten auf dem iPhone, in den iOS-Einstellungen unter Mitteilungen und beim Fokus nachsehen.'],
   ['Datensicherung', 'Jeden Sonntag sichert die App alle Daten. Im Familie-Fenster unter „Datensicherung“ lassen sie sich herunterladen oder sofort neu anlegen. „Zurückholen“ holt einzelne Rezepte oder den Plan einer Woche aus einer Sicherung zurück. Bevor ein Entwurf, ein eingefügter Plan oder eine Sicherung übernommen wird, zeigt die App, was sich ändert, und markiert rot, was verloren gehen würde.'],
   ['Wochenbonus', 'Wer an jedem Tag der Woche alle Grundaufgaben erledigt, bekommt am Sonntag Extra-Minuten (voreingestellt 30, einstellbar unter „Aufgaben verwalten“). Die Kinder sehen unter „Aufgaben“ sieben Punkte für die Woche. Urlaubstage zählen nicht mit, und der Bonus zählt nicht zum Tageslimit.'],
   ['Kosten im Blick', 'Über jeder Einkaufstour steht eine Schätzung, sobald es genug Preise aus euren Kassenzetteln gibt. Im Familie-Fenster steht, was die Anfragen an Claude im Monat kosten.'],
@@ -4743,6 +4821,34 @@ const actions = {
     if (needsFoto(task)) { startFoto(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid())); return; }
     logTask(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid()));
   },
+  'sm-raus': () => {
+    const task = A.smTask(state.data.tasks);
+    const v = smNow();
+    if (!task || !isKidMe()) return;
+    if (!v.canReport) { toast(v.pending ? 'Ist schon gemeldet.' : v.stufe === 'gelb' ? 'Die Spülmaschine läuft noch.' : 'Gerade gibt es nichts auszuräumen.'); return; }
+    if (needsFoto(task)) { startFoto(task, task.name, A.smId(L.uid())); return; }
+    logTask(task, task.name, A.smId(L.uid()));
+  },
+  'sm-stufe': ({ stufe }) => {
+    const cur = A.smState(smValue(), nowMs());
+    if (!A.STUFEN.includes(stufe) || cur.stufe === stufe) return;
+    smSave(stufe);
+    if (stufe === 'rot') {
+      const kids = smKids().map((id) => (personById(id) || {}).name).filter(Boolean);
+      const n = new Date(nowMs());
+      const m = n.getHours() * 60 + n.getMinutes();
+      const when = m < KM_PUSH_VON ? 'um 7 Uhr' : m >= KM_PUSH_BIS ? 'morgen um 7 Uhr' : 'gleich';
+      toast(`Spülmaschine fertig. ${kids.length ? kids.join(' und ') : 'Die Kinder'} ${kids.length === 1 ? 'bekommt' : 'bekommen'} ${when} eine Nachricht.`);
+    } else if (stufe === 'gelb') toast('Läuft. Mit einer Endzeit springt die Ampel dann von selbst auf Rot.');
+    else if (A.smPending(state.data.taskLog)) toast('Auf Grün. Die Meldung wartet noch oben auf deine Bestätigung.');
+  },
+  'sm-bis': ({ wert }) => {
+    const min = Number(wert) || 0;
+    if (min <= 0) return;
+    const bis = new Date(nowMs() + min * 60000).toISOString();
+    smSave('gelb', bis);
+    toast(`Fertig um ${clockOf(bis)} Uhr. Dann springt die Ampel auf Rot.`);
+  },
   'km-stufe': ({ bin, stufe }) => {
     const cur = A.kmState(kmValue());
     if (!cur[bin] || !A.STUFEN.includes(stufe) || cur[bin].stufe === stufe) return;
@@ -5574,6 +5680,16 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'abfuhr-datei') {
     const file = e.target.files && e.target.files[0];
     readAbfuhrFile(file).finally(() => { e.target.value = ''; });
+  }
+  if (e.target.classList && e.target.classList.contains('sm-zeit') && canPlan()) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(e.target.value || '');
+    if (m) {
+      const d = new Date(nowMs());
+      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      if (d.getTime() <= nowMs()) d.setDate(d.getDate() + 1);
+      smSave('gelb', d.toISOString());
+      toast(`Fertig um ${m[1].padStart(2, '0')}:${m[2]} Uhr. Dann springt die Ampel auf Rot.`);
+    }
   }
   if (e.target.id === 'nachweis-foto') {
     const file = e.target.files && e.target.files[0];

@@ -110,6 +110,7 @@ Eine kleine Funktion bei Supabase schaut alle fünf Minuten nach, ob etwas anste
 | Vorabend der Müllabfuhr, ab 18 Uhr | wer mit der Tonne dran ist (ohne Tonnen-Aufgabe: die Eltern) | „Schwarze Tonne rausstellen“. Entfällt, wenn die Aufgabe schon abgehakt ist. |
 | Kind meldet eine Aufgabe als erledigt | Eltern | „Kind 1: Spülmaschine ausräumen (+10 Min.)“. Mit der Regel „Minuten erst nach den Grundaufgaben“ erst, wenn die erledigt sind. |
 | Vorabend der Müllabfuhr, ab 21 Uhr | Eltern | „Restmüll steht noch nicht draußen“, wenn das zuständige Kind die Tonne noch nicht abgehakt hat. |
+| Spülmaschine fertig (von Hand auf Rot oder zur eingestellten Endzeit) | die Kinder der Aufgabe „Spülmaschine ausräumen“ | „Die Spülmaschine ist fertig“. Zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Entfällt, wenn sie schon jemand als ausgeräumt gemeldet hat. |
 | Sonntag ab 18:30 Uhr | Eltern (im Rückblick abschaltbar) | „Wochenrückblick KW 47“. Öffnet den Rückblick mit Essen, Aufgaben, Lernen und Ausgaben. |
 | Mama oder Papa stellen einen Mülleimer in der Küche auf Rot | die Kinder der Aufgabe „Müll aus der Küche rausbringen“ | „Plastikmüll ist voll“. Zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Entfällt, wenn ihn schon jemand als rausgebracht gemeldet hat. |
 | Jemand schreibt etwas auf die Einkaufsliste | die anderen Erwachsenen (abschaltbar) | „Kind 1: Brezeln, Spülmittel“. Zwischen 21:30 und 7 Uhr wartet die Nachricht bis zum Morgen. |

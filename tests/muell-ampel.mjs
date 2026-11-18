@@ -41,7 +41,7 @@ const iso = new Date().toISOString();
   await page.locator('[data-action="km-stufe"][data-bin="rest"][data-stufe="gelb"]').click(); await page.waitForTimeout(300);
   const s = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'kuechenmuell').pop();
   console.log('A gespeichert:', s && s.value.plastik.stufe, s && s.value.rest.stufe, !!(s && s.value.plastik.at));
-  await page.locator('.km-karte.eltern').screenshot({ path: '/tmp/km_eltern.png' });
+  await page.locator('.km-karte.eltern').first().screenshot({ path: '/tmp/km_eltern.png' });
   console.log('A Fehler:', errs); await ctx.close();
 }
 // B: Kind sieht Rot und Gelb und meldet den Plastikmüll
@@ -75,5 +75,54 @@ const iso = new Date().toISOString();
   const s = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'kuechenmuell').pop();
   console.log('D nach Bestätigen:', s && s.value.plastik.stufe, s && s.value.rest.stufe);
   console.log('D Fehler:', errs); await ctx.close();
+}
+// E: Spülmaschine lief bis vor einer Stunde, Kind räumt aus
+{
+  const db = base();
+  const past = new Date(Date.now() - 3600000).toISOString();
+  db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'gelb', at: past, by: 'p1', bis: past } }];
+  const { page, ctx, errs } = await open(db, 2);
+  console.log('E Karte:', (await page.locator('.km-karte').innerText()).replace(/\n+/g, ' | '));
+  console.log('E Extras mit Spülmaschine:', await page.locator('.extra-zeile', { hasText: 'Spülmaschine' }).count(), 'Badge:', await page.locator('.tab[data-tab="aufgaben"]').innerText());
+  await page.locator('.km-karte').screenshot({ path: '/tmp/sm_kind_rot.png' });
+  await page.locator('[data-action="sm-raus"]').click(); await page.waitForTimeout(400);
+  const e = (await calls(page, 'ep_task_log')).flat().pop();
+  console.log('E Meldung:', e && e.id.slice(0, 3), e && e.label, e && e.status, e && e.minutes);
+  console.log('E danach:', (await page.locator('.km-karte').innerText()).replace(/\n+/g, ' | '));
+  console.log('E Fehler:', errs); await ctx.close();
+}
+// F: Eltern stellen auf Gelb und wählen die Endzeit
+{
+  const { page, ctx, errs } = await open(base(), 0);
+  await page.locator('[data-action="sm-stufe"][data-stufe="gelb"]').click(); await page.waitForTimeout(300);
+  console.log('F Toast:', await toastText(page));
+  await page.locator('[data-action="sm-bis"][data-wert="120"]').click(); await page.waitForTimeout(300);
+  let st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'spuelmaschine').pop();
+  console.log('F nach 2 Std.:', st && st.value.stufe, st && Math.round((Date.parse(st.value.bis) - Date.now()) / 60000), 'Min.');
+  await page.locator('.sm-zeit').fill('23:45'); await page.locator('.sm-zeit').dispatchEvent('change'); await page.waitForTimeout(300);
+  st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'spuelmaschine').pop();
+  console.log('F um 23:45:', st && new Date(st.value.bis).toTimeString().slice(0, 5), 'Text:', (await page.locator('.km-karte.eltern').last().innerText()).replace(/\n+/g, ' | '));
+  await page.locator('.km-karte.eltern').last().screenshot({ path: '/tmp/sm_eltern.png' });
+  console.log('F Fehler:', errs); await ctx.close();
+}
+// G: Eltern bestätigen das Ausräumen, Ampel springt auf Grün
+{
+  const db = base();
+  db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'rot', at: iso, by: 'p1' } }];
+  db.ep_task_log = [{ id: 'sm-abc', person_id: 'p3', task_id: 'spuelmaschine', day: '2026-11-18', label: 'Spülmaschine ausräumen', minutes: 10, status: 'offen', created_at: iso, decided_by: null, decided_at: null }];
+  const { page, ctx, errs } = await open(db, 0);
+  await page.locator('[data-action="log-ok"][data-id="sm-abc"]').click(); await page.waitForTimeout(400);
+  const st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'spuelmaschine').pop();
+  console.log('G nach Bestätigen:', st && st.value.stufe);
+  console.log('G Fehler:', errs); await ctx.close();
+}
+// H: Spülmaschine läuft noch, sonst alles grün
+{
+  const db = base();
+  db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'gelb', at: iso, by: 'p1', bis: new Date(Date.now() + 5400000).toISOString() } }];
+  const { page, ctx, errs } = await open(db, 3);
+  console.log('H Karte:', (await page.locator('.km-karte').innerText()).replace(/\n+/g, ' | '), 'Knöpfe:', await page.locator('[data-action="sm-raus"]').count());
+  await page.locator('.km-karte').screenshot({ path: '/tmp/sm_kind_laeuft.png' });
+  console.log('H Fehler:', errs); await ctx.close();
 }
 await b.close(); srv.close();

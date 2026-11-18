@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-18c', datum: '18. November, mittags', titel: 'Ampel für die Spülmaschine',
+    punkte: [
+      { text: 'Neben den Mülleimern gibt es jetzt eine Ampel für die Spülmaschine. Grün: wird eingeräumt. Gelb: läuft. Rot: fertig, bitte ausräumen.' },
+      { text: 'Ist sie fertig, kommt eine Nachricht. Nach dem Ausräumen auf „Ausgeräumt“ tippen, mit der Bestätigung springt die Ampel auf Grün.', fuer: 'kinder' },
+      { text: 'Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit. Zu dieser Zeit springt die Ampel von selbst auf Rot und die Kinder bekommen eine Nachricht. „Spülmaschine ausräumen“ steht dafür nicht mehr bei den Extra-Aufgaben.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-18b', datum: '18. November', titel: 'Foto als Nachweis und Wochenrückblick',
     punkte: [
       { text: 'Bei manchen Aufgaben öffnet sich beim Abhaken die Kamera. Ein Foto zeigt Mama oder Papa, dass es erledigt ist.', fuer: 'kinder' },

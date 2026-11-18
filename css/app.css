@@ -884,3 +884,10 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .rb-kinder li { display: grid; gap: 2px; padding: 10px 12px; background: var(--wand); border-radius: 10px; font-size: 15px; line-height: 1.4; }
 .rb-kinder strong { font-size: 16px; }
 .rb-nav { display: flex; justify-content: space-between; margin-top: 14px; }
+
+/* Spülmaschine: dritte Kachel über die ganze Breite, Endzeit bei Gelb */
+.km-eimer.breit { grid-column: 1 / -1; }
+.km-karte.eltern > .km-eimer { justify-items: start; }
+.sm-ende { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.sm-zeit-l { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+.sm-zeit { font: inherit; font-size: 16px; padding: 6px 8px; border: 1px solid var(--linie); border-radius: 8px; background: var(--blatt); color: inherit; min-height: 40px; }
