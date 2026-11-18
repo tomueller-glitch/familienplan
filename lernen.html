@@ -203,6 +203,11 @@ details.grp[open] summary{margin-bottom:6px}
 .quiz{margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
 .quiz .qh{font-size:13px;color:var(--tinte2);font-weight:600}
 .quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
+.kk-row{display:flex;align-items:center;gap:12px;margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
+.kk-bar{height:6px;border-radius:3px;background:var(--leise);margin-top:6px;overflow:hidden}
+.kk-bar span{display:block;height:100%;background:var(--ok,#2E8B57);border-radius:3px}
+.kk-card{border:1px solid var(--linie);border-radius:12px;padding:14px 14px 4px;background:var(--blatt);margin:6px 0 10px;box-shadow:0 1px 0 var(--linie)}
+.kk-heft{cursor:pointer}
 .quiz .qa{background:var(--leise);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:16px}
 .qdet{margin:0 0 8px 20px}.qdet summary{font-size:14px;color:var(--tinte2);cursor:pointer}
 .tafel{display:block;width:100%;background:var(--court) center/100% 100% no-repeat,var(--tafel);background-blend-mode:normal;color:#fff;border:0;border-radius:16px;padding:12px 16px 12px;margin:10px 0 4px;text-align:left;font:inherit;cursor:pointer;position:relative;overflow:hidden}
@@ -422,10 +427,10 @@ function aiError(e){
 }
 
 /* ===== Datenmodell ===== */
-const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',conc:'conc',help:'help',books:'book',results:'result',lessons:'lesson'};
+const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',conc:'conc',help:'help',books:'book',results:'result',lessons:'lesson',cards:'card'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
 const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable','lm','brk'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],conc:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],cards:[],conc:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -560,6 +565,8 @@ function stepTitles(subject,type,n,topic){
 // Ältere Prüfungen, die Claude nie angepasst hat, bekommen statt der alten Rechen-Schritte die fachgerechten Grundschritte.
 function fixGenericSteps(){
   let ch=false;
+  const old=iso(addDays(today(),-60)),keep=new Set(S.exams.filter(e=>e.date>=old).map(e=>e.id));
+  if(S.cards.some(c=>!keep.has(c.examId))){S.cards=S.cards.filter(c=>keep.has(c.examId));ch=true}
   S.exams.forEach(ex=>{
     if(ex.ai==='ok'||ex.lp||(ex.focus&&ex.focus.length))return;
     const ts=S.tasks.filter(t=>t.examId===ex.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1048,6 +1055,7 @@ const examRefined=e=>e.ai==='ok'||(e.ai!==''&&e.ai!=='fehler'&&(!!e.lp||!!(e.foc
 function examStatus(e,ts){
   const m=ui.exMsg&&ui.exMsg.id===e.id?`<div class="note ${ui.exMsg.type||''}" style="margin-top:6px">${esc(ui.exMsg.text)}</div>`:'';
   if(ui.busy===e.id)return`<div class="note" style="margin-top:6px">Claude gleicht Thema, Lehrplan und Buch ab und plant die Schritte. Das dauert bis zu einer Minute.</div>`;
+  if(ui.busy==='heft'+e.id||ui.busy==='cards'+e.id)return m||`<div class="note" style="margin-top:6px">Claude arbeitet, einen Moment …</div>`;
   if(m)return m;
   if(!AI_OK()||examRefined(e)||!ts.some(t=>!t.done))return'';
   return`<div class="note warn" style="margin-top:6px">Die Lernschritte sind noch allgemein.${e.aiErr?' Letzter Versuch: '+esc(e.aiErr):''} Mit „Mit Claude planen“ werden sie auf Thema, Jahrgangsstufe und Lehrplan zugeschnitten.</div>`;
@@ -1059,13 +1067,13 @@ async function refineExam(id){
   const grade=+S.settings.grade||7;
   ui.busy=id;render();
   try{
-    const prompt=`Ein Schüler der ${grade}. Jahrgangsstufe an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${bookContext(ex.subject)}${lessonContext(ex)}
+    const prompt=`Ein Schüler der ${grade}. Jahrgangsstufe an einem bayerischen Gymnasium (G9) bereitet sich auf eine ${ex.type} in ${ex.subject} am ${ex.date} vor. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${bookContext(ex.subject)}${lessonContext(ex)}${ex.heft?'\nHefteinträge des Schülers (von Fotos abgeschrieben), die wichtigste Quelle für die Inhalte:\n'+ex.heft.slice(0,6000):''}
 Fachtypisch: ${fachHinweis(ex.subject)}
 
 Schritt 1, Lehrplan: Prüfe im LehrplanPLUS Gymnasium Bayern (lehrplanplus.bayern.de), Fach ${ex.subject}, Jahrgangsstufe ${grade}, zu welchem Lernbereich das Thema gehört und welche Kompetenzen und Inhalte dort verlangt werden. Gleiche das mit dem Lehrwerk ab: welche Lektionen oder Kapitel passen dazu. Wenn das Thema nur Seitenzahlen nennt, leite den Inhalt aus dem Inhaltsverzeichnis ab. Wenn du etwas nicht sicher weißt, sag das knapp und erfinde keine Seitenzahlen.
 Schritt 2, Schwerpunkte: Nenne die 2 bis 4 Inhalte, die für diese Prüfung in dieser Jahrgangsstufe am wichtigsten sind, also das, was typischerweise abgefragt wird und worauf der Rest aufbaut. Bei Personen und Werken: die konkreten Fakten, Werke oder Begriffe nennen.
 Schritt 3, Lernschritte: Plane ${ts.length} Lerneinheiten in dieser Reihenfolge und mit diesen Längen: ${ts.map((t,i)=>`${i+1}. ${fmt(t.date)}, ${planMin(t)} Minuten${t.sheet?' (Übungsblatt der Eltern, Auftrag bleibt so)':''}`).join('; ')}.
-Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Fragen ohne Hilfe beantworten, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
+Ihm fällt es schwer, sich zu motivieren; er lernt gut mit konkreten, kleinen Aufträgen. Nutze, was nachweislich wirkt: aktives Abfragen statt Durchlesen (Karteikarten, Fragen ohne Hilfe beantworten, sich selbst erklären), verteiltes Wiederholen über die Tage und gemischtes Üben. Steigere von Verstehen über Üben zu einem Probetest; die letzte Einheit ist eine kurze Wiederholung.${cardsOf(ex.id).length?` In der App gibt es ${cardsOf(ex.id).length} Karteikarten zu diesem Thema, die er dort abfragen kann. Für Abfrage- und Wiederholungsschritte schreib „Karteikarten in der App üben“ und nenne, worum es geht.`:''}${pastRes?'\nFrühere Prüfungen in diesem Fach: '+pastRes+'.':''}
 Jeder Auftrag nennt den konkreten Inhalt dieses Themas, nicht nur eine Methode. Gut für ein Musik-Thema Beethoven wäre etwa: „Lebensstationen Beethovens auf 6 Karteikarten: Bonn, Wien, Taubheit, 1827“ oder „5. Sinfonie anhören: Anfangsmotiv, Besetzung, Tempo notieren“. Schlecht wären allgemeine Aufträge wie „5 Aufgaben aus dem Buch rechnen“ oder „Lernkarten durchgehen“ ohne Inhalt. Nur Aufgaben, die zum Fach passen.
 Jeder Auftrag ist ein kurzer Satz (höchstens 100 Zeichen), den er ohne Rückfrage beginnen kann. Nenne wenn möglich Lektion, Seite oder Aufgabe aus dem Lehrwerk. Einfache Sprache, keine Gedankenstriche.
 Antworte am Ende nur mit JSON: {"lehrplan":"Lernbereich und Einordnung in einem Satz","schwerpunkte":["..."],"schritte":["...","..."]} mit genau ${ts.length} Einträgen in "schritte".`;
@@ -1139,7 +1147,7 @@ async function genQuiz(t,open){
   ui.busy='quiz'+t.id;render();
   try{
     const prompt=`Erstelle eine kurze Abfrage für einen Schüler der ${grade}. Klasse an einem bayerischen Gymnasium. Er bereitet sich auf eine ${ex.type||'Prüfung'} in ${t.subject}${ex.date?' am '+fmt(ex.date):''} vor.
-Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${ex.lp?'\nEinordnung im Lehrplan: '+ex.lp:''}${ex.focus&&ex.focus.length?'\nSchwerpunkte: '+ex.focus.join(', '):''}${bookContext(t.subject)}${ex.id?lessonContext(ex):''}
+Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${ex.lp?'\nEinordnung im Lehrplan: '+ex.lp:''}${ex.focus&&ex.focus.length?'\nSchwerpunkte: '+ex.focus.join(', '):''}${bookContext(t.subject)}${ex.id?lessonContext(ex):''}${ex.heft?'\nHefteinträge des Schülers (von Fotos abgeschrieben), frag genau diesen Stoff ab:\n'+ex.heft.slice(0,5000):''}
 Heutige Lerneinheit (${t.part||1} von ${t.parts||1}): ${t.title}.
 Regeln:
 - 6 Fragen, die genau zu diesem Stoff gehören. Was nicht sicher dazugehört, lass weg. Im Zweifel frag Grundlagen des Themas, die in der ${grade}. Klasse sicher behandelt werden.
@@ -1175,6 +1183,135 @@ function quizStep(knew){
   q.pos++;q.show=false;
   if(q.pos>=q.order.length&&!q.saved){q.saved=true;t.quizRes=(t.quizRes||[]).concat({date:iso(today()),ok:q.ok,n});save()}
 }
+/* ===== Hefteinträge ===== */
+// Fotos (oder ein PDF) aus dem Schulheft: Claude schreibt sie ab, der Text hängt an der Prüfung (ex.heft) und ist
+// danach die wichtigste Quelle für Lernschritte, Abfrage und Karteikarten.
+const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
+function heftPrompt(ex){const grade=+S.settings.grade||7;
+  return `Das sind Fotos aus dem Schulheft eines Schülers der ${grade}. Jahrgangsstufe an einem bayerischen Gymnasium, Fach ${ex.subject}, Thema: ${ex.topic||'unbekannt'}. Schreibe die Hefteinträge sauber und vollständig ab, in der Reihenfolge der Seiten: Überschriften, Merksätze, Definitionen, Regeln, Formeln, Beispiele und Tabellen (als Zeilen). Skizzen beschreibst du in einem kurzen Satz in eckigen Klammern. Lass Durchgestrichenes, Kritzeleien und Seitenzahlen weg. Ist etwas nicht lesbar, schreib [unleserlich]. Keine Einleitung und kein Kommentar, nur der abgeschriebene Text.`}
+async function readHeft(id,inp,opt){
+  opt=opt||{};const ex=S.exams.find(e=>e.id===id),files=[...((inp&&inp.files)||[])];
+  const say=(text,type)=>{examMsg(id,text,type);if(opt.kid){ui.msg=text;ui.msgType=type}};
+  if(!ex||ui.busy)return;
+  if(!files.length){say('Bitte zuerst Fotos der Hefteinträge auswählen.','err');render();return}
+  const big=files.find(f=>isPdfFile(f)&&f.size>5*1024*1024);
+  if(big){say(`„${big.name}“ ist zu groß (über 5 MB). Bitte Fotos nehmen oder nur die passenden Seiten als PDF.`,'err');render();return}
+  ui.busy='heft'+id;say(`Claude liest ${files.length===1?'die Seite':files.length+' Seiten'} aus dem Heft. Das dauert bis zu einer Minute.`,'');render();
+  try{
+    const parts=[];
+    for(let i=0;i<files.length;i+=4){
+      const batch=await Promise.all(files.slice(i,i+4).map(f=>isPdfFile(f)?(f.type?f:new Blob([f],{type:'application/pdf'})):shrink(f)));
+      const txt=String(await aiText(heftPrompt(ex),batch)||'').trim();
+      if(txt)parts.push(txt);
+    }
+    if(!parts.length)throw{code:'error',msg:'Auf den Fotos war kein Text zu erkennen. Bitte schärfer und mit mehr Licht fotografieren.'};
+    ex.heft=((ex.heft?ex.heft+'\n\n':'')+parts.join('\n\n')).slice(0,12000);
+    ex.heftN=(ex.heftN||0)+files.length;ex.ai='';save();
+    try{inp.value=''}catch(e){}
+    ui.busy=null;say('Hefteinträge gespeichert. Claude plant jetzt die Lernschritte neu und schreibt Karteikarten.','okn');render();
+  }catch(e){ui.busy=null;say('Hefteinträge lesen hat nicht geklappt: '+aiError(e),'err');render();return}
+  // Mit den Hefteinträgen Karten schreiben und neu planen. Eigene Karten der Eltern bleiben.
+  const n=await genCards(id,{quiet:true});
+  await refineExam(id);
+  const ok=ex.ai==='ok',open=S.tasks.some(t=>t.examId===id&&!t.done);
+  say(`Hefteinträge gelesen.${!open?'':ok?' Die Lernschritte passen jetzt zu den Hefteinträgen.':' Die Lernschritte konnten nicht neu geplant werden, bitte bei der Prüfung „Mit Claude planen“ tippen.'}${n?` ${n} Karteikarten sind fertig.`:''}`,ok||!open?'okn':'err');render();
+}
+
+/* ===== Karteikarten ===== */
+// Lernkartei mit fünf Fächern: gewusst rückt ein Fach weiter, nicht gewusst geht zurück in Fach 1.
+// Fach 1 kommt jeden Tag, Fach 2 am nächsten Tag, Fach 3 nach 2, Fach 4 nach 4, Fach 5 nach 7 Tagen wieder.
+const BOX_GAP=[0,0,1,2,4,7];
+const cardsOf=id=>S.cards.filter(c=>c.examId===id);
+// Fach 1 einmal am Tag (in der Runde selbst kommen falsche Karten schon ein zweites Mal), die anderen nach Abstand.
+const cardDue=(c,T)=>!c.last||((c.box||1)<=1?c.last<T:diff(c.last,T)>=BOX_GAP[Math.min(5,c.box||1)]);
+function dueCards(id){const T=iso(today());return cardsOf(id).filter(c=>cardDue(c,T)).sort((a,b)=>(a.box||1)-(b.box||1)||String(a.last||'').localeCompare(String(b.last||'')))}
+function cardPrompt(ex){
+  const grade=+S.settings.grade||7;
+  return `Erstelle Karteikarten für einen Schüler der ${grade}. Jahrgangsstufe an einem bayerischen Gymnasium (G9). Er lernt für eine ${ex.type} in ${ex.subject} am ${fmt(ex.date)}. Thema laut Lehrkraft: ${ex.topic||'nicht angegeben'}.${ex.notes?'\nWeitere Infos der Eltern: '+ex.notes:''}${ex.lp?'\nEinordnung im Lehrplan: '+ex.lp:''}${ex.focus&&ex.focus.length?'\nSchwerpunkte: '+ex.focus.join(', '):''}
+Fachtypisch: ${fachHinweis(ex.subject)}
+${ex.heft?'Hefteinträge des Schülers (von Fotos abgeschrieben), die wichtigste Quelle:\n'+ex.heft.slice(0,7000):'Hefteinträge liegen nicht vor. Halte dich an das, was in dieser Jahrgangsstufe zu diesem Thema sicher behandelt wird.'}${bookContext(ex.subject)}${lessonContext(ex)}
+Regeln:
+- 15 bis 20 Karten. Jede Karte prüft genau eine Sache.
+- Vorderseite: eine kurze Frage oder ein Begriff, höchstens 120 Zeichen. Rückseite: die Antwort, kurz und vollständig, höchstens 200 Zeichen.
+- Mische Begriffe, Fakten und Zusammenhänge (Warum? Was passiert, wenn …?). Je nach Fach auch kleine Aufgaben mit Ergebnis, Formen, Vokabeln oder Werke und ihre Merkmale.
+- Nur Stoff, der sicher drankommt. Nichts erfinden, was nicht in den Hefteinträgen, im Thema oder im Lehrplan der Jahrgangsstufe steht.
+- Einfache Sprache, keine Gedankenstriche.
+- Konntest du den Stoff nicht sicher eingrenzen, schreib das kurz in "hinweis", sonst lass "hinweis" leer.
+Antworte nur mit JSON: {"karten":[{"f":"Vorderseite","a":"Rückseite"}],"hinweis":""}`;
+}
+async function genCards(id,opt){
+  opt=opt||{};const ex=S.exams.find(e=>e.id===id);if(!ex||!AI_OK())return 0;
+  const say=(text,type)=>{examMsg(id,text,type);if(opt.kid){ui.msg=text;ui.msgType=type}};
+  ui.busy='cards'+id;if(!opt.quiet)say('Claude schreibt Karteikarten. Das dauert etwa eine halbe Minute.','');render();
+  try{
+    const res=await aiJSON(cardPrompt(ex));
+    const ks=((res&&res.karten)||[]).filter(x=>x&&x.f&&x.a).slice(0,25).map(x=>({f:String(x.f).trim().slice(0,200),a:String(x.a).trim().slice(0,300)}));
+    if(!ks.length)throw{code:'parse'};
+    // Neu erstellen ersetzt die Karten von Claude. Eigene Karten der Eltern bleiben.
+    S.cards=S.cards.filter(c=>!(c.examId===id&&c.src!=='eltern'));
+    ks.forEach(k=>S.cards.push({id:uid(),examId:id,subject:ex.subject,f:k.f,a:k.a,box:1,seen:0,right:0,last:null,src:'claude'}));
+    ex.cardNote=String((res&&res.hinweis)||'').slice(0,200);save();
+    ui.busy=null;if(!opt.quiet)say(`${ks.length} Karteikarten sind fertig.`,'okn');render();return ks.length;
+  }catch(e){ui.busy=null;say('Karteikarten erstellen hat nicht geklappt: '+aiError(e),'err');render();return 0}
+}
+// Übungsrunde: höchstens 10 fällige Karten, schwächstes Fach zuerst. Nicht gewusste kommen am Ende noch einmal.
+function cardStart(examId,taskId){
+  let pick=dueCards(examId).slice(0,10),extra=false;
+  if(!pick.length){pick=cardsOf(examId).slice().sort((a,b)=>(a.box||1)-(b.box||1)).slice(0,8);extra=true}
+  if(!pick.length)return;
+  ui.cs={exam:examId,task:taskId,order:pick.map(c=>c.id),first:pick.length,pos:0,show:false,ok:0,extra};ui.quiz=null;
+}
+function cardStep(knew){
+  const q=ui.cs;if(!q)return;const c=S.cards.find(x=>x.id===q.order[q.pos]);
+  if(c){const first=q.pos<q.first;c.seen=(c.seen||0)+1;c.last=iso(today());
+    if(knew){if(first){c.box=Math.min(5,(c.box||1)+1);c.right=(c.right||0)+1;q.ok++}}
+    else{c.box=1;if(first)q.order.push(c.id)}}
+  q.pos++;q.show=false;
+  if(q.pos>=q.order.length&&!q.saved){q.saved=true;const t=S.tasks.find(x=>x.id===q.task);if(t)t.cardRes=(t.cardRes||[]).concat({date:iso(today()),ok:q.ok,n:q.first})}
+  save();
+}
+function cardStats(id){const cs=cardsOf(id);return{n:cs.length,sit:cs.filter(c=>(c.box||1)>=4).length,due:dueCards(id).length}}
+function cardBlock(t){
+  const ex=examOf(t);if(!ex)return'';
+  if(ui.busy==='cards'+ex.id)return `<div class="quiz"><div class="sub">Claude schreibt Karteikarten, einen Moment …</div></div>`;
+  const st=cardStats(ex.id),q=ui.cs&&ui.cs.exam===ex.id?ui.cs:null;
+  if(!q)return `<div class="kk-row"><div class="grow"><b>Karteikarten</b><div class="sub">${st.sit} von ${st.n} sitzen${st.due?`, ${st.due} sind heute dran`:''}</div><div class="kk-bar" aria-hidden="true"><span style="width:${st.n?Math.round(st.sit/st.n*100):0}%"></span></div></div>
+    <button class="btn${st.due?' primary':''}" data-act="cards" data-id="${ex.id}" data-task="${t.id}">${st.due?'Üben':'Nochmal üben'}</button></div>`;
+  if(q.pos>=q.order.length)return `<div class="quiz"><div class="qh">Runde fertig</div><div class="qq">${q.ok} von ${q.first} gewusst</div><div class="sub">${q.ok===q.first?'Stark, alles sitzt!':'Die anderen kommen beim nächsten Mal wieder dran, bis sie sitzen.'} Jetzt sitzen ${cardStats(ex.id).sit} von ${st.n} Karten.</div><div class="row" style="margin-top:8px"><button class="btn" data-act="cardsend">Schließen</button></div></div>`;
+  const c=S.cards.find(x=>x.id===q.order[q.pos])||{f:'',a:''},again=q.pos>=q.first;
+  return `<div class="quiz"><div class="qh">${again?'Noch einmal':`Karte ${q.pos+1} von ${q.first}`}${q.extra?' · freiwillig':''} · Fach ${c.box||1}</div>
+    <div class="kk-card"><div class="qq">${esc(c.f)}</div>${q.show?`<div class="qa">${esc(c.a)}</div>`:''}</div>
+    ${q.show?`<div class="row"><button class="btn primary" data-act="cok">Gewusst</button><button class="btn" data-act="cno">Noch nicht</button></div>`
+      :`<div class="sub">Erst selbst überlegen oder laut sagen, dann umdrehen.</div><div class="row" style="margin-top:8px"><button class="btn primary" data-act="cshow">Umdrehen</button></div>`}</div>`;
+}
+// Lernhilfen bei einer Lerneinheit: Karteikarten, sonst die Abfrage; dazu Hefteintrag fotografieren.
+function learnTools(t){
+  const ex=examOf(t);
+  const heftK=ex&&AI_OK()&&!ex.heft?`<label class="lnk kk-heft" data-act="ext">Hefteintrag fotografieren<input type="file" accept="image/*" multiple data-heftk="${ex.id}" hidden></label>`:'';
+  if(ui.busy==='heft'+(ex&&ex.id))return `<div class="quiz"><div class="sub">Claude liest den Hefteintrag, einen Moment …</div></div>`;
+  if(ex&&cardsOf(ex.id).length)return cardBlock(t);
+  return (quizOk()?quizBlock(t):'')+(ex&&AI_OK()&&!(ui.quiz&&ui.quiz.id===t.id)?`<div class="row" style="margin-top:6px"><button class="lnk" data-act="cardgenk" data-id="${ex.id}">Karteikarten erstellen lassen</button>${heftK}</div>`:'');
+}
+const tasksBusy=t=>(ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length)||(ui.cs&&ui.cs.task===t.id&&ui.cs.pos<ui.cs.order.length);
+
+// Für die Eltern bei jeder Prüfung: Hefteinträge und Karteikarten.
+function examExtras(e){
+  const cs=cardsOf(e.id),st=cardStats(e.id),bz=ui.busy==='heft'+e.id||ui.busy==='cards'+e.id||ui.busy===e.id;
+  const keep=k=>(ui.openD&&ui.openD.has(k+e.id))?' open':'';
+  return `<details class="qdet" data-keep="heft${e.id}"${keep('heft')}><summary>Hefteinträge: ${e.heft?`${e.heftN||1} ${(e.heftN||1)===1?'Seite':'Seiten'} gelesen`:'noch keine'}</summary>
+    ${AI_OK()?`<div class="sub" style="margin-top:6px">Fotos aus dem Heft oder ein PDF. Claude schreibt sie ab, plant danach die Lernschritte neu und schreibt Karteikarten dazu.</div>
+    <div class="row" style="margin-top:6px"><input type="file" id="heft-${e.id}" accept="image/*,application/pdf,.pdf" multiple style="flex:1"><button class="btn sm" data-act="heft" data-id="${e.id}"${bz?' disabled':''}>${ui.busy==='heft'+e.id?'Moment …':'Einlesen'}</button></div>`:''}
+    <form data-form="hefttext" data-id="${e.id}"><textarea name="heft" rows="8" style="width:100%;margin-top:6px;font-size:14px" placeholder="Hefteinträge als Text, zum Beispiel aus einem Arbeitsblatt kopiert">${esc(e.heft||'')}</textarea>
+    <div class="row" style="margin-top:6px"><button class="btn sm primary">Speichern</button></div></form></details>
+  <details class="qdet" data-keep="cards${e.id}"${keep('cards')}><summary>Karteikarten: ${st.n?`${st.n}, davon ${st.sit} sitzen`:'noch keine'}</summary>
+    ${e.cardNote?`<div class="sub" style="margin-top:6px">Hinweis von Claude: ${esc(e.cardNote)}</div>`:''}
+    ${cs.map(c=>`<div class="li"><span class="grow">${esc(c.f)}<br><span class="sub">${esc(c.a)} · Fach ${c.box||1}${c.src==='eltern'?' · von euch':''}</span></span><button class="btn sm danger" data-act="carddel" data-id="${c.id}" aria-label="Karte löschen">×</button></div>`).join('')}
+    <form data-form="cardadd" data-id="${e.id}" style="margin-top:8px"><div class="g2"><label>Vorderseite<input name="f" required maxlength="200"></label><label>Rückseite<input name="a" required maxlength="300"></label></div>
+    <div class="row" style="margin-top:6px"><button class="btn sm">Eigene Karte dazu</button>${!AI_OK()?'':ui.ask==='cardgen'+e.id?`<button type="button" class="btn sm danger" data-act="cardgen" data-id="${e.id}">Ja, neu schreiben</button><button type="button" class="btn sm" data-act="askx">Nein</button>`
+      :`<button type="button" class="btn sm" data-act="${cs.some(c=>c.src!=='eltern'&&c.seen)?'ask':'cardgen'}" data-v="cardgen" data-id="${e.id}"${bz?' disabled':''}>${ui.busy==='cards'+e.id?'Moment …':st.n?'Neu schreiben lassen':'Von Claude schreiben lassen'}</button>`}</div></form>
+    ${st.n&&cs.some(c=>c.src!=='eltern')?'<div class="sub" style="margin-top:6px">„Neu schreiben lassen“ ersetzt die Karten von Claude samt Lernstand. Eure eigenen Karten bleiben.</div>':''}</details>`;
+}
+
 function taskMeta(t){
   if(t.kind==='daily')return 'Latein · jeden Tag zum Aufwärmen';
   if(t.kind==='ha')return `${esc(t.subject)} · Hausaufgabe bis ${fmt(t.due)}`;
@@ -1394,8 +1531,8 @@ function renderFocus(plan){
       ${t.examId&&(examOf(t)||{}).focus?`<div class="sub" style="margin-top:8px">Darum geht es: ${esc(examOf(t).focus.join(', '))}</div>`:''}
       ${t.sheet?`<div style="margin-top:12px">${t.link?`<a class="btn" data-act="ext" href="${esc(t.link)}" target="_blank" rel="noopener">Übungsblatt öffnen</a>`:'<span class="chip">Übungsblatt von Mama oder Papa</span>'}</div>`:''}
       ${t.kind==='daily'&&S.settings.ludusUrl?`<div style="margin-top:12px"><a class="btn" data-act="ext" href="${esc(S.settings.ludusUrl)}" target="_blank" rel="noopener">Ludus Latinus öffnen</a></div>`:''}
-      ${t.kind==='lern'&&quizOk()?quizBlock(t):''}
-      ${ui.fb===t.id?fbPanel(t,cur.P):ui.quiz&&ui.quiz.id===t.id&&ui.quiz.pos<ui.quiz.order.length?'':focusActions(t)}</div>`;
+      ${t.kind==='lern'?learnTools(t):''}
+      ${ui.fb===t.id?fbPanel(t,cur.P):tasksBusy(t)?'':focusActions(t)}</div>`;
     return h+nextLine(q.filter(x=>x!==cur))+foot();
   }
   // 5. Abpfiff: Kabinen-Check
@@ -1576,7 +1713,7 @@ function renderEltern(plan){
   <div class="row" style="margin-top:12px"><button class="btn primary">Speichern</button></div></form>`;
   const ex=S.exams.filter(e=>e.date>=T).sort((a,b)=>a.date.localeCompare(b.date));
   const delBtn=(act,id)=>ui.ask===act+id?`<button class="btn sm danger" data-act="${act}" data-id="${id}">Wirklich löschen</button><button class="btn sm" data-act="askx">Nein</button>`:`<button class="btn sm danger" data-act="ask" data-v="${act}" data-id="${id}">Löschen</button>`;
-  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}${examStatus(e,ts)}</span><span class="acts">${AI_OK()?`<button class="btn sm${examRefined(e)||!ts.some(t=>!t.done)?'':' primary'}" data-act="refine" data-id="${e.id}"${ui.busy===e.id?' disabled':''}>${ui.busy===e.id?'Claude plant …':examRefined(e)?'Neu planen':'Mit Claude planen'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${quizInfo(ts)}${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
+  sec.schule+=`<div class="card"><h2>Prüfungen</h2>${ex.length?ex.map(e=>{const ts=S.tasks.filter(t=>t.examId===e.id);return `<div class="li stk"><span class="dot" style="background:${col(e.subject)}"></span><span class="grow">${fmt(e.date)}: ${esc(e.subject)} ${esc(e.type)}${e.topic?', '+esc(e.topic):''}<br><span class="sub">${ts.filter(t=>t.done).length} von ${ts.length} Lerneinheiten erledigt${ts.some(t=>t.sheet)?', mit Übungsblatt':''}</span>${e.lp?`<br><span class="sub">Lehrplan: ${esc(e.lp)}</span>`:''}${e.focus&&e.focus.length?`<br><span class="sub">Schwerpunkte: ${esc(e.focus.join(', '))}</span>`:''}${examStatus(e,ts)}</span><span class="acts">${AI_OK()?`<button class="btn sm${examRefined(e)||!ts.some(t=>!t.done)?'':' primary'}" data-act="refine" data-id="${e.id}"${ui.busy===e.id?' disabled':''}>${ui.busy===e.id?'Claude plant …':examRefined(e)?'Neu planen':'Mit Claude planen'}</button>`:''}<button class="btn sm" data-act="exedit" data-id="${e.id}">Bearbeiten</button>${delBtn('delexam',e.id)}</span></div>${examExtras(e)}${quizInfo(ts)}${ui.edit==='x-'+e.id?examEditForm(e,ts):''}`}).join(''):'<div class="muted">Keine Prüfungen eingetragen.</div>'}
   ${S.results.length?`<div class="sub" style="margin-top:10px">Spielanalysen</div>`+S.results.slice(-6).reverse().map(r=>`<div class="li"><span class="dot" style="background:${col(r.subject)}"></span><span class="grow">${fmt(r.date)}: ${esc(r.subject)} ${esc(r.type)}, lief ${r.feel==='mittel'?'so lala':r.feel}, Vorbereitung ${r.prep==='zuwenig'?'zu wenig':r.prep==='zuviel'?'mehr als nötig':'passend'}${r.grade?', Note '+esc(r.grade):''}</span>${r.grade?'':`<button class="btn sm" data-act="grade" data-id="${r.id}">Note</button>`}</div>${ui.edit==='g-'+r.id?`<form data-form="grade" data-id="${r.id}" class="row"><input name="grade" style="width:90px" inputmode="decimal" placeholder="2" required><button class="btn sm primary">Speichern</button></form>`:''}`).join(''):''}</div>`;
   const open=S.tasks.filter(t=>!t.done&&(t.kind!=='daily'||t.date===T)).sort((a,b)=>(a.due||a.date).localeCompare(b.due||b.date));
   sec.schule+=`<div class="card"><h2>Offene Aufgaben</h2>${open.length?open.map(t=>ui.edit===t.id?
@@ -1735,6 +1872,15 @@ document.addEventListener('click',e=>{
     case'qok':quizStep(true);break;
     case'qno':quizStep(false);break;
     case'quizend':ui.quiz=null;break;
+    case'cards':cardStart(id,b.dataset.task);break;
+    case'cshow':if(ui.cs)ui.cs.show=true;break;
+    case'cok':cardStep(true);break;
+    case'cno':cardStep(false);break;
+    case'cardsend':ui.cs=null;break;
+    case'cardgen':ui.ask=null;if(!ui.busy)genCards(id);return;
+    case'cardgenk':if(!ui.busy)genCards(id,{kid:true});return;
+    case'carddel':S.cards=S.cards.filter(c=>c.id!==id);save();break;
+    case'heft':if(!ui.busy)readHeft(id,document.getElementById('heft-'+id));return;
     case'qdel':if(t&&t.quiz){t.quiz.qs.splice(+b.dataset.v,1);if(!t.quiz.qs.length)delete t.quiz;save()}break;
     case'qnew':if(t&&!ui.busy){delete t.quiz;genQuiz(t,false)}return;
     case'kickreset':{const T=iso(today());delete S.kick[T];S.goals=S.goals.filter(g=>!(g.date===T&&g.why==='Pünktlicher Anpfiff'));S.conc=S.conc.filter(c=>!(c.date===T&&/^Zu spät/.test(c.why)));
@@ -1750,7 +1896,7 @@ document.addEventListener('click',e=>{
     case'edit':ui.edit=id;break;
     case'editx':ui.edit=null;break;
     case'grade':ui.edit='g-'+id;break;
-    case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.tasks.filter(x=>x.examId===id&&!x.done).forEach(x=>removeTask(x.id));S.tasks=S.tasks.filter(x=>x.examId!==id||x.done);ui.ask=null;save();break;
+    case'delexam':S.exams=S.exams.filter(x=>x.id!==id);S.cards=S.cards.filter(c=>c.examId!==id);S.tasks.filter(x=>x.examId===id&&!x.done).forEach(x=>removeTask(x.id));S.tasks=S.tasks.filter(x=>x.examId!==id||x.done);ui.ask=null;save();break;
     case'ask':ui.ask=b.dataset.v+(id||'');break;
     case'askx':ui.ask=null;break;
     case'neu':newsDialog(newsFor(NEUES));return;
@@ -1829,6 +1975,8 @@ document.addEventListener('submit',e=>{
     case'grade':{const r=S.results.find(x=>x.id===f.dataset.id);if(r)r.grade=String(v.grade).trim().slice(0,4);ui.edit=null;break}
     case'book':S.books=S.books.filter(b=>b.subject!==v.subject);S.books.push({id:uid(),subject:v.subject,title:v.title.trim(),isbn:(v.isbn||'').replace(/[^0-9Xx-]/g,''),chapter:(v.chapter||'').trim(),toc:''});ui.msg='Lehrwerk gespeichert.';ui.msgType='okn';break;
     case'toctext':{const b=S.books.find(x=>x.id===f.dataset.id);if(b){b.toc=String(v.toc||'').trim().slice(0,8000);ui.tocMsg={id:b.id,text:b.toc?`Inhaltsverzeichnis gespeichert (${b.toc.split('\n').length} Zeilen).`:'Inhaltsverzeichnis gelöscht.',type:'okn'}}break}
+    case'hefttext':{const ex=S.exams.find(x=>x.id===f.dataset.id);if(ex){const h=String(v.heft||'').trim().slice(0,12000);if(h!==(ex.heft||'')){ex.heft=h;if(!h)ex.heftN=0;else if(!ex.heftN)ex.heftN=1;ex.ai=''}examMsg(ex.id,h?'Hefteinträge gespeichert. Mit „Mit Claude planen“ passen sich die Lernschritte daran an.':'Hefteinträge gelöscht.','okn')}break}
+    case'cardadd':{const ex=S.exams.find(x=>x.id===f.dataset.id),fr=String(v.f||'').trim(),an=String(v.a||'').trim();if(ex&&fr&&an){S.cards.push({id:uid(),examId:ex.id,subject:ex.subject,f:fr.slice(0,200),a:an.slice(0,300),box:1,seen:0,right:0,last:null,src:'eltern'});examMsg(ex.id,'Karte gespeichert.','okn')}break}
     case'chapter':{const b=S.books.find(x=>x.id===f.dataset.id);if(b)b.chapter=(v.chapter||'').trim();ui.msg='Aktuelle Lektion gespeichert.';ui.msgType='okn';break}
     case'appt':
       if(toMin(v.end)<=toMin(v.start)){ui.msg='Das Ende muss nach dem Beginn liegen.';ui.msgType='err';break}
@@ -1850,6 +1998,8 @@ document.addEventListener('submit',e=>{
   save();render();
 });
 
+// Aufgeklappte Bereiche bleiben nach dem Neuzeichnen offen.
+document.addEventListener('toggle',e=>{const d=e.target;if(!d||!d.dataset||!d.dataset.keep)return;ui.openD=ui.openD||new Set();if(d.open)ui.openD.add(d.dataset.keep);else ui.openD.delete(d.dataset.keep)},true);
 document.addEventListener('change',e=>{
   const el=e.target;
   if(el.matches&&el.matches('select[data-tt]')){
@@ -1857,6 +2007,7 @@ document.addEventListener('change',e=>{
     const plan=Object.assign({},tt[t]),l=(plan[wd]||[]).slice();while(l.length<=i)l.push('');l[i]=el.value;while(l.length&&!l[l.length-1])l.pop();
     plan[wd]=l;tt[t]=plan;save();render();return;
   }
+  if(el.matches&&el.matches('input[data-heftk]')){readHeft(el.dataset.heftk,el,{kid:true});return}
   if(el.matches&&el.matches('select[data-due]')){const f=el.closest('form'),d=f&&f.querySelector('input[name=due]');if(d)d.value=nextLesson(el.value)}
 });
 
@@ -1893,6 +2044,11 @@ async function init(){
 // sein als alle bisherigen. eltern:1 zeigt einen Punkt nur auf den Geräten der Eltern.
 const NEWS_KEY='lp-neu-gesehen';
 const NEUES=[
+  {id:'2026-11-18c',datum:'18. November',titel:'Hefteinträge und Karteikarten',punkte:[
+    {t:'Karteikarten in der App: Bei einer Lerneinheit für eine Prüfung gibt es jetzt Karteikarten. Erst überlegen, dann umdrehen und ehrlich sagen, ob du es wusstest. Was sitzt, rückt ein Fach weiter und kommt seltener. Was nicht sitzt, kommt am nächsten Tag wieder.'},
+    {t:'Fehlt ein Hefteintrag, kannst du ihn bei der Lerneinheit fotografieren. Claude schreibt ihn ab und macht Karteikarten daraus.'},
+    {t:'Hefteinträge: Unter Eltern, Schule, Prüfungen lassen sich bei jeder Prüfung Fotos aus dem Heft oder ein PDF einlesen. Claude schreibt sie ab, schreibt Karteikarten dazu und plant die Lernschritte danach neu. Den Text könnt ihr ansehen und korrigieren.',eltern:1},
+    {t:'Karteikarten: Ihr seht bei jeder Prüfung alle Karten mit ihrem Fach, könnt einzelne löschen, eigene dazuschreiben oder Claude neu schreiben lassen.',eltern:1}]},
   {id:'2026-11-18b',datum:'18. November',titel:'Lernschritte passen besser zum Fach',punkte:[
     {t:'Die Lernschritte für Prüfungen passen jetzt zum Fach: Rechnen nur in Mathe, Physik und Chemie, in Musik, Geschichte oder Biologie zum Beispiel Lernkarten, Hörbeispiele, Zeitleiste oder Skizzen. Das Thema steht direkt im Auftrag.'},
     {t:'Claude bekommt für jedes Fach einen Hinweis, was dort typischerweise geprüft wird, und soll in jedem Schritt den konkreten Inhalt nennen, also Werke, Begriffe oder Buchseiten statt allgemeiner Methoden.',eltern:1},

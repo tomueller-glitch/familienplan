@@ -1,7 +1,16 @@
 // Was ist neu? Nach jedem Update zeigt die App einmal die Einträge, die auf diesem Gerät noch nicht gesehen wurden.
 // Neue Einträge kommen oben dazu. Die id muss größer sein als alle bisherigen (Datum plus Buchstabe).
-// fuer: 'eltern' zeigt den Punkt nur Erwachsenen, ohne Angabe sehen ihn alle.
+// fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
+  {
+    id: '2026-11-18b', datum: '18. November', titel: 'Foto als Nachweis und Wochenrückblick',
+    punkte: [
+      { text: 'Bei manchen Aufgaben öffnet sich beim Abhaken die Kamera. Ein Foto zeigt Mama oder Papa, dass es erledigt ist.', fuer: 'kinder' },
+      { text: 'Foto als Nachweis: Unter „Aufgaben verwalten“ lässt es sich bei jeder Aufgabe einschalten. Das Kind fotografiert beim Melden, ihr seht das Bild unter „Zu bestätigen“ und könnt es groß ansehen. Die Fotos werden nach 14 Tagen gelöscht.', fuer: 'eltern' },
+      { text: 'Wochenrückblick: Essen mit Sternen, Aufgaben und Minuten der Kinder, Müll, Lernen, Ausgaben und der Stand der nächsten Woche auf einer Seite. Zu finden unter „Woche“ bei „Planen“, sonntags und montags auch oben in der Woche.', fuer: 'eltern' },
+      { text: 'Sonntags um 18:30 Uhr kommt eine Nachricht zum Wochenrückblick. Abschalten lässt sie sich unten im Rückblick.', fuer: 'eltern' },
+    ],
+  },
   {
     id: '2026-11-18a', datum: '18. November', titel: 'Push-Nachrichten: Fehler „BadWebPushTopic“ behoben',
     punkte: [
@@ -61,5 +70,5 @@ export function unseen(list, seenId, nowMs) {
 export const newest = (list) => list.reduce((m, n) => (n.id > m ? n.id : m), '');
 
 export function forAudience(list, adult) {
-  return list.map((n) => ({ ...n, punkte: n.punkte.filter((p) => adult || p.fuer !== 'eltern') })).filter((n) => n.punkte.length);
+  return list.map((n) => ({ ...n, punkte: n.punkte.filter((p) => (adult ? p.fuer !== 'kinder' : p.fuer !== 'eltern')) })).filter((n) => n.punkte.length);
 }

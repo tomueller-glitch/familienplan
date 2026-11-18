@@ -12,6 +12,7 @@
 //  - abends eine Erinnerung an alle, die mitgegessen, aber das Abendessen noch nicht bewertet haben.
 //    Kinder etwa eine Stunde nach dem Essen, spätestens 20:15 Uhr, Erwachsene nach 90 Minuten. Abschaltbar.
 //  - den Kindern eine Nachricht, sobald Mama oder Papa einen Mülleimer in der Küche auf Rot stellen (Müll-Ampel),
+//  - sonntags ab 18:30 Uhr den Eltern den Hinweis auf den Wochenrückblick,
 //  - Lernplaner (lernen.html): Anpfiff und Endspurt an das Kind, Erinnerung am Abend vor einer Prüfung,
 //    den Eltern den Stand am Abend, sofort Bescheid bei „schwer“, das gewonnene Wochenspiel und sonntags
 //    die Mannschaftsbesprechung. Abschaltbar im Lernplaner unter Einstellungen.
@@ -1941,6 +1942,29 @@ export function lpSchoolEnd(tt: Row | null, day: string): number | null {
   return last >= 0 && tt.times[last] ? hmMin(tt.times[last][1], 13 * 60) : null;
 }
 
+/* ---------- Wochenrückblick ---------- */
+// Sonntags ab 18:30 Uhr eine Nachricht an die Eltern, die sie nicht abbestellt haben (ep_settings "rueckblick".aus).
+export function isoWeekOf(day: string): number {
+  const d = new Date(`${day}T12:00:00Z`);
+  const wd = (d.getUTCDay() + 6) % 7;
+  const thu = new Date(d.getTime() + (3 - wd) * DAY);
+  const jan4 = new Date(Date.UTC(thu.getUTCFullYear(), 0, 4, 12));
+  return 1 + Math.round(((thu.getTime() - jan4.getTime()) / DAY - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
+}
+export function reviewMessages(value: Row | null, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
+  const { day, min, wd } = berlin(nowMs);
+  if (wd !== 6 || min < 18 * 60 + 30 || min >= 21 * 60) return [];
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return [];
+  const off: string[] = value && Array.isArray(value.aus) ? value.aus : [];
+  const to = persons.filter((p) => p.adult && !off.includes(p.id)).map((p) => p.id);
+  if (!to.length) return [];
+  return [{
+    key: `rueckblick:${mondayOf(day)}`, to, ttl: 6 * 3600,
+    msg: { title: `Wochenrückblick KW ${isoWeekOf(day)}`, body: 'Essen, Aufgaben der Kinder, Lernen und Ausgaben der Woche auf einen Blick.', tag: 'rueckblick', url: './#rueckblick' },
+  }];
+}
+
 /* ---------- Mülleimer in der Küche ---------- */
 // Ampel aus ep_settings "kuechenmuell", gleiche Regeln wie in js/aufgaben.js (kmTask, kmBinOf).
 // Steht ein Eimer auf Rot und hat ihn noch niemand als rausgebracht gemeldet, bekommen die Kinder der Aufgabe
@@ -2208,6 +2232,74 @@ export async function makeBackup(store: Store, nowMs = Date.now()) {
   return { name, bytes: body.length, anzahl: counts };
 }
 
+/* ---------- Fotonachweis für Aufgaben ---------- */
+// Die Kinder machen beim Melden ein Foto. Es liegt privat im Speicher "nachweise" (legt die Funktion selbst an),
+// Dateiname ist die Kennung des Eintrags. Die Eltern bekommen Links, die eine Stunde gelten. Nach 14 Tagen weg.
+export const FOTO_BUCKET = 'nachweise';
+export const FOTO_DAYS = 14;
+export const fotoName = (id: string) => `${String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80)}.jpg`;
+let fotoBucketOk = false;
+async function ensureFotoBucket() {
+  if (fotoBucketOk) return;
+  const base = `${env('SUPABASE_URL')}/storage/v1`;
+  const r = await fetch(`${base}/bucket/${FOTO_BUCKET}`, { headers: storageHeaders() });
+  await r.body?.cancel();
+  if (!r.ok) {
+    const c = await fetch(`${base}/bucket`, {
+      method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: FOTO_BUCKET, name: FOTO_BUCKET, public: false, file_size_limit: 3000000, allowed_mime_types: ['image/jpeg'] }),
+    });
+    const t = await c.text();
+    if (!c.ok && !/exist|duplicate/i.test(t)) throw new Error(`Speicher für Fotos: ${c.status} ${t.slice(0, 160)}`);
+  }
+  fotoBucketOk = true;
+}
+export async function saveFoto(id: string, b64: string) {
+  const name = fotoName(id);
+  if (name === '.jpg') throw new Error('Kennung fehlt.');
+  const bin = Uint8Array.from(atob(String(b64 || '')), (c) => c.charCodeAt(0));
+  if (bin.length < 1000) throw new Error('Das Foto ist leer.');
+  if (bin.length > 2500000) throw new Error('Das Foto ist zu groß.');
+  await ensureFotoBucket();
+  const up = await fetch(`${env('SUPABASE_URL')}/storage/v1/object/${FOTO_BUCKET}/${name}`, {
+    method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'image/jpeg', 'x-upsert': 'true' }, body: bin,
+  });
+  if (!up.ok) throw new Error(`Foto speichern: ${up.status} ${(await up.text()).slice(0, 160)}`);
+  await up.body?.cancel();
+  return { name, bytes: bin.length };
+}
+export async function fotoLinks(ids: string[]): Promise<Record<string, string>> {
+  const list = [...new Set((ids || []).map(String))].slice(0, 60);
+  if (!list.length) return {};
+  const r = await fetch(`${env('SUPABASE_URL')}/storage/v1/object/sign/${FOTO_BUCKET}`, {
+    method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresIn: 3600, paths: list.map(fotoName) }),
+  });
+  if (!r.ok) { await r.body?.cancel(); return {}; }
+  const out: Record<string, string> = {};
+  for (const x of (await r.json()) as Row[]) {
+    if (!x || x.error || !x.signedURL) continue;
+    const id = list.find((i) => fotoName(i) === String(x.path || '').split('/').pop());
+    if (id) out[id] = `${env('SUPABASE_URL')}/storage/v1${String(x.signedURL).startsWith('/') ? '' : '/'}${x.signedURL}`;
+  }
+  return out;
+}
+export async function cleanupFotos(nowMs = Date.now()) {
+  const base = `${env('SUPABASE_URL')}/storage/v1/object`;
+  const r = await fetch(`${base}/list/${FOTO_BUCKET}`, {
+    method: 'POST', headers: { ...storageHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix: '', limit: 1000, sortBy: { column: 'created_at', order: 'asc' } }),
+  });
+  if (!r.ok) { await r.body?.cancel(); return 0; }
+  const cut = nowMs - FOTO_DAYS * DAY;
+  const old = ((await r.json()) as Row[]).filter((f) => f && f.name && Date.parse(f.created_at || '') < cut).map((f) => String(f.name));
+  if (old.length) {
+    const del = await fetch(`${base}/${FOTO_BUCKET}`, { method: 'DELETE', headers: { ...storageHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: old }) });
+    await del.body?.cancel();
+  }
+  return old.length;
+}
+
 function vapidFromEnv(): Vapid {
   const v = { publicKey: env('VAPID_PUBLIC_KEY'), privateKey: env('VAPID_PRIVATE_KEY'), subject: env('VAPID_SUBJECT') || 'mailto:familienplan@example.com' };
   if (!v.publicKey || !v.privateKey) throw new Error('VAPID_PUBLIC_KEY oder VAPID_PRIVATE_KEY fehlt in den Secrets der Funktion.');
@@ -2315,7 +2407,7 @@ async function runSchedule(nowMs = Date.now()) {
     store.get(`ep_shopping?select=*&due=eq.${today}&checked=is.false`).catch(() => []),
     store.get('ep_dishes?select=*'),
     store.get(`ep_ratings?select=day,person_id&day=eq.${today}`),
-    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell)').catch(() => []),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell,rueckblick)').catch(() => []),
     store.get(`ep_shopping?select=id,label,added_by,created_at,checked&added_by=not.is.null&created_at=gte.${encodeURIComponent(new Date(nowMs - 12 * 3600000).toISOString())}`).catch(() => []),
   ]);
   const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
@@ -2324,6 +2416,7 @@ async function runSchedule(nowMs = Date.now()) {
   const erinnerung = (setting('aufgaben') || {}).erinnerung;
   const due = dueMessages({ persons, tasks, log, abfuhr, hearts, plan, shopping, dishes, ratings, urlaub, grundZuerst, added, erinnerung }, nowMs);
   due.push(...muellMessages(setting('kuechenmuell'), tasks, log, persons, nowMs, urlaub));
+  due.push(...reviewMessages(setting('rueckblick'), persons, nowMs, urlaub));
   // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
   try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }
   // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.
@@ -2338,6 +2431,8 @@ async function runSchedule(nowMs = Date.now()) {
           await makeBackup(store, nowMs);
           // Erst nach geglückter Sicherung: Einkaufslisten, die älter als acht Wochen sind, löschen.
           await store.dropShopping(oldListCut(b.day));
+          // Fotonachweise älter als 14 Tage löschen.
+          try { await cleanupFotos(nowMs); } catch (e) { console.warn('Fotos', String(e)); }
         }
       } catch (e) { console.warn('Sicherung', String(e)); }
       // Danach die Kosten pro Gericht mit den Preisen der Woche auffrischen.
@@ -2396,6 +2491,13 @@ async function runTest(req: Request) {
   if (body.action === 'ersatz') {
     if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
     try { return { status: 200, body: { ersatz: await suggestSubstitute(db(), body) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Fotonachweis: hochladen (Kind) und ansehen (Eltern).
+  if (body.action === 'foto') {
+    try { return { status: 200, body: await saveFoto(String(body.id || ''), String(body.data || '')) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  if (body.action === 'foto-links') {
+    try { return { status: 200, body: { links: await fotoLinks(Array.isArray(body.ids) ? body.ids : []) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Datensicherung auf Knopfdruck.
   if (body.action === 'sicherung') {

@@ -866,3 +866,21 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .neu-eintrag .abteilung { margin-bottom: 0; }
 .neu-eintrag .meta { margin: 2px 0 8px; }
 .neu-eintrag ul { margin: 0; padding-left: 20px; list-style: disc; display: grid; gap: 8px; line-height: 1.45; }
+
+/* Fotonachweis */
+.foto-vorschau { display: block; width: 100%; max-height: 52vh; object-fit: contain; border-radius: 12px; background: var(--wand); margin: 12px 0 4px; }
+.foto-knopf { cursor: pointer; }
+.foto-mini { display: block; margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 10px; overflow: hidden; width: 112px; height: 84px; }
+.foto-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-mini:focus-visible { outline: 3px solid var(--akzent, #14323C); outline-offset: 2px; }
+.foto-gross { display: block; width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; background: var(--wand); margin-bottom: 8px; }
+
+/* Wochenrückblick */
+.rb-banner { background: var(--blatt); display: block; width: 100%; text-align: left; cursor: pointer; border: 0; font: inherit; color: inherit; margin-bottom: 14px; }
+.rb-liste, .rb-kinder { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; }
+.rb-liste li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; align-items: baseline; font-size: 15px; }
+.rb-tag { color: var(--tinte-2); font-weight: 600; }
+.rb-wert { color: var(--tinte-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rb-kinder li { display: grid; gap: 2px; padding: 10px 12px; background: var(--wand); border-radius: 10px; font-size: 15px; line-height: 1.4; }
+.rb-kinder strong { font-size: 16px; }
+.rb-nav { display: flex; justify-content: space-between; margin-top: 14px; }

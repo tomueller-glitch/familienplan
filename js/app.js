@@ -12,6 +12,7 @@ import * as KI from './planer.js';
 import * as HB from './haushalt.js';
 import * as P from './packungen.js';
 import * as NEU from './neu.js';
+import * as RB from './rueckblick.js';
 
 const store = createStore(window.ESSENSPLAN_CONFIG);
 const ME_KEY = 'essensplan.ich';
@@ -21,7 +22,7 @@ if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
 }
-const FORM_SHEETS = ['packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
+const FORM_SHEETS = ['foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
 const EPOCH = '1970-01-01T00:00:00Z';
 
 const state = {
@@ -86,7 +87,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -309,6 +310,7 @@ async function enter() {
     window.addEventListener('hashchange', () => {
       const t = location.hash.slice(1);
       if (HASH_TABS.includes(t) && state.phase === 'app') { state.tab = t; render(); }
+      if (t === 'rueckblick' && state.phase === 'app' && canPlan()) { history.replaceState(null, '', `${location.pathname}#woche`); state.tab = 'woche'; render(); openReview(); }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && state.phase === 'app') onRemote('all');
@@ -742,7 +744,7 @@ function viewWoche() {
       <div class="fuss"><button class="textknopf" data-action="urlaub">Urlaub und Tage auswärts</button></div>`;
   }
   if (!planned.length) {
-    return `${html}${draftBanner()}${wishBanner(state.week)}${feastBanner(state.week)}${canPlan() ? leftoverCard() : ''}${heartReminder()}${abfuhrBox(false)}<div class="leer"><h2 class="abschnitt">Für diese Woche steht noch nichts fest</h2>
+    return `${html}${draftBanner()}${reviewBanner()}${wishBanner(state.week)}${feastBanner(state.week)}${canPlan() ? leftoverCard() : ''}${heartReminder()}${abfuhrBox(false)}<div class="leer"><h2 class="abschnitt">Für diese Woche steht noch nichts fest</h2>
       ${canPlan() ? `<p>Der Vorschlag nimmt gut bewertete Gerichte, die länger nicht dran waren.</p>
       <div class="knopfreihe"><button class="knopf" data-action="woche-fuellen">Woche vorschlagen</button>
 </div>` : '<p>Mama oder Papa planen die Woche.</p>'}</div>
@@ -751,6 +753,7 @@ function viewWoche() {
   // Für die Kinder steht die Wahl oben, solange sie offen ist. Die Eltern sehen das Ergebnis unter der Woche.
   const heartFirst = canRateLunch() && L.heartOpen(state.week);
   html += draftBanner();
+  html += reviewBanner();
   html += wishBanner(state.week);
   html += feastBanner(state.week);
   if (canPlan()) html += leftoverCard();
@@ -780,7 +783,8 @@ function planTiles() {
     ${tile('termine', 'Termine', ev.length ? `${ev.length} ${ev.length === 1 ? 'fester Termin' : 'feste Termine'}` : 'Training, Dienste, Kurse')}
     ${tile('urlaub', 'Urlaub und auswärts', away ? `${away.name || 'Urlaub'} ab ${L.fmtShort(away.von)}` : 'Nichts eingetragen')}
     ${tile('reste', 'Was muss weg?', rest ? `${rest} ${rest === 1 ? 'Eintrag' : 'Einträge'}` : 'Reste und Gartenernte')}
-    ${canPlan() ? tile('feste', 'Festtage', feast ? `${feast.anlass}, ${L.fmtShort(feast.datum)}` : 'Fondue, Geburtstag und Co.') : ''}</div>`;
+    ${canPlan() ? tile('feste', 'Festtage', feast ? `${feast.anlass}, ${L.fmtShort(feast.datum)}` : 'Fondue, Geburtstag und Co.') : ''}
+    ${canPlan() ? tile('rueckblick', 'Wochenrückblick', `KW ${L.isoWeek(reviewWeek())}: Essen, Aufgaben, Lernen, Ausgaben`) : ''}</div>`;
 }
 
 // Geschätzte Kosten der geplanten Abendessen, nach Zahl der Esser und Gäste, dazu der Rest vom Monatsbudget.
@@ -908,8 +912,10 @@ function heartReminder() {
 let pendingClaim = false;
 let pendingDay = null;
 let pendingDraft = null;
+let pendingReview = false;
 function readStartParams() {
   const q = new URLSearchParams(location.search);
+  if (location.hash === '#rueckblick') { pendingReview = true; state.tab = 'woche'; history.replaceState(null, '', `${location.pathname}#woche`); }
   const w = q.get('woche');
   const t = q.get('tag');
   const e = q.get('entwurf');
@@ -922,6 +928,7 @@ function readStartParams() {
   if (state.phase === 'app' && state.fresh) runPending();
 }
 function runPending() {
+  if (pendingReview && canPlan()) { pendingReview = false; openReview(); }
   if (pendingClaim) claimToday();
   if (pendingDay) { const day = pendingDay; pendingDay = null; openSheet({ type: 'tag', day }); }
   if (pendingDraft && canPlan()) {
@@ -1649,17 +1656,17 @@ function viewAusgaben() {
 }
 
 // Foto verkleinern: Claude rechnet ohnehin mit höchstens etwa 1568 Pixeln an der langen Kante.
-async function shrinkImage(file) {
+async function shrinkImage(file, max = 1568, quality = 0.85) {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
     await new Promise((ok, fail) => { img.onload = ok; img.onerror = () => fail(new Error('Das Foto ließ sich nicht öffnen.')); img.src = url; });
-    const k = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight));
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas');
     c.width = Math.round(img.naturalWidth * k);
     c.height = Math.round(img.naturalHeight * k);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    return { data: c.toDataURL('image/jpeg', 0.85).split(',')[1], media: 'image/jpeg' };
+    return { data: c.toDataURL('image/jpeg', quality).split(',')[1], media: 'image/jpeg' };
   } finally { URL.revokeObjectURL(url); }
 }
 
@@ -1843,6 +1850,78 @@ const holidayOf = (day) => KI.holidayOn(state.data.settings, day);
 function draftTarget() {
   const next = L.addDays(L.mondayOf(L.todayISO()), 7);
   return state.week > L.mondayOf(L.todayISO()) ? state.week : next;
+}
+
+/* ---------- Wochenrückblick ---------- */
+// Sonntags die laufende Woche, sonst die letzte abgeschlossene. Auswertung in js/rueckblick.js.
+function reviewWeek() {
+  const today = L.todayISO();
+  return L.wdIndex(today) === 6 ? L.mondayOf(today) : L.addDays(L.mondayOf(today), -7);
+}
+function reviewBanner() {
+  const today = L.todayISO();
+  const wd = L.wdIndex(today);
+  if (!canPlan() || !(wd === 6 || wd === 0) || !L.weekDays(state.week).includes(today)) return '';
+  const w = reviewWeek();
+  return `<button class="kasten-text rb-banner" data-action="rueckblick"><strong>Wochenrückblick KW ${L.isoWeek(w)}</strong>Essen, Aufgaben der Kinder, Lernen und Ausgaben auf einen Blick. ›</button>`;
+}
+function openReview(week) {
+  const w = week || reviewWeek();
+  state.review = { week: w, lern: undefined };
+  openSheet({ type: 'rueckblick' });
+  loadLearnWeek(w).then((x) => {
+    if (!state.review || state.review.week !== w) return;
+    state.review.lern = x;
+    if (state.sheet && state.sheet.type === 'rueckblick') renderSheet();
+  });
+}
+// Lernen aus dem Lernplaner: nur mit Datenbank und wenn der Lernplaner benutzt wird.
+async function loadLearnWeek(week) {
+  if (store.mode !== 'supabase' || !store.sb || store.offline || !state.lp) return null;
+  try {
+    const sun = L.addDays(week, 6);
+    const [a, b] = await Promise.all([
+      store.sb.from('lp_data').select('coll,data').eq('deleted', false).in('coll', ['settings', 'win', 'day', 'help', 'exam']),
+      store.sb.from('lp_data').select('data').eq('deleted', false).eq('coll', 'task').gte('data->>doneAt', week).lte('data->>doneAt', sun),
+    ]);
+    if (a.error || b.error) return null;
+    return RB.learnWeek(a.data || [], (b.data || []).map((r) => r.data), week);
+  } catch (e) { return null; }
+}
+const stars1 = (x) => x.toFixed(1).replace('.', ',');
+const timeText = (m) => (m >= 60 ? `${Math.floor(m / 60)} Std. ${m % 60 ? `${m % 60} Min.` : ''}`.trim() : `${m} Min.`);
+function sheetReview() {
+  const r = state.review || { week: reviewWeek() };
+  const H = hbSettings();
+  const v = RB.weekReview(state.data, r.week, { today: L.todayISO(), budget: H.budget, away: (d) => { const h = holidayOf(d); return !!(h && h.weg !== false); } });
+  const nav = `<div class="rb-nav"><button class="textknopf" data-action="rueckblick-woche" data-wert="-7">‹ Woche davor</button>${r.week < reviewWeek() ? '<button class="textknopf" data-action="rueckblick-woche" data-wert="7">Woche danach ›</button>' : ''}</div>`;
+  const e = v.essen;
+  const meals = e.meals.filter((m) => m.dish).map((m) => `<li><span class="rb-tag">${L.WD_SHORT[L.wdIndex(m.day)]}</span><span class="rb-was">${esc(m.dish)}</span><span class="rb-wert">${m.avg != null ? `${stars1(m.avg)} ★` : ''}</span></li>`).join('');
+  const essen = `<h3 class="abteilung">Essen</h3>
+    ${e.cooked ? `<ul class="rb-liste">${meals}</ul>
+    <p class="meta">${[e.best ? `Am besten kam ${esc(e.best.dish)} an (${stars1(e.best.avg)} Sterne).` : '', e.worst && e.worst.avg < 3.5 ? `Am wenigsten ${esc(e.worst.dish)} (${stars1(e.worst.avg)}).` : '', e.hearts.length ? `Herz der Woche: ${e.hearts.map((h) => `${esc(h.person)} für ${esc(h.dish)}`).join(', ')}.` : ''].filter(Boolean).join(' ') || 'Noch keine Sterne vergeben.'}</p>` : '<p class="meta">In dieser Woche war kein Abendessen geplant.</p>'}`;
+  const kinder = v.kinder.length ? `<h3 class="abteilung">Aufgaben der Kinder</h3><ul class="rb-kinder">${v.kinder.map((k) => `<li><strong>${esc(k.name)}</strong>
+    <span>${k.basicsDue ? `Grundaufgaben an ${k.basicsOk} von ${k.basicsDue} Tagen geschafft` : 'Keine Grundaufgaben'}${k.bonus ? `, Wochenbonus ${k.bonus} Min.` : ''}.</span>
+    <span>${k.extras ? `${k.extras} ${k.extras === 1 ? 'Extra-Aufgabe' : 'Extra-Aufgaben'}, ${k.earned} Min. verdient` : 'Keine Extra-Aufgaben'}${k.redeemed ? `, ${k.redeemed} Min. eingelöst` : ''}.</span>
+    ${k.muell || k.rejected ? `<span>${[k.muell ? `Müll ${k.muell}-mal rausgebracht` : '', k.rejected ? `${k.rejected}-mal nicht anerkannt` : ''].filter(Boolean).join(', ')}.</span>` : ''}</li>`).join('')}</ul>` : '';
+  const l = r.lern;
+  const lernen = l === undefined && state.lp ? '<h3 class="abteilung">Lernen</h3><p class="meta">Wird geladen …</p>'
+    : l ? `<h3 class="abteilung">Lernen</h3><ul class="rb-kinder"><li>
+      <span>Tagessiege: ${l.wins} von 5${l.wins >= l.goal ? ', Wochenspiel gewonnen' : ` (Ziel ${l.goal})`}${l.verlegt ? `, ${l.verlegt}-mal Spiel verlegt` : ''}.</span>
+      <span>${l.done ? `${l.done} ${l.done === 1 ? 'Aufgabe' : 'Aufgaben'} erledigt, zusammen ${timeText(l.minutes)}.` : 'Keine Aufgaben erledigt.'}</span>
+      ${l.help.length ? `<span>Schwer war: ${esc(l.help.join(', '))}.</span>` : ''}
+      ${l.exams.length ? `<span>Als Nächstes: ${l.exams.slice(0, 3).map((x) => `${L.WD_SHORT[L.wdIndex(x.date)]} ${L.fmtShort(x.date)} ${esc(x.text)}`).join(', ')}.</span>` : ''}</li></ul>` : '';
+  const a = v.ausgaben;
+  const ausgaben = `<h3 class="abteilung">Ausgaben</h3><p class="meta">${a.count ? `Diese Woche ${HB.euro(a.total)} auf ${a.count} ${a.count === 1 ? 'Kassenzettel' : 'Kassenzetteln'}.` : 'Diese Woche keine Kassenzettel.'} ${HB.monthLabel(a.month)} bisher ${HB.euroShort(a.monthTotal)}${a.left != null ? (a.left >= 0 ? `, vom Budget sind noch ${HB.euroShort(a.left)} übrig` : `, das Budget ist um ${HB.euroShort(-a.left)} überzogen`) : ''}.</p>`;
+  const ausblick = r.week === reviewWeek() ? `<h3 class="abteilung">Nächste Woche</h3><p class="meta">${v.ausblick.planned === 7 ? 'Alle sieben Abendessen sind geplant.' : v.ausblick.planned ? `${v.ausblick.planned} von 7 Abendessen sind geplant.` : 'Für nächste Woche ist noch nichts geplant.'}</p>` : '';
+  const off = ((KI.settingOf(state.data.settings, 'rueckblick') || {}).aus || []).includes(state.me);
+  return {
+    over: 'Wochenrückblick',
+    title: `KW ${L.isoWeek(r.week)}, ${L.fmtShort(r.week)} bis ${L.fmtShort(v.sun)}`,
+    body: `${essen}${kinder}${lernen}${ausgaben}${ausblick}
+      <label class="schalter" style="margin-top:18px"><input type="checkbox" data-action="rueckblick-push"${off ? '' : ' checked'}> Sonntags um 18:30 Uhr eine Nachricht <small>wenn der Rückblick für die Woche fertig ist</small></label>
+      ${nav}`,
+  };
 }
 
 function draftBanner() {
@@ -2208,6 +2287,9 @@ function taskBadge() {
 const basicsFirst = () => (KI.settingOf(state.data.settings, 'aufgaben') || {}).grund_zuerst !== false;
 // Auch Grundaufgaben (ohne Minuten) bestätigen die Eltern. Bis dahin zählen sie als erledigt.
 const basicsConfirm = () => (KI.settingOf(state.data.settings, 'aufgaben') || {}).grund_bestaetigen !== false;
+// Aufgaben mit Fotonachweis (Kennungen in ep_settings "aufgaben".foto).
+const fotoTasks = () => { const v = (KI.settingOf(state.data.settings, 'aufgaben') || {}).foto; return Array.isArray(v) ? v : []; };
+const needsFoto = (task) => !!task && fotoTasks().includes(task.id);
 // Wochenbonus in Minuten, 0 heißt aus. Voreingestellt sind 30 Minuten.
 const bonusMinutes = () => { const v = (KI.settingOf(state.data.settings, 'aufgaben') || {}).wochenbonus; return v == null ? 30 : Math.max(0, Number(v) || 0); };
 const awayOn = (day) => { const h = holidayOf(day); return !!(h && h.weg !== false); };
@@ -2367,12 +2449,13 @@ function parentTasks() {
   const today = L.todayISO();
   const kids = kidsList();
   const free = pending.filter((e) => !lockOf(e).length);
+  ensureFotoLinks(pending.filter(fotoEntry).map((e) => e.id));
   const queue = pending.length ? `<h2 class="abschnitt">Zu bestätigen</h2><ul class="posten bestaetigen">${pending.map((e) => {
     const p = personById(e.person_id);
     const lock = lockOf(e);
     return `<li${lock.length ? ' class="gesperrt"' : ''}><div class="extra-zeile">${avatar(p, true)}<span class="p-text"><span class="p-name">${esc(e.label)}</span>
       <span class="p-menge">${esc(p ? p.name : '')}, ${e.day === today ? 'heute' : `${L.WD_SHORT[L.wdIndex(e.day)]} ${L.fmtShort(e.day)}`}, ${e.minutes ? `+${e.minutes} Min.` : 'Grundaufgabe'}</span>
-      ${lock.length ? `<span class="p-wofuer">Wartet auf die Grundaufgaben: ${esc(lock.join(', '))}</span>` : ''}</span>
+      ${lock.length ? `<span class="p-wofuer">Wartet auf die Grundaufgaben: ${esc(lock.join(', '))}</span>` : ''}${fotoEntry(e) ? fotoThumb(e) : ''}</span>
       <span class="ja-nein"><button class="knopf ${lock.length ? 'zweit ' : ''}klein" data-action="log-ok" data-id="${esc(e.id)}"${lock.length ? ` aria-label="${esc(e.label)} trotzdem bestätigen"` : ''}>${lock.length ? 'Trotzdem' : 'Bestätigen'}</button>
       <button class="knopf zweit klein" data-action="log-nein" data-id="${esc(e.id)}" aria-label="${esc(e.label)} nicht anerkennen">Nein</button></span></div></li>`;
   }).join('')}</ul>${free.length > 1 ? `<div class="fuss"><button class="textknopf" data-action="log-alle">${free.length < pending.length ? `Alle freigegebenen bestätigen (${free.length})` : 'Alle bestätigen'}</button></div>` : ''}` : '';
@@ -2514,15 +2597,17 @@ function kmParent() {
     </div>`).join('')}</div></div>`;
 }
 
-function logTask(task, label, id) {
+function logTask(task, label, id, opts = {}) {
+  // Mit Foto entscheiden immer die Eltern, auch bei Grundaufgaben ohne Bestätigung.
+  const open = !!(task.minutes || basicsConfirm() || opts.foto);
   const entry = {
     id: id || L.uid(), person_id: state.me, task_id: task.id, day: L.todayISO(), label, minutes: task.minutes,
-    status: task.minutes || basicsConfirm() ? 'offen' : 'bestaetigt', created_at: nowStamp(), decided_by: null, decided_at: task.minutes || basicsConfirm() ? null : nowStamp(),
+    status: open ? 'offen' : 'bestaetigt', created_at: nowStamp(), decided_by: null, decided_at: open ? null : nowStamp(),
   };
   const left = A.minutesLeftToday(state.data.taskLog, state.me, capOf(personById(state.me)), L.todayISO());
   commit(() => { state.data.taskLog = [...state.data.taskLog, entry]; }, () => store.saveLog([entry]));
   kmConfirmed([entry]);
-  if (!task.minutes) { if (basicsConfirm()) toast('Erledigt, danke! Mama oder Papa schauen noch drüber.'); return; }
+  if (!task.minutes) { if (open) toast(opts.foto ? 'Foto ist angekommen. Mama oder Papa schauen es sich an.' : 'Erledigt, danke! Mama oder Papa schauen noch drüber.'); return; }
   if (!left) toast('Erledigt, danke! Dein Tageslimit ist schon erreicht, deshalb gibt es heute keine Minuten mehr dafür.');
   else if (left < task.minutes) toast(`Erledigt. Bis zum Tageslimit zählen heute nur noch ${left} Minuten.`);
   else if (basicsFirst() && A.basicsOpen(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).length) toast(`Erledigt. Die ${task.minutes} Minuten gibt es, sobald deine Grundaufgaben für heute erledigt sind.`);
@@ -2534,6 +2619,67 @@ function decide(ids, status) {
   const rows = state.data.taskLog.filter((e) => ids.includes(e.id)).map((e) => ({ ...e, status, decided_by: state.me, decided_at: now }));
   commit(() => { state.data.taskLog = state.data.taskLog.map((e) => rows.find((r) => r.id === e.id) || e); }, () => store.saveLog(rows));
   kmConfirmed(rows);
+}
+
+/* ---------- Fotonachweis ---------- */
+// Das Kind macht beim Melden ein Foto. Es geht verkleinert an die Push-Funktion und liegt privat im Speicher.
+// Die Eltern sehen es in „Zu bestätigen“. Nach 14 Tagen löscht die Funktion die Fotos wieder.
+function startFoto(task, label, id) {
+  state.fotoDraft = null;
+  openSheet({ type: 'foto', task: task.id, label, id: id || '', key: L.uid() });
+}
+function sheetFoto(sh) {
+  const d = state.fotoDraft && state.fotoDraft.for === sh.key ? state.fotoDraft : null;
+  return {
+    over: 'Foto als Nachweis',
+    title: sh.label,
+    body: `<p class="meta">Mach ein Foto, auf dem man sieht, dass es erledigt ist. Mama oder Papa schauen es sich beim Bestätigen an.</p>
+      ${d ? `<img class="foto-vorschau" src="${d.url}" alt="Dein Foto">` : ''}
+      <div class="knopfreihe"><label class="knopf${d ? ' zweit' : ''} foto-knopf">${d ? 'Neues Foto' : 'Foto machen'}<input type="file" accept="image/*" capture="environment" id="nachweis-foto" hidden></label>
+      ${d ? `<button class="knopf" data-action="foto-melden"${state.fotoBusy ? ' disabled' : ''}>${state.fotoBusy ? 'Wird gesendet …' : 'Erledigt melden'}</button>` : ''}</div>`,
+  };
+}
+async function fotoChosen(file) {
+  const sh = state.sheet;
+  if (!file || !sh || sh.type !== 'foto') return;
+  try {
+    const img = await shrinkImage(file, 1280, 0.72);
+    state.fotoDraft = { for: sh.key, data: img.data, url: `data:image/jpeg;base64,${img.data}` };
+  } catch (e) { toast(e.message || 'Das Foto ließ sich nicht öffnen.'); }
+  renderSheet();
+}
+const fotoEntry = (e) => !!e && (fotoTasks().includes(e.task_id));
+// Links zu den Fotos holen (gelten eine Stunde), danach neu zeichnen.
+function ensureFotoLinks(ids) {
+  state.fotoLinks = state.fotoLinks || {};
+  const now = Date.now();
+  const missing = ids.filter((id) => { const x = state.fotoLinks[id]; return !x || (!x.busy && x.url && now - x.at > 50 * 60000); });
+  if (!missing.length) return;
+  missing.forEach((id) => { state.fotoLinks[id] = { busy: true, at: now }; });
+  setTimeout(() => {
+    store.fotoLinks(missing).then((links) => {
+      missing.forEach((id) => { state.fotoLinks[id] = { url: links[id] || null, at: Date.now() }; });
+    }).catch(() => {
+      missing.forEach((id) => { state.fotoLinks[id] = { url: null, at: Date.now(), err: true }; });
+    }).finally(() => { if (state.tab === 'aufgaben' || (state.sheet && state.sheet.type === 'foto-gross')) { render(); if (state.sheet) renderSheet(); } });
+  }, 0);
+}
+function fotoThumb(e) {
+  const x = (state.fotoLinks || {})[e.id];
+  if (!x || x.busy) return '<span class="p-wofuer">Foto lädt …</span>';
+  if (!x.url) return `<span class="p-wofuer">${x.err ? 'Foto ließ sich gerade nicht laden.' : 'Kein Foto dabei.'}</span>`;
+  return `<button class="foto-mini" data-action="foto-gross" data-id="${esc(e.id)}" aria-label="Foto zu ${esc(e.label)} groß ansehen"><img src="${esc(x.url)}" alt="" loading="lazy"></button>`;
+}
+function sheetFotoBig({ id }) {
+  const e = state.data.taskLog.find((x) => x.id === id);
+  const x = (state.fotoLinks || {})[id] || {};
+  const p = e && personById(e.person_id);
+  return {
+    over: p ? `Foto von ${p.name}` : 'Foto',
+    title: e ? e.label : 'Foto',
+    body: `${x.url ? `<img class="foto-gross" src="${esc(x.url)}" alt="Foto zu ${esc(e ? e.label : '')}">` : '<p class="meta">Das Foto ist nicht mehr da.</p>'}
+      ${e && e.status === 'offen' ? `<div class="knopfreihe"><button class="knopf" data-action="foto-ok" data-id="${esc(id)}">Bestätigen</button><button class="knopf zweit" data-action="foto-nein" data-id="${esc(id)}">Nein</button></div>` : ''}`,
+  };
 }
 
 function sheetRedeem({ id }) {
@@ -2565,7 +2711,7 @@ function sheetTaskList() {
   const rows = [...state.data.tasks].sort((a, b) => (a.sort || 0) - (b.sort || 0)).map((t) => `<li${t.active === false ? ' class="raus"' : ''}><button class="g-zeile" data-action="aufgabe-bearbeiten" data-id="${esc(t.id)}">
       <span class="mal"><span class="n">${t.minutes || '0'}</span><span class="x">Min.</span></span>
       <span class="tz-text"><span class="tz-name">${esc(t.name)}${t.active === false ? ' <span class="marke">pausiert</span>' : ''}</span>
-      <span class="tz-meta">${esc([A.RHYTHMEN[t.schedule], whoText(t), t.school_only ? 'nur an Schultagen' : '', (t.months || []).length ? `nur ${t.months.map((m) => A.MONATE[m - 1]).join(', ')}` : ''].filter(Boolean).join(', '))}</span></span></button></li>`).join('');
+      <span class="tz-meta">${esc([A.RHYTHMEN[t.schedule], whoText(t), t.school_only ? 'nur an Schultagen' : '', needsFoto(t) ? 'mit Foto' : '', (t.months || []).length ? `nur ${t.months.map((m) => A.MONATE[m - 1]).join(', ')}` : ''].filter(Boolean).join(', '))}</span></span></button></li>`).join('');
   return {
     over: 'Aufgaben',
     title: 'Aufgaben verwalten',
@@ -2597,6 +2743,7 @@ function sheetTaskForm({ id }) {
       <fieldset class="feldgruppe"><legend>Wer</legend>${kids.map((k) => `<label class="schalter"><input type="checkbox" name="who" value="${esc(k.id)}"${!t || (t.who || []).includes(k.id) ? ' checked' : ''}> ${esc(k.name)}</label>`).join('')}
       <label class="schalter"><input type="checkbox" name="rotate"${t && t.rotate ? ' checked' : ''}> Im wöchentlichen Wechsel</label></fieldset>
       <label class="schalter"><input type="checkbox" name="school_only"${t && t.school_only ? ' checked' : ''}> Nur an Schultagen <small>nicht am Wochenende, in den bayerischen Ferien und an Feiertagen</small></label>
+      <label class="schalter"><input type="checkbox" name="foto"${t && needsFoto(t) ? ' checked' : ''}> Foto als Nachweis <small>beim Melden macht das Kind ein Foto, ihr seht es beim Bestätigen. Dann bestätigt ihr auch Grundaufgaben.</small></label>
       <label>Bei Bedarf höchstens pro Tag<input class="feld" name="max_per_day" type="number" inputmode="numeric" min="1" max="10" value="${t ? t.max_per_day || 1 : 1}"></label>
       <fieldset class="feldgruppe"><legend>Nur in diesen Monaten <small>nichts angehakt heißt ganzjährig</small></legend><div class="monate">${A.MONATE.map((m, i) => `<label class="schalter"><input type="checkbox" name="months" value="${i + 1}"${t && (t.months || []).includes(i + 1) ? ' checked' : ''}> ${m}</label>`).join('')}</div></fieldset>
       <label>Hinweis für die Kinder<input class="feld" name="note" maxlength="200" value="${esc(t ? t.note || '' : '')}"></label>
@@ -2619,7 +2766,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3221,6 +3368,7 @@ function sheetAppWishes() {
 
 const HELP_KIDS = [
   ['Aufgaben und Bildschirmzeit', 'Unter „Aufgaben“ stehen deine Aufgaben für heute. Grundaufgaben wie Tisch decken gehören einfach dazu. Was noch offen ist, steht ganz oben in der Woche, und nachmittags und abends kommt eine Erinnerung. Mama oder Papa schauen auch bei Grundaufgaben drüber. Für Extra-Aufgaben gibt es Minuten Bildschirmzeit, sobald Mama oder Papa sie bestätigen. Die Minuten gibt es erst, wenn deine Grundaufgaben für heute erledigt sind. Verdiente Minuten verfallen nach drei Tagen, oben siehst du dein Konto.'],
+  ['Foto als Nachweis', 'Bei manchen Aufgaben möchten Mama oder Papa ein Foto sehen. Dann öffnet sich beim Abhaken die Kamera. Mach ein Foto, auf dem man sieht, dass es erledigt ist, und tipp auf „Erledigt melden“.'],
   ['Mülleimer in der Küche', 'Unter „Aufgaben“ siehst du direkt unter dem Datum die Ampel für Plastikmüll und Restmüll. Grün heißt: noch Platz, gerade nichts zu tun. Gelb heißt: fast voll, du kannst ihn schon rausbringen. Rot heißt: voll, bitte jetzt rausbringen, dazu kommt eine Nachricht aufs Handy. Danach auf „Rausgebracht“ tippen. Bestätigen Mama oder Papa, gibt es die Minuten und die Ampel springt auf Grün.'],
   ['Tonne', 'Bist du mit der Tonne dran, kommt am Vorabend ab 18 Uhr eine Erinnerung. Hak die Aufgabe ab, wenn die Tonne an der Straße steht. Um 21 Uhr schauen Mama und Papa nach.'],
   ['Lernplaner', 'Wer den Lernplaner benutzt, sieht unter „Aufgaben“ oben die Karte „Dein Lerntag“: was heute erledigt ist, wie lange du gelernt hast und wie das Wochenspiel steht. „Zum Lernplaner“ öffnet ihn.'],
@@ -3236,10 +3384,12 @@ const HELP_ADULTS = [
   ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
+  ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
+  ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
   ['Müll-Ampel in der Küche', 'Unter „Aufgaben“ schaltet ihr für Plastikmüll und Restmüll die Ampel: einfach auf Rot, Gelb oder Grün tippen. Bei Grün können die Kinder den Eimer nicht melden, bei Gelb und Rot schon („Rausgebracht“, mit den Minuten der Aufgabe „Müll aus der Küche rausbringen“). Bei Rot bekommen die Kinder eine Push-Nachricht, zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Bestätigt ihr die Meldung, springt die Ampel von selbst auf Grün.'],
   ['Lernplaner', 'Der Lernplaner (lernen.html) plant Hausaufgaben, Prüfungslernen und Pausen für das Schulkind. Unter „Aufgaben“ zeigt die Karte „Schule“ den Stand des Tages, das Wochenspiel und was als schwer markiert wurde, „Lernplaner öffnen“ führt hinein. Termine aus dem Lernplaner und die Termine der Familie sind dieselben, sie stehen in beiden Apps.'],
   ['Ausgaben', 'Kassenzettel fotografieren, prüfen, speichern. Die App sortiert in Kategorien, lernt aus euren Korrekturen, hakt Gekauftes auf der Einkaufsliste ab und setzt Vorräte auf „da“. Dazu Monatsbudget, Jahresüberblick mit Bio-Anteil und das Preisgedächtnis.'],
-  ['Benachrichtigungen', 'Im Familie-Fenster (oben rechts auf euren Namen) schaltet jedes Gerät seine Push-Nachrichten ein: Morgenüberblick, Kochen anfangen, Vorabend, Einkauf, neue Einträge auf der Liste, Bewerten, Tonne, Aufgaben zum Bestätigen, Grundaufgaben der Kinder, die Müll-Ampel und der Wochenplan von Claude. Die Nachrichten des Lernplaners stellt ihr im Lernplaner unter Einstellungen ein. Dort steht auch, wann die letzte Nachricht angekommen ist. Fehlen Nachrichten auf dem iPhone, in den iOS-Einstellungen unter Mitteilungen und beim Fokus nachsehen.'],
+  ['Benachrichtigungen', 'Im Familie-Fenster (oben rechts auf euren Namen) schaltet jedes Gerät seine Push-Nachrichten ein: Morgenüberblick, Kochen anfangen, Vorabend, Einkauf, neue Einträge auf der Liste, Bewerten, Tonne, Aufgaben zum Bestätigen, Grundaufgaben der Kinder, die Müll-Ampel, der Wochenrückblick am Sonntag und der Wochenplan von Claude. Die Nachrichten des Lernplaners stellt ihr im Lernplaner unter Einstellungen ein. Dort steht auch, wann die letzte Nachricht angekommen ist. Fehlen Nachrichten auf dem iPhone, in den iOS-Einstellungen unter Mitteilungen und beim Fokus nachsehen.'],
   ['Datensicherung', 'Jeden Sonntag sichert die App alle Daten. Im Familie-Fenster unter „Datensicherung“ lassen sie sich herunterladen oder sofort neu anlegen. „Zurückholen“ holt einzelne Rezepte oder den Plan einer Woche aus einer Sicherung zurück. Bevor ein Entwurf, ein eingefügter Plan oder eine Sicherung übernommen wird, zeigt die App, was sich ändert, und markiert rot, was verloren gehen würde.'],
   ['Wochenbonus', 'Wer an jedem Tag der Woche alle Grundaufgaben erledigt, bekommt am Sonntag Extra-Minuten (voreingestellt 30, einstellbar unter „Aufgaben verwalten“). Die Kinder sehen unter „Aufgaben“ sieben Punkte für die Woche. Urlaubstage zählen nicht mit, und der Bonus zählt nicht zum Tageslimit.'],
   ['Kosten im Blick', 'Über jeder Einkaufstour steht eine Schätzung, sobald es genug Preise aus euren Kassenzetteln gibt. Im Familie-Fenster steht, was die Anfragen an Claude im Monat kosten.'],
@@ -4541,17 +4691,56 @@ const actions = {
       else toast('Schon bestätigt.');
       return;
     }
+    if (needsFoto(task)) { startFoto(task, item.label); return; }
     logTask(task, item.label);
   },
   extra: ({ id }) => {
     const task = taskById(id);
-    if (task && isKidMe()) logTask(task, task.name);
+    if (!task || !isKidMe()) return;
+    if (needsFoto(task)) { startFoto(task, task.name); return; }
+    logTask(task, task.name);
   },
+  'foto-melden': async () => {
+    const sh = state.sheet;
+    const d = state.fotoDraft;
+    if (!sh || sh.type !== 'foto' || !d || d.for !== sh.key || state.fotoBusy) return;
+    const task = taskById(sh.task);
+    if (!task || !isKidMe()) return;
+    const id = sh.id || L.uid();
+    state.fotoBusy = true;
+    renderSheet();
+    try {
+      await store.uploadFoto(id, d.data);
+    } catch (err) {
+      state.fotoBusy = false;
+      renderSheet();
+      toast(`Das Foto ließ sich nicht senden. ${err.message || ''} Bitte gleich noch einmal versuchen.`);
+      return;
+    }
+    state.fotoBusy = false;
+    state.fotoDraft = null;
+    (state.fotoLinks = state.fotoLinks || {})[id] = { url: d.url, at: Date.now() };
+    closeSheet();
+    logTask(task, sh.label, id, { foto: true });
+  },
+  'foto-gross': ({ id }) => openSheet({ type: 'foto-gross', id }),
+  rueckblick: () => openReview(),
+  'rueckblick-woche': ({ wert }) => { const w = L.addDays((state.review || {}).week || reviewWeek(), Number(wert) || 0); if (w <= reviewWeek()) openReview(w); },
+  'rueckblick-push': () => {
+    const cur = KI.settingOf(state.data.settings, 'rueckblick') || {};
+    const aus = Array.isArray(cur.aus) ? cur.aus : [];
+    const row = { key: 'rueckblick', value: { ...cur, aus: aus.includes(state.me) ? aus.filter((x) => x !== state.me) : [...aus, state.me] }, updated_at: new Date().toISOString() };
+    commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'rueckblick'), row]; }, () => store.saveSettings([row]));
+    toast(row.value.aus.includes(state.me) ? 'Keine Nachricht mehr zum Wochenrückblick.' : 'Sonntags kommt eine Nachricht zum Wochenrückblick.');
+  },
+  'foto-ok': ({ id }) => { decide([id], 'bestaetigt'); closeSheet(); },
+  'foto-nein': ({ id }) => { decide([id], 'abgelehnt'); closeSheet(); },
   'km-raus': ({ bin }) => {
     const task = A.kmTask(state.data.tasks);
     const x = A.kmView(kmValue(), state.data.taskLog).find((v) => v.bin === bin);
     if (!task || !x || !isKidMe()) return;
     if (!x.canReport) { toast(x.pending ? 'Ist schon gemeldet.' : 'Der Eimer ist grün, gerade nichts zu tun.'); return; }
+    if (needsFoto(task)) { startFoto(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid())); return; }
     logTask(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid()));
   },
   'km-stufe': ({ bin, stufe }) => {
@@ -5302,6 +5491,12 @@ const forms = {
       active: fd.get('active') === 'on',
     };
     commit(() => { state.data.tasks = [...state.data.tasks.filter((t) => t.id !== row.id), row]; }, () => store.saveTasks([row]));
+    const wantFoto = fd.get('foto') === 'on';
+    const fotos = fotoTasks();
+    if (wantFoto !== fotos.includes(row.id)) {
+      const srow = { key: 'aufgaben', value: { ...(KI.settingOf(state.data.settings, 'aufgaben') || {}), foto: wantFoto ? [...fotos, row.id] : fotos.filter((x) => x !== row.id) }, updated_at: new Date().toISOString() };
+      commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'aufgaben'), srow]; }, () => store.saveSettings([srow]));
+    }
     openSheet({ type: 'aufgaben-liste' });
     toast('Aufgabe gespeichert.');
   },
@@ -5379,6 +5574,10 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'abfuhr-datei') {
     const file = e.target.files && e.target.files[0];
     readAbfuhrFile(file).finally(() => { e.target.value = ''; });
+  }
+  if (e.target.id === 'nachweis-foto') {
+    const file = e.target.files && e.target.files[0];
+    fotoChosen(file).finally(() => { e.target.value = ''; });
   }
   if (e.target.id === 'beleg-foto') {
     const files = e.target.files;

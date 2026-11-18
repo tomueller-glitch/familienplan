@@ -300,6 +300,16 @@ class SupabaseStore {
     if (error) throw new Error(error.message || 'Die Sicherung ließ sich nicht laden.');
     return data;
   }
+  // Fotonachweis: Das Foto liegt privat im Speicher, die Eltern bekommen Links für eine Stunde.
+  async uploadFoto(id, data) { return this.readPhotos2({ action: 'foto', id, data }); }
+  async fotoLinks(ids) { return ((await this.readPhotos2({ action: 'foto-links', ids })) || {}).links || {}; }
+  async readPhotos2(body) {
+    const { data, error } = await this.sb.functions.invoke('push', { body });
+    if (!error) return data;
+    let msg = '';
+    try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
+    throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht.');
+  }
   async readRecipe(photos) { return (await this.readPhotos('rezept', photos)).rezept; }
   async readIngredients(photos) { return (await this.readPhotos('zutaten', photos)).zutaten; }
   async readPhotos(action, photos) {
@@ -470,6 +480,9 @@ class LocalStore {
     };
   }
   async listBackups() { return []; }
+  // Demo: Fotos bleiben nur im Speicher dieser Seite.
+  async uploadFoto(id, data) { this.fotos = this.fotos || {}; this.fotos[id] = `data:image/jpeg;base64,${data}`; return { name: `${id}.jpg` }; }
+  async fotoLinks(ids) { const f = this.fotos || {}; return Object.fromEntries(ids.filter((i) => f[i]).map((i) => [i, f[i]])); }
   async downloadBackup() { throw new Error('Im Demo-Modus gibt es keine Sicherungen.'); }
   async readIngredients() {
     await new Promise((ok) => setTimeout(ok, 1200));

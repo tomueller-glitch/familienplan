@@ -110,6 +110,7 @@ Eine kleine Funktion bei Supabase schaut alle fünf Minuten nach, ob etwas anste
 | Vorabend der Müllabfuhr, ab 18 Uhr | wer mit der Tonne dran ist (ohne Tonnen-Aufgabe: die Eltern) | „Schwarze Tonne rausstellen“. Entfällt, wenn die Aufgabe schon abgehakt ist. |
 | Kind meldet eine Aufgabe als erledigt | Eltern | „Kind 1: Spülmaschine ausräumen (+10 Min.)“. Mit der Regel „Minuten erst nach den Grundaufgaben“ erst, wenn die erledigt sind. |
 | Vorabend der Müllabfuhr, ab 21 Uhr | Eltern | „Restmüll steht noch nicht draußen“, wenn das zuständige Kind die Tonne noch nicht abgehakt hat. |
+| Sonntag ab 18:30 Uhr | Eltern (im Rückblick abschaltbar) | „Wochenrückblick KW 47“. Öffnet den Rückblick mit Essen, Aufgaben, Lernen und Ausgaben. |
 | Mama oder Papa stellen einen Mülleimer in der Küche auf Rot | die Kinder der Aufgabe „Müll aus der Küche rausbringen“ | „Plastikmüll ist voll“. Zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Entfällt, wenn ihn schon jemand als rausgebracht gemeldet hat. |
 | Jemand schreibt etwas auf die Einkaufsliste | die anderen Erwachsenen (abschaltbar) | „Kind 1: Brezeln, Spülmittel“. Zwischen 21:30 und 7 Uhr wartet die Nachricht bis zum Morgen. |
 | Eltern bestätigen oder lehnen ab | das Kind | „+10 Minuten. Papa hat … bestätigt.“ Bei Grundaufgaben kommt nur die Ablehnung. |
@@ -317,6 +318,8 @@ Unter **Familie > Von Hand mit Claude im Chat > Plan einfügen** nimmt die App e
 | `js/push.js`, `sw.js` | Push-Nachrichten auf dem Gerät und die Fassung der App für den Betrieb ohne Netz |
 | `js/naehrwerte.js` | Nährwerttabelle und Berechnung pro Portion |
 | `js/planer.js` | Wochenplan mit Claude: Regeln, Kontext, Entwürfe |
+| `js/rueckblick.js` | Auswertung für den Wochenrückblick |
+| `js/neu.js` | Einträge für „Was ist neu?“ nach einem Update |
 | `push-einrichten.html` | Hilfsseite: erzeugt die Schlüssel und den Zeitplan |
 | `supabase/schema.sql` | Tabellen und Zugriffsregeln |
 | `supabase/functions/push/index.ts` | Supabase-Funktion, die die Nachrichten verschickt |
@@ -374,6 +377,14 @@ lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der
 - Termine: Ist unter Optionen „Lernplaner gehört zu“ gewählt, nutzt der Lernplaner die Termine des Familienplans (`ep_events`, gleiche Regeln). Neue Termine aus dem Lernplaner landen dort ebenfalls.
 - Lernmodus: startet mit dem Anpfiff, zeigt nur die aktuelle Aufgabe, Beenden mit Eltern-PIN. Verlässt er die App, zählt die Zeit nicht; nach der eingestellten Zeit kommt eine Push-Nachricht. Eine echte Sperre gibt es nur mit dem Geführten Zugriff am iPhone.
 - „Pause vorbei“ und Lernmodus-Meldungen kommen pünktlich mit einem zweiten Zeitplan im Minutentakt (`lernplaner-minute` in `supabase/cron.sql` bzw. `push-einrichten.html`). Ohne ihn kommen sie mit bis zu fünf Minuten Verspätung.
+
+- Hefteinträge: Fotos oder ein PDF pro Prüfung, Claude schreibt sie ab (`ex.heft`). Sie sind danach die wichtigste Quelle für Lernschritte, Abfrage und Karteikarten.
+- Karteikarten: eigene Sammlung `card` in `lp_data`, Lernkartei mit fünf Fächern (Fach 1 täglich, dann nach 1, 2, 4 und 7 Tagen). Karten von Prüfungen, die länger als 60 Tage vorbei sind, räumt die App weg.
+
+## Foto als Nachweis und Wochenrückblick
+
+- Foto als Nachweis: pro Aufgabe unter „Aufgaben verwalten“ (gespeichert in `ep_settings` unter `aufgaben.foto`). Das Foto geht verkleinert an die Funktion `push`, die es privat im Speicher `nachweise` ablegt. Den Speicher legt die Funktion beim ersten Foto selbst an, SQL ist nicht nötig. Die Eltern bekommen Links, die eine Stunde gelten. Fotos älter als 14 Tage löscht der Sonntagslauf.
+- Wochenrückblick: Auswertung in `js/rueckblick.js`, Lernen direkt aus `lp_data`. Prüfung: `node --experimental-strip-types tests/funktion-rueckblick.mts`.
 
 ## Arbeiten mit GitHub
 
