@@ -152,12 +152,16 @@ function requirePin(id, onOk) {
 const myRating = (day) => state.data.ratings.find((r) => r.day === day && r.person_id === state.me);
 
 let toastTimer;
-function toast(text) {
+// Hinweis unten. Mit undo zeigt er „Rückgängig“ und bleibt etwas länger stehen.
+let toastUndo = null;
+function toast(text, undo) {
   const el = $('#toast');
-  el.textContent = text;
+  toastUndo = typeof undo === 'function' ? undo : null;
+  el.innerHTML = `<span>${esc(text)}</span>${toastUndo ? '<button class="toast-knopf" data-action="toast-undo">Rückgängig</button>' : ''}`;
+  el.classList.toggle('mit-knopf', !!toastUndo);
   el.classList.add('sichtbar');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('sichtbar'), 4200);
+  toastTimer = setTimeout(() => { el.classList.remove('sichtbar', 'mit-knopf'); toastUndo = null; }, toastUndo ? 7000 : 4200);
 }
 
 function durationText(min) {
@@ -1079,6 +1083,19 @@ function dueElsewhere() {
   }).join('');
 }
 
+/* ---------- Von Hand entfernte Posten ---------- */
+// ep_settings "liste_weg": { Woche: [Schlüssel] }. Neuberechnen und der Kasten mit Claudes Brotbox-Posten lassen sie weg.
+const removedKeys = (week) => { const v = KI.settingOf(state.data.settings, 'liste_weg'); return v && Array.isArray(v[week]) ? v[week] : []; };
+function removedRow(week, key, add) {
+  const v = KI.settingOf(state.data.settings, 'liste_weg') || {};
+  const from = L.addDays(L.mondayOf(L.todayISO()), -14);
+  const value = Object.fromEntries(Object.entries(v).filter(([w]) => w >= from));
+  const set = new Set(value[week] || []);
+  if (add) set.add(key); else set.delete(key);
+  value[week] = [...set];
+  return { key: 'liste_weg', value, updated_at: new Date().toISOString() };
+}
+
 /* ---------- Aus dem Vorrat: wirklich da? ---------- */
 // Was der Plan aus dem Vorrat nimmt, steht nicht (oder nur abgehakt) auf der Liste. Vor dem Einkauf fragt die App nach,
 // ob es wirklich da ist. „Ist da“ merkt sich die Antwort pro Woche (ep_settings "vorrat_check"), „Fehlt“ setzt den
@@ -1111,10 +1128,9 @@ function draftMissing(week) {
     .sort((a, b) => String(b.decided_at || '').localeCompare(String(a.decided_at || '')))[0];
   const list = state.data.shopping.filter((i) => i.week_start === week);
   if (!run || !list.length) return [];
-  const names = L.dinnerNamesOf(state.data.dishes, (run.draft.plan || []).map((p) => p.dish));
-  const onList = new Set(list.map((i) => L.itemKey(i.label)));
+  const onList = new Set([...list.map((i) => L.itemKey(i.label)), ...removedKeys(week)]);
   return (run.draft.shopping || []).filter((x) => x && x.label && !onList.has(L.itemKey(x.label))
-    && L.usesOf(x.purpose).some((u) => !L.isDinnerUse(u, names)));
+    && L.usesOf(x.purpose).some((u) => !L.isDinnerUse(u)));
 }
 // Steht alles auf einer einzigen Tour, obwohl die Woche einen Frischeeinkauf hat, schlägt die Liste die Aufteilung vor:
 // Frisches für die Tage nach dem Frischeeinkauf dorthin, der Rest auf den Großeinkauf.
@@ -1435,7 +1451,7 @@ function itemRow(item) {
       <span class="kasten">${CHECK}</span>
       <span class="p-text"><span class="p-name">${esc(item.label)}${item.missing ? ' <span class="marke warn">nicht bekommen</span>' : ''}${seasonMark(item)}</span>${sub ? `<span class="p-menge">${esc(sub)}</span>` : ''}${purpose ? `<span class="p-wofuer">für ${esc(purpose)}</span>` : ''}</span></button>
     ${!item.checked && item.category !== 'vorhanden' && (state.shopMode || item.missing) ? `<button class="fehlt-knopf" data-action="fehlt" data-id="${esc(item.id)}" aria-pressed="${!!item.missing}" aria-label="${esc(item.label)} ${item.missing ? 'doch bekommen' : 'nicht bekommen'}">${item.missing ? 'doch da' : 'fehlt'}</button>` : ''}
-    ${item.manual ? `<button class="weg" data-action="posten-weg" data-id="${esc(item.id)}" aria-label="${esc(item.label)} entfernen">${CROSS}</button>` : ''}</li>`;
+    ${item.manual || (!item.checked && !state.shopMode) ? `<button class="weg" data-action="posten-weg" data-id="${esc(item.id)}" aria-label="${esc(item.label)} von der Liste nehmen">${CROSS}</button>` : ''}</li>`;
 }
 
 /* ---------- Gerichte ---------- */
@@ -3861,7 +3877,7 @@ const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Termine der Familie, Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
   ['Neues Gericht von Claude', 'Passt ein Abendessen nicht, im Tag auf „Neues Gericht von Claude“ tippen (auch oben bei „Gericht tauschen“). Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, passend zur Kochzeit, zu euren Regeln und zum Rest der Woche, mit Wunsch wie „schneller“ oder „mit Fisch“. „Anderer Vorschlag“ holt einen neuen. „Übernehmen“ speichert das Rezept in der Sammlung und passt die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, schon Gekauftes wird möglichst weiterverwendet, die neuen Zutaten kommen auf die nächste Tour.'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
-  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour.'],
+  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
@@ -4246,7 +4262,8 @@ function swapShopping(day, oldDish, newDish) {
   const list = state.data.shopping.filter((i) => i.week_start === week);
   if (day < today || !list.some((i) => !i.manual)) return null;
   const wd = L.WEEKDAYS_SHORT[L.wdIndex(day)];
-  const oldUse = oldDish ? `${L.shortDish(oldDish.name)} (${wd})`.toLowerCase() : '';
+  // Zweck des alten Gerichts: das Abendessen an diesem Tag, auch wenn Claude den Namen gekürzt hat.
+  const isOld = (u) => !!oldDish && L.isDinnerUse(u) && L.useDay(u, week) === day;
   const newUse = newDish ? `${L.shortDish(newDish.name)} (${wd})` : '';
   const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
   const dishes = newDish && !state.data.dishes.some((d) => d.id === newDish.id) ? [...state.data.dishes, newDish] : state.data.dishes;
@@ -4257,11 +4274,11 @@ function swapShopping(day, oldDish, newDish) {
   const change = [];
   const bought = [];
   const boughtKeys = new Map();
-  if (oldUse) {
+  if (oldDish) {
     for (const i of list) {
       if (i.manual) continue;
       const uses = L.usesOf(i.purpose);
-      const left = uses.filter((u) => u.toLowerCase() !== oldUse);
+      const left = uses.filter((u) => !isOld(u));
       if (left.length === uses.length) continue;
       const key = L.itemKey(i.label);
       if (i.checked && i.category !== 'vorhanden') { bought.push(i.label); boughtKeys.set(key, { i, left }); continue; }
@@ -4341,7 +4358,7 @@ function newDishContext(day, wish, rejected) {
   const limits = T.durationLimits(state.data.persons, state.data.events, state.data.attendance, [day]);
   const lim = limits[day];
   const main = (d) => (d.ingredients || []).filter((g) => g.c !== 'basis' && g.q != null).slice(0, 6).map((g) => g.n);
-  const oldUse = old ? `${L.shortDish(old.name)} (${L.WEEKDAYS_SHORT[L.wdIndex(day)]})`.toLowerCase() : '';
+  const isOld = (u) => !!old && L.isDinnerUse(u) && L.useDay(u, week) === day;
   return {
     tag: day, wochentag: L.fmtLong(day).split(',')[0], alt: old ? old.name : '', wunsch: wish || '', abgelehnt: rejected || [],
     woche: L.weekDays(week).filter((d) => d !== day).map((d) => {
@@ -4352,7 +4369,7 @@ function newDishContext(day, wish, rejected) {
     sammlung: state.data.dishes.map((d) => d.name),
     esser: info.eaters, gaeste: guestsOf(day), weg: info.away.map((x) => x.person.name),
     kochzeit: Number.isFinite(lim) ? lim : 0,
-    gekauft: oldUse ? state.data.shopping.filter((i) => i.week_start === week && i.checked && i.category !== 'vorhanden' && L.usesOf(i.purpose).some((u) => u.toLowerCase() === oldUse)).map((i) => i.label) : [],
+    gekauft: state.data.shopping.filter((i) => i.week_start === week && i.checked && i.category !== 'vorhanden' && L.usesOf(i.purpose).some(isOld)).map((i) => i.label),
     vorrat: state.data.pantry.filter((x) => x.have).map((x) => x.label),
     reste: leftovers().map((x) => x.text),
   };
@@ -4454,19 +4471,25 @@ function fillWeek() {
 async function rebuildShopping(silent) {
   const week = state.week;
   const old = state.data.shopping.filter((i) => i.week_start === week && !i.manual);
-  if (!silent && old.length && !(await ask('Die Liste wird aus dem Wochenplan neu berechnet. Häkchen gehen dabei verloren. Eigene Einträge und Posten für die Brotboxen bleiben.', 'Neu erstellen'))) return;
+  if (!silent && old.length && !(await ask('Die Liste wird aus dem Wochenplan neu berechnet. Häkchen gehen dabei verloren. Eigene Einträge und Posten für die Brotboxen bleiben, von Hand entfernte Posten kommen nicht wieder.', 'Neu erstellen'))) return;
   const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
   const built = L.buildShopping(week, state.data.plan, state.data.dishes, factors, state.data.pantry, packsAll());
   if (!built.length) { toast('Im Wochenplan steht noch kein Gericht.'); return; }
-  const keep = keepNonDinner(old, week);
-  // Was ein behaltener Posten schon abdeckt (gleiche Zutat, gleiche Gerichte), kommt nicht doppelt dazu.
-  const low = (list) => list.map((u) => u.toLowerCase());
-  const covered = (it) => keep.some((k) => L.itemKey(k.label) === L.itemKey(it.label) && low(L.usesOf(it.purpose)).every((u) => low(L.usesOf(k.purpose)).includes(u)));
+  const kept = keepNonDinner(old, week);
+  // Deckt ein behaltener Posten (etwa Äpfel für Brotbox und Apfelkuchen) die Abendessen schon ab, kommt die Zutat
+  // nicht noch einmal dazu. Sonst bleibt beim behaltenen Posten nur die Brotbox als Zweck.
+  const coveredBy = (it) => kept.find((k) => L.itemKey(k.item.label) === L.itemKey(it.label) && k.days.length
+    && L.usesOf(it.purpose).every((u) => k.days.includes(L.useDay(u, week))));
+  const covers = new Set();
+  const built2 = built.filter((it) => { const k = coveredBy(it); if (k) covers.add(k.item.id); return !k; });
+  const keep = kept.map((k) => (covers.has(k.item.id) || !k.days.length ? k.item : { ...k.item, purpose: k.extra.join(', ') }));
+  // Von Hand entfernte Posten dieser Woche bleiben weg.
+  const removed = new Set(removedKeys(week));
   // Touren: die der alten Liste, sonst Großeinkauf am Samstag davor und Frischeeinkauf am Mittwoch wie in Claudes Plan.
   // Frisches kommt auf die letzte Tour bis zum ersten Gebrauch, der Rest auf den Großeinkauf.
   const oldTrips = L.tripsOf(old);
   const trips = oldTrips.length > 1 ? oldTrips : KI.shopTrips(week);
-  const items = built.filter((it) => !covered(it)).map((it) => ({ ...it, ...L.tripFor(it, trips, week) }));
+  const items = built2.filter((it) => !removed.has(L.itemKey(it.label))).map((it) => ({ ...it, ...L.tripFor(it, trips, week) }));
   const keepIds = new Set(keep.map((k) => k.id));
   const gone = old.filter((i) => !keepIds.has(i.id));
   commit(() => {
@@ -4480,19 +4503,13 @@ async function rebuildShopping(silent) {
 // Posten für Brotboxen, Frühstück oder Snacks lassen sich nicht aus den Rezepten berechnen. Beim Neuberechnen bleiben sie,
 // samt Häkchen. Steht bei ihnen auch ein Abendessen, das nicht mehr geplant ist, fällt dieser Zweck weg.
 function keepNonDinner(old, week) {
-  const names = L.dinnerNamesOf(state.data.dishes);
-  const planned = new Set(L.weekDays(week).map((d) => {
-    const p = planOf(d);
-    const dish = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
-    return dish ? `${L.shortDish(dish.name)} (${L.WEEKDAYS_SHORT[L.wdIndex(d)]})`.toLowerCase() : null;
-  }).filter(Boolean));
   const keep = [];
   for (const i of old) {
     if (i.category === 'vorhanden') continue;
     const uses = L.usesOf(i.purpose);
-    if (!uses.some((u) => !L.isDinnerUse(u, names))) continue;
-    const left = uses.filter((u) => !L.isDinnerUse(u, names) || planned.has(u.toLowerCase()));
-    keep.push(left.length === uses.length ? i : { ...i, purpose: left.join(', ') });
+    const extra = uses.filter((u) => !L.isDinnerUse(u));
+    if (!extra.length) continue;
+    keep.push({ item: i, extra, days: uses.filter((u) => L.isDinnerUse(u)).map((u) => L.useDay(u, week)) });
   }
   return keep;
 }
@@ -4773,11 +4790,11 @@ function applyImport({ dishes, saved, rows, week, items }) {
 function draftShopping(d, plan, week) {
   const swapped = new Map();
   plan.forEach((p, n) => { if (p.dish !== d.plan[n].dish) swapped.set(p.day, d.plan[n].dish); });
-  const oldUses = new Set([...swapped].filter(([, name]) => name).map(([day, name]) => `${L.shortDish(name)} (${L.WEEKDAYS_SHORT[L.wdIndex(day)]})`.toLowerCase()));
   const list = [];
   for (const s of d.shopping || []) {
     const uses = L.usesOf(s.purpose);
-    const left = uses.filter((u) => !oldUses.has(u.toLowerCase()));
+    // Das Abendessen eines getauschten Tages, egal wie Claude es abgekürzt hat.
+    const left = uses.filter((u) => !(L.isDinnerUse(u) && swapped.has(L.useDay(u, week))));
     if (uses.length && !left.length) continue;
     list.push(left.length === uses.length ? s : { ...s, purpose: left.join(', ') });
   }
@@ -5228,7 +5245,28 @@ const actions = {
     toast(`${moved.length === 1 ? '1 Posten steht' : `${moved.length} Posten stehen`} jetzt bei „${target}“.`);
   },
   'posten-weg': ({ id }) => {
-    commit(() => { state.data.shopping = state.data.shopping.filter((i) => i.id !== id); }, () => store.deleteItems([id]));
+    const item = state.data.shopping.find((i) => i.id === id);
+    if (!item) return;
+    // Erzeugte Posten merkt sich die Liste, damit Neuberechnen und Claudes Plan sie nicht wieder draufsetzen.
+    const row = item.manual ? null : removedRow(item.week_start, L.itemKey(item.label), true);
+    commit(() => {
+      state.data.shopping = state.data.shopping.filter((i) => i.id !== id);
+      if (row) state.data.settings = [...state.data.settings.filter((x) => x.key !== 'liste_weg'), row];
+    }, async () => { await store.deleteItems([id]); if (row) await store.saveSettings([row]); });
+    toast(`${item.label} ist von der Liste.`, () => {
+      const back = item.manual ? null : removedRow(item.week_start, L.itemKey(item.label), false);
+      commit(() => {
+        state.data.shopping = [...state.data.shopping.filter((i) => i.id !== item.id), item];
+        if (back) state.data.settings = [...state.data.settings.filter((x) => x.key !== 'liste_weg'), back];
+      }, async () => { await store.saveItems([item]); if (back) await store.saveSettings([back]); });
+    });
+  },
+  'toast-undo': () => {
+    const fn = toastUndo;
+    toastUndo = null;
+    clearTimeout(toastTimer);
+    $('#toast').classList.remove('sichtbar', 'mit-knopf');
+    if (fn) fn();
   },
   erledigte: (_, el) => { state.hideDone = el.checked; render(); },
   'erledigte-loeschen': async () => {

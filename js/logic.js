@@ -548,8 +548,9 @@ export function buildShopping(weekStart, plan, dishes, factors = {}, pantry = []
 
 /* ---------- Gleiche Posten zusammenfassen ---------- */
 // Schlüssel eines Postens: klein, ohne Umlaute, Bindestrich wie Leerzeichen, das letzte Wort in einer Grundform.
-// So landen „Zwiebel“ und „Zwiebeln“, „Knoblauchzehe“ und „Knoblauchzehen“, „Pilz“ und „Pilze“ zusammen.
-// „Bio“ und Zusätze in Klammern bleiben Teil des Namens, das sind oft andere Produkte.
+// So landen „Zwiebel“ und „Zwiebeln“, „Knoblauchzehe“ und „Knoblauchzehen“, „Pilz“ und „Pilze“ zusammen, ebenso
+// „Bio-Hähnchenbrustfilet“ und „Hähnchenbrustfilet“ (dann wird alles in Bio gekauft). Zusätze wie „rote“ oder
+// „gehackte“ und Klammern bleiben Teil des Namens, das sind andere Produkte.
 const foldKey = (s) => s.replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss');
 const WORD_SINGULAR = { eier: 'ei' };
 function singularWord(w) {
@@ -562,6 +563,7 @@ function singularWord(w) {
 }
 export function itemKey(name) {
   const words = foldKey(String(name || '').toLowerCase()).replace(/[-–]/g, ' ').split(/\s+/).filter(Boolean);
+  if (words[0] === 'bio' && words.length > 1) words.shift();
   if (!words.length) return '';
   const last = words.pop();
   return [...words, singularWord(last)].join(' ');
@@ -587,10 +589,17 @@ export function parseQtyText(text) {
 }
 // Anzeigename für zusammengefasste Schreibweisen: bekannte Einzahl, sonst bei Stückzahlen über 1 die längere Form.
 const SINGULAR_OF = Object.fromEntries(Object.entries(NAME_PLURAL).map(([one, many]) => [many.toLowerCase(), one]));
-function baseName(names, q, u) {
+function baseName(all, q, u) {
+  // Steht eine Schreibweise mit Bio dabei, heißt der Posten so.
+  const bio = all.filter((n) => /^bio[- ]/i.test(n));
+  const names = bio.length ? bio : all;
   for (const n of names) {
     if (NAME_PLURAL[n]) return n;
     if (SINGULAR_OF[n.toLowerCase()]) return SINGULAR_OF[n.toLowerCase()];
+  }
+  if (bio.length && !names.some((n) => NAME_PLURAL[n] || SINGULAR_OF[n.toLowerCase()])) {
+    const plain = all.find((n) => !/^bio[- ]/i.test(n) && (NAME_PLURAL[n] || SINGULAR_OF[n.toLowerCase()]));
+    if (plain) return `Bio-${NAME_PLURAL[plain] ? plain : SINGULAR_OF[plain.toLowerCase()]}`;
   }
   if (names.length < 2 || u) return names[0];
   return [...names].sort((a, b) => (q > 1 ? b.length - a.length : a.length - b.length))[0];
@@ -643,12 +652,14 @@ export function mergeList(items, canMerge) {
 // „Hackbällchen (Mo), Brotbox (Do)“ als Liste.
 export const usesOf = (purpose) => String(purpose || '').split(/,\s*/).map((x) => x.trim()).filter(Boolean);
 const USE_RE = /^(.*\S)\s*\((Mo|Di|Mi|Do|Fr|Sa|So)\)$/;
-const useDay = (use, weekStart) => { const m = USE_RE.exec(use); return m ? addDays(weekStart, WEEKDAYS_SHORT.indexOf(m[2])) : null; };
-// Steht ein Zweck für ein Abendessen? dinnerNames: Kurznamen der Abendessen, klein geschrieben.
-// Alles andere (Brotbox, Frühstück, Snack) lässt sich nicht aus Rezepten neu berechnen.
-export function isDinnerUse(use, dinnerNames) {
+export const useDay = (use, weekStart) => { const m = USE_RE.exec(use); return m ? addDays(weekStart, WEEKDAYS_SHORT.indexOf(m[2])) : null; };
+// Steht ein Zweck für ein Abendessen? Jeder Zweck mit Wochentag, der nicht Brotbox, Frühstück, Snack oder Mittag ist.
+// Claude kürzt die Namen oft („Chili (Di)“ für „Chili con Carne mit Reis“), deshalb zählt der Tag, nicht der Name.
+// Brotbox und Co. lassen sich nicht aus Rezepten neu berechnen.
+const EXTRA_USE = /brotbox|pausenbrot|pause|frühstück|fruehstueck|snack|mittag|vesper|schule|kita|kindergarten|ausflug|picknick/i;
+export function isDinnerUse(use) {
   const m = USE_RE.exec(use);
-  return !!m && dinnerNames.has(shortDish(m[1]).toLowerCase());
+  return !!m && !EXTRA_USE.test(m[1]);
 }
 export const dinnerNamesOf = (dishes, more = []) => new Set([...dishes.filter(isDinner).map((d) => d.name), ...more].filter(Boolean).map((n) => shortDish(String(n)).toLowerCase()));
 // Touren einer Liste nach Datum: [{ trip, due }].

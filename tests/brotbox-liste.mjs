@@ -143,4 +143,52 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   for (const [t, l] of Object.entries(tr)) console.log('E', t, l.length, JSON.stringify(l.slice(0, 14)));
   console.log('E Fehler:', errs); await ctx.close();
 }
+// F: Claudes Liste mit kurzen Gerichtsnamen („Chili (Di)“, „Gulasch (So)“) neu berechnen: nichts doppelt.
+{
+  const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)];
+  const short = [
+    { label: 'Bio-Hackfleisch vom Rind', qty: '1,2 kg', category: 'fleisch', trip: F, due: '2026-11-25', purpose: 'Chili (Di), Burger (So)', shop: '' },
+    { label: 'Champignons', qty: '400 g', category: 'obst', trip: F, due: '2026-11-25', purpose: 'Geschnetzeltes (Do)', shop: '' },
+    { label: 'Zwiebeln', qty: '4 Stück', category: 'obst', trip: G, due: '2026-11-21', purpose: 'Chili (Di), Bolognese (Mi), Geschnetzeltes (Do)', shop: '' },
+    { label: 'Vollkornbrot', qty: '1 Laib', category: 'brot', trip: G, due: '2026-11-21', purpose: 'Brotbox (Di), Brotbox (Do)', shop: '' },
+    { label: 'Äpfel', qty: '1 kg', category: 'obst', trip: G, due: '2026-11-21', purpose: 'Brotbox (Mo), Brotbox (Fr)', shop: '' },
+    { label: 'Hähnchenbrustfilet', qty: '600 g', category: 'fleisch', trip: G, due: '2026-11-21', purpose: 'Pfanne (Mo)', shop: '' },
+  ];
+  db.ep_shopping = short.map((x, n) => ({ id: 'kurz-' + n, week_start: W, ...x, shop: null, sort: n, missing: false, checked: false, checked_by: null, checked_at: null, manual: false }));
+  const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
+  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
+  await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1200);
+  // Was auf der Seite steht, nach Touren
+  const rows = await page.evaluate(() => [...document.querySelectorAll('h2.tour')].flatMap((h) => {
+    const out = []; let el = h.nextElementSibling;
+    while (el && !(el.matches && el.matches('h2.tour'))) { for (const li of el.querySelectorAll ? el.querySelectorAll('.posten li') : []) { const n = li.querySelector('.p-name'); if (n) out.push({ trip: h.innerText, label: n.innerText.split('\n')[0].replace(/Saison$/, '').trim(), qty: (li.querySelector('.p-menge') || {}).innerText || '', purpose: (li.querySelector('.p-wofuer') || {}).innerText || '' }); } el = el.nextElementSibling; }
+    return out;
+  }));
+  const keys = {}; for (const r of rows) { const k = r.trip + '|' + r.label.toLowerCase().replace(/^bio[- ]/, '').replace(/n$/, ''); (keys[k] ||= []).push(`${r.label} [${r.qty}] ${r.purpose} {${r.trip.slice(0, 5)}}`); }
+  console.log('F doppelt:', JSON.stringify(Object.values(keys).filter((x) => x.length > 1)));
+  console.log('F Brotbox:', JSON.stringify(rows.filter((r) => /Brotbox/.test(r.purpose)).map((r) => r.label)), '| Hackfleisch:', JSON.stringify(rows.filter((r) => /hack/i.test(r.label)).map((r) => `${r.label} [${r.qty}] ${r.purpose}`)));
+  console.log('F Fehler:', errs); await ctx.close();
+}
+// G: Posten ohne Abhaken von der Liste nehmen, rückgängig machen, wieder entfernen, dann neu berechnen.
+{
+  const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)]; db.ep_ai_runs = [run('r1', 'freigegeben')];
+  db.ep_shopping = draftShop.map((x, n) => ({ id: 'g-' + n, week_start: W, ...x, shop: x.shop || null, sort: n, missing: false, checked: false, checked_by: null, checked_at: null, manual: false }));
+  const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
+  const row = (t) => page.locator('.posten li', { hasText: t }).first();
+  await page.locator('.posten').first().screenshot({ path: '/tmp/liste_kreuz.png' });
+  console.log('G Kreuz bei erzeugten Posten:', await page.locator('.posten li [data-action="posten-weg"]').count(), 'von', await page.locator('.posten li:has([data-action="haken"])').count());
+  await row('Vollkornbrot').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
+  await page.screenshot({ path: '/tmp/liste_toast.png' });
+  console.log('G Hinweis:', (await page.locator('#toast').innerText()).replace(/\n+/g, ' | '), '| noch da:', await row('Vollkornbrot').count());
+  await page.locator('#toast [data-action="toast-undo"]').click(); await page.waitForTimeout(300);
+  console.log('G nach Rückgängig da:', await row('Vollkornbrot').count(), '| gemerkt:', JSON.stringify((await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'liste_weg').pop().value));
+  await row('Vollkornbrot').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
+  await row('Snackmöhren').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
+  console.log('G Kasten Claude-Plan:', await page.locator('.vorrat-frage', { hasText: 'passt nicht' }).count());
+  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
+  await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1000);
+  console.log('G nach Neuberechnen da:', await row('Vollkornbrot').count(), await row('Snackmöhren').count(), '| Äpfel:', await row('Äpfel').count());
+  await page.locator('[data-action="einkaufen"], [data-action="einkaufsmodus"]').first().click().catch(() => {}); await page.waitForTimeout(300);
+  console.log('G Fehler:', errs); await ctx.close();
+}
 await b.close(); srv.close();

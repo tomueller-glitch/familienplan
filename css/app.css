@@ -968,3 +968,8 @@ html.anzeige-modus body::before { display: none; }
 .kasten-zeile { margin: 6px 0 0; }
 .neu-claude { margin: 0 0 14px; }
 .fehler-text { color: var(--rot, #B3261E); margin: 0 0 10px; }
+
+/* Hinweis mit „Rückgängig“ */
+#toast.mit-knopf { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
+.toast-knopf { font: inherit; font-weight: 600; color: #fff; background: none; border: 1px solid rgba(255,255,255,.6); border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.toast-knopf:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

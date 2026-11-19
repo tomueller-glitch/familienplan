@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19e', datum: '19. November, spätabends', titel: 'Einkaufsliste: keine Doppelten mehr, Posten entfernen',
+    punkte: [
+      { text: 'Neu berechnete Listen hatten Posten aus Claudes Plan doppelt, wenn Claude ein Gericht abgekürzt hatte, etwa „Chili (Di)“. Jetzt erkennt die App das Abendessen am Wochentag. Einmal „Aus dem Plan neu erstellen“ räumt eine betroffene Liste auf.', fuer: 'eltern' },
+      { text: '„Bio-Hähnchenbrustfilet“ und „Hähnchenbrustfilet“ sind jetzt ein Posten, gekauft wird dann Bio.' },
+      { text: 'Jeder offene Posten hat rechts ein Kreuz: Damit kommt er von der Liste, ohne abgehakt zu werden. „Rückgängig“ im Hinweis holt ihn zurück. Beim Neuberechnen bleibt er weg.' },
+    ],
+  },
+  {
     id: '2026-11-19d', datum: '19. November, abends', titel: 'Neues Gericht von Claude für einen Tag',
     punkte: [
       { text: 'Passt ein Abendessen im Wochenplan nicht, gibt es im Tag den Knopf „Neues Gericht von Claude“. Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, auf Wunsch schneller, mit Fisch oder vegetarisch. Mit „Anderer Vorschlag“ kommt ein neuer, mit „Übernehmen“ steht es im Plan und in der Sammlung.', fuer: 'eltern' },

@@ -401,6 +401,8 @@ Aus dem Vorrat: `fromPantry` in `js/logic.js` sammelt die Zutaten der Gerichte a
 
 Brotbox und Touren: Posten, deren Zweck kein Abendessen ist (`isDinnerUse`), etwa „Brotbox (Di)“, lassen sich nicht aus Rezepten berechnen. „Aus dem Plan neu erstellen“ behält sie samt Touren (`keepNonDinner`, `tripFor`). Werden im Entwurf Tage getauscht, passt `draftShopping` Claudes Liste an, statt sie zu ersetzen. Fehlen Brotbox-Posten aus dem freigegebenen Entwurf, bietet die Liste sie oben zum Nachtragen an. Prüfung: `node tests/brotbox-liste.mjs`.
 
+Abendessen oder Brotbox: Ein Zweck mit Wochentag gilt als Abendessen, außer er nennt Brotbox, Frühstück, Snack oder Mittag (`isDinnerUse`). Claude kürzt Gerichtsnamen oft, deshalb zählt der Tag. „Bio-X“ und „X“ sind ein Posten. Entfernte Posten (Kreuz, mit „Rückgängig“) stehen in `ep_settings` unter `liste_weg` (pro Woche) und kommen beim Neuberechnen nicht wieder.
+
 ## Neues Gericht von Claude für einen Tag
 
 Im Tagesbogen und oben bei „Gericht wählen“: „Neues Gericht von Claude“ schickt den Tag, das alte Gericht, den Rest der Woche, die Namen der Sammlung, Esser, Kochzeit, Vorrat und schon Gekauftes an die Funktion `push` (Aktion `neues-gericht`, `suggestNewDish`, Modell aus den Regeln). Sie prüft, dass der Name neu ist und keine Ausschlüsse vorkommen, und fragt sonst einmal nach. „Übernehmen“ speichert das Rezept, setzt es an den Tag, pausiert auf Wunsch das alte Gericht acht Wochen und passt die Einkaufsliste mit `swapShopping` an. Dasselbe passiert jetzt beim Tauschen aus der Sammlung. Prüfung: `node tests/neues-gericht.mjs`, `node --experimental-strip-types tests/funktion-neues-gericht.mts`.
