@@ -891,3 +891,72 @@ details.notiz-neu > summary { font-size: 15px; color: var(--tinte-2); padding: 4
 .sm-ende { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .sm-zeit-l { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
 .sm-zeit { font: inherit; font-size: 16px; padding: 6px 8px; border: 1px solid var(--linie); border-radius: 8px; background: var(--blatt); color: inherit; min-height: 40px; }
+
+/* Stall-Ampel: Einstellung für die Eltern */
+.st-form { display: grid; gap: 8px; margin-top: 4px; width: 100%; }
+.st-felder { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.st-felder .feld-label { display: grid; gap: 4px; font-size: 14px; color: var(--tinte-2); }
+.st-intro { padding: 0 4px 6px; }
+.km-karte.eltern .textknopf { justify-self: start; }
+@media (max-width: 360px) { .st-felder { grid-template-columns: 1fr; } }
+
+/* Minuten-Shop */
+.shop-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.shop-zeile { display: grid; grid-template-columns: 4.2em 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--wand); border-radius: 12px; }
+.shop-zeile.gewaehlt { grid-template-columns: 4.2em 1fr; }
+.shop-preis { font-variant-numeric: tabular-nums; color: var(--tinte-2); font-size: 14px; line-height: 1.1; }
+.shop-preis b { display: block; font: 700 22px/1 var(--anzeige); color: var(--tinte); }
+.shop-name { font-weight: 600; line-height: 1.3; }
+.shop-frage { grid-column: 1 / -1; display: grid; gap: 8px; font-size: 15px; }
+.shop-admin { display: grid; gap: 8px; margin-bottom: 14px; }
+.shop-admin-zeile { display: grid; grid-template-columns: 1fr 5.5em; gap: 8px; }
+.shop-kauf .p-menge { color: var(--tinte-2); }
+
+/* Küchen-Display: dunkle Wand, damit das Tablet abends nicht blendet. Oben links das Kalenderblatt wie im Logo der App. */
+html.anzeige-modus, html.anzeige-modus body { background: #0E1A1F; }
+html.anzeige-modus body::before { display: none; }
+.anzeige { --a-blatt: #172930; --a-tinte: #E2EBED; --a-leise: #9AB0B7; --a-linie: #2B4048;
+  min-height: 100vh; min-height: 100dvh; box-sizing: border-box; padding: clamp(16px, 2.4vw, 32px); color: var(--a-tinte);
+  display: grid; grid-template-rows: auto 1fr auto; gap: clamp(14px, 2vw, 24px); font-size: clamp(17px, 1.6vw, 22px); line-height: 1.35; }
+.anzeige.nacht { filter: brightness(.55); }
+.anz-kopf { display: flex; align-items: center; gap: clamp(16px, 2.5vw, 36px); }
+.anz-blatt { display: grid; justify-items: center; min-width: 7.2em; background: #fff; color: #14323C; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 0 -3px #c9d5d9, 0 10px 0 -5px #9fb1b6; }
+.anz-wt { display: block; width: 100%; text-align: center; background: #D4312A; color: #fff; font: 600 .95em/1 var(--text); padding: 6px 10px 5px; }
+.anz-blatt b { font: 700 3.4em/0.95 var(--anzeige); padding-top: 4px; font-variant-numeric: tabular-nums; }
+.anz-mon { font: 600 .9em/1 var(--text); padding: 0 10px 8px; color: #4F6972; }
+.anz-uhr { font: 600 clamp(64px, 9vw, 132px)/0.9 var(--anzeige); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.anz-raster { display: grid; grid-template-columns: 1.25fr 1fr; grid-template-areas: "essen ampeln" "essen heute" "kinder kinder"; gap: clamp(12px, 1.6vw, 20px); align-content: start; }
+.anz-essen { grid-area: essen; }
+.anz-ampeln { grid-area: ampeln; }
+.anz-heute { grid-area: heute; }
+.anz-feld { background: var(--a-blatt); border-radius: 16px; padding: clamp(14px, 1.8vw, 24px); min-width: 0; }
+.anz-feld h2 { font: 600 .82em/1 var(--text); color: var(--a-leise); margin: 0 0 .7em; }
+.anz-gericht { font: 700 clamp(36px, 4.6vw, 68px)/1.02 var(--anzeige); margin: 0; overflow-wrap: anywhere; }
+.anz-meta { margin: .45em 0 0; font-size: 1.05em; }
+.anz-morgen { margin: .8em 0 0; color: var(--a-leise); }
+.anz-ampeln ul, .anz-termine, .anz-kinder ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .55em; }
+.anz-ampeln li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .7em; }
+.anz-ampeln .km-ampel { padding: 5px 8px; gap: 6px; }
+.anz-ampeln .km-l { width: 24px; height: 24px; }
+.anz-a-name { font-weight: 600; }
+.anz-a-text { color: var(--a-leise); text-align: right; }
+.anz-ampeln li.s-rot .anz-a-text { color: #FF8B84; font-weight: 600; }
+.anz-termine li { display: grid; grid-template-columns: 3.6em 1fr; gap: .6em; align-items: baseline; }
+.anz-zeit { font: 600 1.15em/1 var(--anzeige); font-variant-numeric: tabular-nums; color: var(--a-leise); }
+.anz-termine small, .anz-kinder small { display: block; color: var(--a-leise); font-size: .85em; }
+.anz-tonne .anz-zeit { color: #FFC531; }
+.anz-leer { margin: 0; color: var(--a-leise); }
+.anz-kinder { grid-area: kinder; }
+.anz-kinder li { display: grid; grid-template-columns: minmax(7em, auto) 1fr auto; gap: .8em; align-items: center; padding: .35em 0; border-top: 1px solid var(--a-linie); }
+.anz-kinder li:first-child { border-top: 0; }
+.anz-k-name { display: inline-flex; align-items: center; gap: .5em; font-weight: 700; }
+.anz-k-min { color: var(--a-leise); font-variant-numeric: tabular-nums; }
+.anz-fuss { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 20px; color: var(--a-leise); font-size: .85em; }
+.anz-aus { font: inherit; color: var(--a-leise); background: none; border: 1px solid var(--a-linie); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.anz-aus:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (orientation: portrait), (max-width: 760px) {
+  .anz-raster { grid-template-columns: 1fr; grid-template-areas: "essen" "ampeln" "heute" "kinder"; }
+}
+@media (prefers-reduced-motion: no-preference) { .anzeige { transition: filter 1s ease; } }
+.anz-raster.ohne-ampeln { grid-template-areas: "essen heute" "kinder kinder"; }
+@media (orientation: portrait), (max-width: 760px) { .anz-raster.ohne-ampeln { grid-template-areas: "essen" "heute" "kinder"; } }

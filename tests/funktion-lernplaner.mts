@@ -56,3 +56,17 @@ console.log('Bettag',lernMessages(bt,persons,Date.parse('2026-11-18T10:10:00+01:
   console.log('Prüfen:',lernMessages(lp2,persons,now).filter(x=>x.key.startsWith('lp-pruefen')).map(x=>`${x.to.join(',')} | ${x.msg.title} | ${x.msg.body}`).join('\n  '));
   console.log('nachts:',lernMessages(lp2,persons,Date.parse('2026-11-18T22:00:00+01:00')).filter(x=>x.key.startsWith('lp-pruefen')).length);
 }
+// Anpfiff mit eigenem Plan, Planungsfrage, Applaus.
+{
+  const day = '2026-11-19';
+  const at = (hm: string) => Date.parse(`${day}T${hm}:00+01:00`);
+  const base = rows.filter((r: any) => !['win', 'kick'].includes(r.coll)).map((r: any) => r.coll === 'task' && !r.data.done && r.data.kind === 'ha' ? { ...r, data: { ...r.data, due: '2026-11-20' } } : r);
+  const plan = { id: 'day:' + day, coll: 'day', data: { k: day, v: { kplan: { at: '17:15', hind: 'Ich bin müde', wenn: 'du müde bist', dann: 'Erst 5 Minuten Bewegung, dann Anpfiff' } } } };
+  const keys = (r: any[], hm: string) => lernMessages(lpFromRows(r), persons, at(hm)).filter((x) => /lp-(plan|anpfiff|applaus|clap)/.test(x.key)).map((x) => `${x.key} -> ${x.to.join(',')} | ${x.msg.title} | ${x.msg.body}${x.msg.url && x.msg.url.includes('applaus') ? ' | ' + x.msg.url : ''}`);
+  for (const hm of ['13:00', '13:30', '14:00', '15:30']) console.log('ohne Plan', hm, JSON.stringify(keys(base, hm)));
+  for (const hm of ['16:20', '17:15']) console.log('mit Plan', hm, JSON.stringify(keys([...base, plan], hm)));
+  const won = [...base, { id: 'win:' + day, coll: 'win', data: { k: day, v: true } },
+    { id: 'task:z1', coll: 'task', data: { id: 'z1', kind: 'lern', subject: 'Mathe', title: 'Terme üben', done: true, doneAt: day, actual: 24, planned: 30, fin: at('17:40') } },
+    { id: 'clap:c1', coll: 'clap', data: { id: 'c1', ref: 't-z1', what: 'Mathe: Terme üben', name: 'Papa', from: 'p1', at: at('17:50'), date: day } }];
+  console.log('Applaus 17:55', JSON.stringify(keys(won, '17:55'), null, 1));
+}

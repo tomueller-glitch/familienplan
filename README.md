@@ -111,6 +111,9 @@ Eine kleine Funktion bei Supabase schaut alle fünf Minuten nach, ob etwas anste
 | Kind meldet eine Aufgabe als erledigt | Eltern | „Kind 1: Spülmaschine ausräumen (+10 Min.)“. Mit der Regel „Minuten erst nach den Grundaufgaben“ erst, wenn die erledigt sind. |
 | Vorabend der Müllabfuhr, ab 21 Uhr | Eltern | „Restmüll steht noch nicht draußen“, wenn das zuständige Kind die Tonne noch nicht abgehakt hat. |
 | Spülmaschine fertig (von Hand auf Rot oder zur eingestellten Endzeit) | die Kinder der Aufgabe „Spülmaschine ausräumen“ | „Die Spülmaschine ist fertig“. Zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Entfällt, wenn sie schon jemand als ausgeräumt gemeldet hat. |
+| Stall heute fällig oder überfällig (Stall-Ampel an) | die Kinder der Stall-Aufgabe in dieser Woche | „Heute ist der Stall dran“ oder „Der Stall ist seit 2 Tagen dran“. Einmal am Tag zur ersten Erinnerungszeit der Kinder (Standard 16:30), nicht im Urlaub. Entfällt, wenn schon gemeldet. |
+| Kind kauft im Minuten-Shop | Eltern | „Gekauft im Minuten-Shop: Jonas: Abendessen aussuchen für 40 Min.“ |
+| Eltern lösen einen Kauf ein oder buchen ihn zurück | das Kind | „Eingelöst: Abendessen aussuchen“ oder „Minuten zurückgebucht“. |
 | Sonntag ab 18:30 Uhr | Eltern (im Rückblick abschaltbar) | „Wochenrückblick KW 47“. Öffnet den Rückblick mit Essen, Aufgaben, Lernen und Ausgaben. |
 | Mama oder Papa stellen einen Mülleimer in der Küche auf Rot | die Kinder der Aufgabe „Müll aus der Küche rausbringen“ | „Plastikmüll ist voll“. Zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Entfällt, wenn ihn schon jemand als rausgebracht gemeldet hat. |
 | Jemand schreibt etwas auf die Einkaufsliste | die anderen Erwachsenen (abschaltbar) | „Kind 1: Brezeln, Spülmittel“. Zwischen 21:30 und 7 Uhr wartet die Nachricht bis zum Morgen. |
@@ -382,6 +385,19 @@ lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der
 - Hefteinträge: Fotos oder ein PDF pro Prüfung, Claude schreibt sie ab (`ex.heft`). Sie sind danach die wichtigste Quelle für Lernschritte, Abfrage und Karteikarten.
 - Lernzeit: Lern-Aufgaben zählen nur mit der Uhr und ab zwei Dritteln der geplanten Zeit (`NEED_SHARE`). Kürzer oder „ohne Handy gelernt“ setzt `t.check`, die Eltern entscheiden mit „Zählt“ oder „Nochmal“ (Push `lp-pruefen`). Bis dahin wartet der Tagessieg.
 - Karteikarten: eigene Sammlung `card` in `lp_data`, Lernkartei mit fünf Fächern (Fach 1 täglich, dann nach 1, 2, 4 und 7 Tagen). Karten von Prüfungen, die länger als 60 Tage vorbei sind, räumt die App weg.
+
+- Tagessieg: schreibt `lpsieg-<Tag>-<Kind>` mit `winMin` Minuten (Standard 10) als bestätigten Eintrag in `ep_task_log`. Zählt nicht zum Tageslimit (`capFree` in `js/aufgaben.js`), im Wochenrückblick als „Tagessieg im Lernplaner“.
+- Anpfiff selbst wählen: Zeit in 15-Minuten-Schritten rund um den geplanten Beginn, dazu ein Hindernis und ein Wenn-dann-Plan (`S.days[Tag].kplan`). Pünktlich heißt dann bis 5 Minuten nach seiner Zeit, früher zählt ab Schulschluss auch. Die Funktion `push` fragt nach Schulschluss „Wann pfeifst du heute an?“ und erinnert zu seiner Zeit an den Plan.
+- Applaus: Bei Tagessieg und echten Lerneinheiten (Uhr, nicht nur bestätigt) bekommen die Eltern eine Nachricht mit Link `lernen.html?applaus=…`. Der Tipp speichert einen Applaus (Sammlung `clap`), das Kind sieht ihn oben und bekommt eine Nachricht. Abschaltbar (`applausOn`).
+- Spielerkarte unter Pokale: Tempo, Ausdauer, Wurfquote, Gedächtnis, Fokus, Teamgeist aus den letzten 14 Tagen (45 bis 99), Teamgeist aus bestätigten Aufgaben im Familienplan.
+- Restzeit-Scheibe bei der laufenden Aufgabe (60-Minuten-Zifferblatt) und ein „Erster Schritt“ vor dem Start (einfache Regeln nach Titel und Fach).
+- Fokus am iPhone: Anleitung unter Eltern, Einstellungen, Lernmodus. Mit „Anpfiff schaltet den Lernfokus ein“ öffnet der Anpfiff `shortcuts://run-shortcut?name=Lernfokus an`, nach dem letzten Tor gibt es einen Knopf für „Lernfokus aus“. Bis zu zwei Minuten in den Kurzbefehlen zählen nicht als Ablenkung.
+
+## Stall-Ampel, Minuten-Shop und Küchen-Display
+
+- Stall-Ampel: `ep_settings` unter `stall` (`on`, `tage`, `last`). Fällig ist `last + tage`, Gelb einen Tag vorher. Meldungen tragen die Kennung `st-…`, die Bestätigung setzt `last`. Aufgabe: `meerschwein-kaefig` oder eine Aufgabe mit Käfig oder Stall im Namen. Prüfung: `node --experimental-strip-types tests/funktion-stall-shop.mts` und `node tests/stall-shop.mjs`.
+- Minuten-Shop: `ep_settings` unter `shop` (`aus`, `items`). Ein Kauf ist ein Eintrag `shop-…` mit negativen Minuten und Status „offen“, er hält die Minuten im Konto fest. „Erledigt“ setzt „bestaetigt“, „Zurückbuchen“ „abgelehnt“.
+- Küchen-Display: `?anzeige=kueche` (oder im Familie-Fenster) merkt sich das Gerät in `localStorage` unter `essensplan.anzeige`, `?anzeige=aus` oder „Anzeige beenden“ beendet es. Das Gerät muss einmal mit dem Familienzugang angemeldet sein.
 
 ## Foto als Nachweis und Wochenrückblick
 

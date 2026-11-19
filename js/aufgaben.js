@@ -94,6 +94,10 @@ export function lockedBy(tasks, log, entry) {
 // Ein Bonus pro Kind und Woche, erkennbar an der festen Kennung. So entsteht er auch bei mehreren Geräten nur einmal.
 export const bonusId = (week, personId) => `bonus-${week}-${personId}`;
 export const isBonus = (e) => String((e && e.id) || '').startsWith('bonus-');
+// Tagessieg im Lernplaner: Minuten, die der Lernplaner selbst bucht (Kennung lpsieg-Tag-Kind).
+export const isSieg = (e) => String((e && e.id) || '').startsWith('lpsieg-');
+// Wochenbonus und Tagessieg zählen nicht zum Tageslimit.
+export const capFree = (e) => isBonus(e) || isSieg(e);
 
 // Stand einer Woche: Für jeden Tag "ok", "offen" (heute, noch nicht fertig), "verpasst", "frei" (keine Grundaufgaben
 // oder Urlaub) oder "kommt" (Zukunft). Geschafft ist die Woche, wenn an mindestens drei Tagen Grundaufgaben anstanden
@@ -128,13 +132,14 @@ export function account(log, personId, cap, nowMs = Date.now(), today = todayISO
     .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : stamp(a) - stamp(b)));
   for (const e of earnedRows) {
     const used = usedPerDay[e.day] || 0;
-    // Der Wochenbonus zählt nicht zum Tageslimit.
-    const m = isBonus(e) ? e.minutes : Math.max(0, Math.min(limit - used, e.minutes));
-    if (!isBonus(e)) usedPerDay[e.day] = used + m;
+    // Wochenbonus und Tagessieg zählen nicht zum Tageslimit.
+    const m = capFree(e) ? e.minutes : Math.max(0, Math.min(limit - used, e.minutes));
+    if (!capFree(e)) usedPerDay[e.day] = used + m;
     if (m) lots.push({ m, at: stamp(e), exp: stamp(e) + EXPIRY_HOURS * HOUR });
   }
   lots.sort((a, b) => a.exp - b.exp);
-  const redemptions = rows.filter((e) => e.minutes < 0 && e.status === 'bestaetigt').sort((a, b) => stamp(a) - stamp(b));
+  // Ein Kauf im Minuten-Shop hält die Minuten schon fest, solange die Eltern ihn noch nicht erledigt haben.
+  const redemptions = rows.filter((e) => e.minutes < 0 && (e.status === 'bestaetigt' || (e.status === 'offen' && isShop(e)))).sort((a, b) => stamp(a) - stamp(b));
   let redeemedToday = 0;
   for (const r of redemptions) {
     const t = stamp(r);
@@ -151,7 +156,7 @@ export function account(log, personId, cap, nowMs = Date.now(), today = todayISO
   const live = lots.filter((l) => l.m > 0 && l.at <= nowMs && l.exp > nowMs);
   const balance = live.reduce((a, l) => a + l.m, 0);
   const next = live[0] ? { minutes: live.filter((l) => l.exp === live[0].exp).reduce((a, l) => a + l.m, 0), at: live[0].exp } : null;
-  const todayRaw = rows.filter((e) => e.day === today && e.minutes > 0 && e.status === 'bestaetigt' && !isBonus(e)).reduce((a, e) => a + e.minutes, 0);
+  const todayRaw = rows.filter((e) => e.day === today && e.minutes > 0 && e.status === 'bestaetigt' && !capFree(e)).reduce((a, e) => a + e.minutes, 0);
   return {
     balance,
     pending: rows.filter((e) => e.status === 'offen' && e.minutes > 0).reduce((a, e) => a + e.minutes, 0),
@@ -166,7 +171,7 @@ export function account(log, personId, cap, nowMs = Date.now(), today = todayISO
 // Minuten, die ein neuer Eintrag heute noch bringen würde, unter Beachtung des Tageslimits.
 export function minutesLeftToday(log, personId, cap, day) {
   if (cap == null) return Infinity;
-  const sum = log.filter((e) => e.person_id === personId && e.day === day && e.minutes > 0 && e.status !== 'abgelehnt' && !isBonus(e))
+  const sum = log.filter((e) => e.person_id === personId && e.day === day && e.minutes > 0 && e.status !== 'abgelehnt' && !capFree(e))
     .reduce((a, e) => a + e.minutes, 0);
   return Math.max(0, cap - sum);
 }
@@ -247,4 +252,55 @@ export function smView(value, log, nowMs = Date.now()) {
   const st = smState(value, nowMs);
   const pending = smPending(log);
   return { ...st, name: 'Spülmaschine', pending, canReport: st.stufe === 'rot' && !pending };
+}
+
+/* ---------- Minuten-Shop ---------- */
+// Die Eltern legen fest, was es gibt (ep_settings "shop": { aus, items: [{ id, name, cost }] }).
+// Ein Kauf ist ein Eintrag mit negativen Minuten und der Kennung shop-…, Status "offen" bis die Eltern ihn
+// erledigen. „Zurückbuchen“ setzt ihn auf "abgelehnt", dann sind die Minuten wieder da.
+export const shopId = (uid) => `shop-${uid}`;
+export const isShop = (e) => /^shop-/.test(String((e && e.id) || ''));
+export const SHOP_START = [
+  { id: 'essen', name: 'Abendessen aussuchen', cost: 40 },
+  { id: 'spiel', name: 'Spieleabend: du suchst das Spiel aus', cost: 30 },
+  { id: 'musik', name: 'Musik im Auto bestimmen', cost: 15 },
+  { id: 'auf', name: '15 Minuten länger aufbleiben', cost: 45 },
+];
+export function shopState(value) {
+  const v = value && typeof value === 'object' ? value : null;
+  const raw = v && Array.isArray(v.items) ? v.items : SHOP_START;
+  const items = raw.map((x) => ({ id: String(x.id || ''), name: String(x.name || '').trim().slice(0, 80), cost: Math.max(1, Math.min(600, parseInt(x.cost, 10) || 0)) }))
+    .filter((x) => x.id && x.name);
+  return { on: !!v && v.aus !== true, items, set: !!v };
+}
+export const shopOpen = (log, personId) => (log || []).filter((e) => isShop(e) && e.status === 'offen' && (!personId || e.person_id === personId));
+
+/* ---------- Stall ---------- */
+// Ampel nach Rhythmus, gespeichert in ep_settings unter "stall": { on, tage, last, by }.
+// Grün: noch mindestens zwei Tage Zeit. Gelb: morgen fällig. Rot: heute fällig oder überfällig.
+// Ab Gelb können die Kinder „Sauber gemacht“ melden (Kennung st-…). Die Bestätigung setzt "last" auf den Tag der Meldung.
+// Solange die Ampel an ist, erscheint die wöchentliche Stall-Aufgabe nicht mehr in den normalen Listen.
+export const stId = (uid) => `st-${uid}`;
+export const isSt = (e) => /^st-/.test(String((e && e.id) || ''));
+export function stTask(tasks) {
+  const live = (tasks || []).filter((t) => t.active !== false);
+  return live.find((t) => t.id === 'meerschwein-kaefig')
+    || live.find((t) => /käfig|kaefig|stall/i.test(t.name || '') && !/futter|füttern|fuettern/i.test(t.name || '')) || null;
+}
+export function stState(value, day = todayISO()) {
+  const v = value && typeof value === 'object' ? value : {};
+  const tage = Math.max(1, Math.min(60, parseInt(v.tage, 10) || 7));
+  const last = /^\d{4}-\d{2}-\d{2}$/.test(String(v.last || '')) ? v.last : null;
+  const due = last ? addDays(last, tage) : day;
+  const left = diffDays(due, day);
+  const stufe = left <= 0 ? 'rot' : left === 1 ? 'gelb' : 'gruen';
+  return { on: v.on === true, tage, last, due, left, stufe, by: v.by || null };
+}
+export function stPending(log) {
+  return (log || []).filter((e) => isSt(e) && e.status === 'offen').pop() || null;
+}
+export function stView(value, log, day = todayISO()) {
+  const st = stState(value, day);
+  const pending = stPending(log);
+  return { ...st, pending, canReport: st.on && st.stufe !== 'gruen' && !pending };
 }

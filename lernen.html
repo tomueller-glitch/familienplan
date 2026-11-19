@@ -204,6 +204,40 @@ details.grp[open] summary{margin-bottom:6px}
 .quiz{margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
 .quiz .qh{font-size:13px;color:var(--tinte2);font-weight:600}
 .quiz .qq{font:700 20px/1.25 var(--anz);margin:4px 0 8px}
+.first{font-size:15px;color:var(--tinte2);margin:0 0 12px;text-align:center}
+.disc{display:flex;flex-direction:column;align-items:center;gap:4px;margin:0 auto 6px}
+.disc svg{width:132px;height:132px}
+.disc .d-bg{fill:var(--leise);stroke:var(--linie);stroke-width:1}
+.disc .d-rest{fill:var(--er);opacity:.85}
+.disc .d-tick line{stroke:var(--tinte2);stroke-width:1.4}
+.disc .d-mitte{fill:var(--tinte)}
+.disc .d-lab{font-size:14px;color:var(--tinte2)}
+@media (prefers-reduced-motion:no-preference){.disc .d-rest{transition:d .6s}}
+.pk-wrap h2{margin-bottom:12px}
+.pk{position:relative;width:min(260px,100%);margin:0 auto;padding:18px 18px 16px;border-radius:18px 18px 46px 46px;color:#2A1F05;
+  background:linear-gradient(160deg,#F7E3A1 0%,#E2B850 45%,#C8962B 100%);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45),inset 0 0 0 5px rgba(0,0,0,.08)}
+.pk-silber{background:linear-gradient(160deg,#F4F6F7 0%,#C9D1D5 50%,#9EA9AE 100%);color:#1E2A2F}
+.pk-bronze{background:linear-gradient(160deg,#F1C9A5 0%,#C98A57 50%,#9C6236 100%);color:#2B1606}
+.pk-kopf{display:flex;justify-content:space-between;align-items:flex-start}
+.pk-ges b{display:block;font-size:46px;line-height:1;font-weight:800;letter-spacing:-1px}
+.pk-ges span{display:block;font-size:13px;font-weight:600;margin-top:2px;max-width:110px}
+.pk-trikot svg{width:92px;height:auto;filter:drop-shadow(0 2px 2px rgba(0,0,0,.18))}
+.pk-name{font-size:22px;font-weight:800;text-align:center;margin:8px 0 10px;padding-bottom:8px;border-bottom:1px solid currentColor;border-bottom-color:rgba(0,0,0,.18)}
+.pk-werte{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px 18px}
+.pk-w{display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
+.pk-w b{font-size:20px;font-weight:800;min-width:26px}
+.pk-w span{font-size:14px;font-weight:600;opacity:.85}
+.pk-w i{font-style:normal;font-size:11px;font-weight:700;margin-left:auto}
+.pk-w i.up{color:#1B5E35}.pk-w i.dn{color:#8E1F19}
+.pk-text{margin-top:14px}
+.pk-leg{margin-top:8px;font-size:14px}.pk-leg ul{margin:6px 0 0;padding-left:18px}
+.fhilfe{margin:8px 0 12px;font-size:14px}.fhilfe summary{cursor:pointer;color:var(--ac);font-weight:600}.fhilfe ol{padding-left:20px}.fhilfe li{margin:6px 0}
+.applaus{display:flex;align-items:center;gap:12px;border:2px solid var(--ac);background:var(--acbg)}
+.ap-hand{font-size:34px;line-height:1}
+.ap-row{margin:0 0 12px}
+.kplan{margin:12px 0 4px;padding:12px;border-radius:12px;background:var(--wand);font-size:15px;line-height:1.45}
+.kplan .q{font-weight:650;margin-bottom:8px}
+.kplan .row.wrap{flex-wrap:wrap;gap:8px}
 .chk-box{border:2px solid var(--wa);background:var(--wabg)}
 .fb.early .q{font-size:22px}
 .kk-row{display:flex;align-items:center;gap:12px;margin-top:12px;border-top:1px dashed var(--linie);padding-top:10px}
@@ -431,10 +465,10 @@ function aiError(e){
 }
 
 /* ===== Datenmodell ===== */
-const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',conc:'conc',help:'help',books:'book',results:'result',lessons:'lesson',cards:'card'};
+const ARR={tasks:'task',exams:'exam',appts:'appt',oneoffs:'oneoff',goals:'goal',conc:'conc',help:'help',books:'book',results:'result',lessons:'lesson',cards:'card',claps:'clap'};
 const MAP={wins:'win',kick:'kick',checks:'check',prizes:'prize',days:'day',meets:'meet'};
 const ONE=['settings','pace','schoolEnd','running','meta','model','report','timetable','lm','brk'];
-function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],cards:[],conc:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
+function blank(){return{settings:{},pace:{},schoolEnd:{},timetable:null,running:null,meta:{},model:{},report:null,tasks:[],exams:[],appts:[],oneoffs:[],goals:[],help:[],books:[],results:[],lessons:[],cards:[],claps:[],conc:[],lm:null,brk:null,wins:{},kick:{},checks:{},prizes:{},days:{},meets:{}}}
 function migrate(x){
   const b=blank();
   Object.keys(b).forEach(k=>{if(x[k]===undefined||x[k]===null&&k!=='running'&&k!=='report')x[k]=b[k]});
@@ -571,6 +605,7 @@ function fixGenericSteps(){
   let ch=false;
   const old=iso(addDays(today(),-60)),keep=new Set(S.exams.filter(e=>e.date>=old).map(e=>e.id));
   if(S.cards.some(c=>!keep.has(c.examId))){S.cards=S.cards.filter(c=>keep.has(c.examId));ch=true}
+  const clapCut=Date.now()-30*86400000;if(S.claps.some(c=>c.at<clapCut)){S.claps=S.claps.filter(c=>c.at>=clapCut);ch=true}
   S.exams.forEach(ex=>{
     if(ex.ai==='ok'||ex.lp||(ex.focus&&ex.focus.length))return;
     const ts=S.tasks.filter(t=>t.examId===ex.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -814,10 +849,208 @@ function checkDayWin(){
   if(pendingChecks().length)return;
   // Was nicht mehr in den Tag passt, verhindert den Sieg nicht: das ist ein Planungsproblem, kein Fehler des Kindes.
   if(!day.items.length&&doneToday>0&&checksDone(T)){
-    if(goalsOn(T)>concOn(T)){S.wins[T]=true;ui.msg=`Abpfiff! Sieg ${goalsOn(T)}:${concOn(T)} gegen den Schweinehund.`;ui.msgType='okn'}
+    if(goalsOn(T)>concOn(T)){S.wins[T]=true;const wm=winMinutes();ui.msg=`Abpfiff! Sieg ${goalsOn(T)}:${concOn(T)} gegen den Schweinehund.${wm?` Dafür gibt es ${wm} Minuten Bildschirmzeit im Familienplan.`:''}`;ui.msgType='okn';payWin(T)}
     else{ui.msg=`Alles geschafft, aber ${goalsOn(T)}:${concOn(T)}: Der Schweinehund hat zu oft getroffen. Diesmal kein Tagessieg.`;ui.msgType='warn'}
   }
 }
+/* ===== Tagessieg bringt Bildschirmzeit ===== */
+// Ein Eintrag im Minutenkonto des Familienplans (ep_task_log), Kennung lpsieg-<Tag>-<Kind>, damit er nie doppelt
+// kommt. Zählt wie der Wochenbonus nicht zum Tageslimit. Klappt das Schreiben nicht, versucht es die App später nochmal.
+const winMinutes=()=>REMOTE&&S.settings.kidId?Math.max(0,+(S.settings.winMin??10)||0):0;
+async function payWin(d){
+  const k=S.settings.kidId,n=winMinutes();
+  if(!n||!S.wins[d]||(S.days[d]&&S.days[d].paid))return;
+  const now=new Date().toISOString();
+  try{
+    const{error}=await sb.from('ep_task_log').upsert([{id:`lpsieg-${d}-${k}`,person_id:k,task_id:null,day:d,label:'Tagessieg im Lernplaner',minutes:n,status:'bestaetigt',created_at:now,decided_by:null,decided_at:now}]);
+    if(error)return;
+    S.days[d]=Object.assign({},S.days[d]||{},{paid:n});save();
+  }catch(e){}
+}
+function payWins(){if(!winMinutes())return;const T=iso(today());Object.keys(S.wins).filter(d=>S.wins[d]&&d<=T&&diff(d,T)<=7&&!(S.days[d]&&S.days[d].paid)).forEach(d=>payWin(d))}
+
+/* ===== Fokus am iPhone über Kurzbefehle ===== */
+// Web-Apps können keinen Fokus schalten. Ein Kurzbefehl kann es, und den startet der Lernplaner per Adresse.
+const fokusOn=()=>!!S.settings.fokusKb&&kidDevice()&&REMOTE;
+function runShortcut(name){
+  if(!name)return;lmExt('kb');
+  const a=document.createElement('a');a.href='shortcuts://run-shortcut?name='+encodeURIComponent(name);document.body.appendChild(a);a.click();a.remove();
+}
+function fokusOffBox(){
+  const T=iso(today());if(!fokusOn()||!S.kick[T]||toWin()!==0||(S.days[T]||{}).fokusAus)return'';
+  return `<div class="row ap-row"><button class="btn sm" data-act="fkoff">Lernfokus am Handy ausschalten</button></div>`;
+}
+const FOKUS_HILFE=`<details class="fhilfe"><summary>Anleitung: Lernfokus am iPhone einrichten</summary>
+<ol>
+<li><b>Fokus anlegen.</b> Auf seinem iPhone: Einstellungen, Fokus, Plus, Eigener Fokus. Name „Lernen“. Bei „Mitteilungen erlauben“ nur euch beide als Personen eintragen und bei Apps den Lernplaner, falls er in der Liste steht.</li>
+<li><b>Bildschirm ruhig machen.</b> Im Fokus „Lernen“ unter „Bildschirme anpassen“ eine Home-Bildschirm-Seite wählen, auf der nur der Lernplaner liegt.</li>
+<li><b>Kurzbefehl zum Einschalten.</b> App Kurzbefehle, Plus, Aktion „Fokus festlegen“ hinzufügen, auf „Lernen“ und „Ein“ stellen. Den Kurzbefehl genau „Lernfokus an“ nennen. Unter den Details „Beim Ausführen anzeigen“ ausschalten.</li>
+<li><b>Kurzbefehl zum Ausschalten.</b> Genauso, nur mit „Aus“, Name „Lernfokus aus“.</li>
+<li><b>Hier einschalten.</b> Den Schalter unten aktivieren und auf seinem Handy einmal „Testen“ tippen. iOS fragt beim ersten Mal, ob der Lernplaner Kurzbefehle öffnen darf: erlauben.</li>
+</ol>
+<p>Ab dann schaltet der Anpfiff den Fokus ein. Danach kommt er oben links über „Lernplaner“ zurück. Das zählt nicht als Ablenkung, solange er nach spätestens zwei Minuten wieder da ist. Nach dem letzten Tor zeigt der Lernplaner einen Knopf zum Ausschalten.</p>
+<p>Ohne Kurzbefehl geht es auch: Im Fokus „Lernen“ einen Zeitplan einstellen, etwa Montag bis Freitag ab Schulschluss bis 18:30 Uhr. Kurzbefehl-Automationen beim Öffnen einer Web-App bietet iOS nicht an.</p></details>`;
+
+/* ===== Spielerkarte ===== */
+// Sechs Werte wie auf einer Sammelkarte, jeweils aus den letzten 14 Tagen. Der Pfeil vergleicht mit den 14 Tagen bis vor einer Woche.
+// Jeder Wert liegt zwischen 45 und 99, damit die Karte nie beschämt.
+const KARTE=[
+  ['TEM','Tempo','pünktliche Anpfiffe','Pfeif pünktlich an, dann wird dein Tempo besser.'],
+  ['AUS','Ausdauer','Lernminuten mit der Uhr','Lass bei Lern-Aufgaben die Uhr laufen, das baut Ausdauer auf.'],
+  ['WRF','Wurfquote','Tagessiege','Jeder Tagessieg verbessert deine Wurfquote.'],
+  ['GED','Gedächtnis','Karteikarten ab Fach 3','Wiederhol deine Karteikarten, dann wandern sie in höhere Fächer.'],
+  ['FOK','Fokus','Kempa-Tricks im Lernmodus','Zieh im Lernmodus eine Aufgabe ohne Ablenkung durch, das ist ein Kempa-Trick.'],
+  ['TEA','Teamgeist','Aufgaben im Familienplan','Hilf zu Hause mit. Jede bestätigte Aufgabe im Familienplan zählt hier.'],
+];
+const POSITION={TEM:'Linksaußen',AUS:'Kreisläufer',WRF:'Rückraum links',GED:'Torwart',FOK:'Spielmacher',TEA:'Kapitän'};
+const rate=x=>Math.round(45+54*Math.max(0,Math.min(1,x)));
+function karteWerte(endIso){
+  const T=iso(today()),end=parse(endIso),from=iso(addDays(end,-13));
+  const inW=d=>d&&d>=from&&d<=endIso;
+  let nd=0;for(let i=0;i<14;i++){const d=addDays(end,-i),di=iso(d);if(isWeekday(d)&&!isFree(d)&&!verlegt(di)&&(di<T||S.wins[di]||S.kick[di]))nd++}
+  const goals=w=>S.goals.filter(g=>g.why===w&&inW(g.date)).reduce((a,g)=>a+(g.n||1),0);
+  const done=S.tasks.filter(t=>t.done&&inW(t.doneAt));
+  const lernMin=done.filter(t=>t.kind==='lern').reduce((a,t)=>a+(+t.actual||0),0);
+  const wins=Object.keys(S.wins).filter(d=>S.wins[d]&&inW(d)&&isWeekday(parse(d))).length;
+  const cs=S.cards||[];const team=ui.team&&ui.team.rows?ui.team.rows.filter(r=>inW(r.day)).length:null;
+  return {
+    TEM:rate(nd?goals('Pünktlicher Anpfiff')/nd:0),
+    AUS:rate(lernMin/Math.max(100,nd*25)),
+    WRF:rate(nd?wins/nd:0),
+    GED:rate(cs.length?cs.filter(c=>(c.box||1)>=3).length/cs.length:0),
+    FOK:rate(done.length?goals('Fokus-Tor')/done.length:0),
+    TEA:rate(team==null?0:team/10),
+  };
+}
+async function loadTeam(){
+  if(!REMOTE||!S.settings.kidId||(ui.team&&Date.now()-ui.team.at<300000)||ui.teamLoading)return;
+  ui.teamLoading=true;
+  try{const from=iso(addDays(today(),-20));
+    const{data,error}=await sb.from('ep_task_log').select('id,day').eq('person_id',S.settings.kidId).eq('status','bestaetigt').gt('minutes',0).gte('day',from);
+    if(!error){ui.team={at:Date.now(),rows:(data||[]).filter(r=>!/^(lpsieg|bonus)-/.test(r.id))};if(ui.tab==='pokale')render()}}
+  catch(e){}finally{ui.teamLoading=false}
+}
+function spielerkarte(){
+  loadTeam();
+  const T=iso(today()),now=karteWerte(T),vor=karteWerte(iso(addDays(today(),-7)));
+  const keys=KARTE.map(k=>k[0]);
+  const ges=Math.round(keys.reduce((a,k)=>a+now[k],0)/keys.length);
+  const top=keys.slice().sort((a,b)=>now[b]-now[a])[0],low=keys.slice().sort((a,b)=>now[a]-now[b])[0];
+  const stufe=ges>=80?'gold':ges>=65?'silber':'bronze';
+  const kid=persons.find(p=>p.id===S.settings.kidId),name=kid?kid.name:'Du';
+  const th=THEMES[S.settings.theme]||THEMES[0];
+  const delta=k=>{if(k==='GED')return'';const d=now[k]-vor[k];return d>0?`<i class="up" aria-label="plus ${d}">▲${d}</i>`:d<0?`<i class="dn" aria-label="minus ${-d}">▼${-d}</i>`:''};
+  const zeile=k=>{const x=KARTE.find(y=>y[0]===k);return `<div class="pk-w" title="${esc(x[1]+': '+x[2])}"><b>${now[k]}</b><span>${x[0]}</span>${delta(k)}</div>`};
+  const tip=KARTE.find(y=>y[0]===low);
+  return `<div class="card pk-wrap"><h2>Deine Spielerkarte</h2>
+  <div class="pk pk-${stufe}" role="img" aria-label="${esc(`Spielerkarte ${name}: Gesamtwert ${ges}, Position ${POSITION[top]}. `+KARTE.map(k=>`${k[1]} ${now[k[0]]}`).join(', '))}">
+    <div class="pk-kopf"><div class="pk-ges"><b>${ges}</b><span>${esc(POSITION[top])}</span></div><div class="pk-trikot" aria-hidden="true">${kitSvg(th,90)}</div></div>
+    <div class="pk-name">${esc(name)}</div>
+    <div class="pk-werte" aria-hidden="true">${['TEM','AUS','WRF'].map(zeile).join('')}${['GED','FOK','TEA'].map(zeile).join('')}</div>
+  </div>
+  <div class="sub pk-text">Werte aus den letzten 14 Tagen, die Pfeile zeigen, was sich seit letzter Woche getan hat. Stärkster Wert: <b>${esc(KARTE.find(y=>y[0]===top)[1])}</b>. Am meisten drin ist bei <b>${esc(tip[1])}</b>: ${esc(tip[3])}</div>
+  <details class="pk-leg"><summary>Was bedeuten die Werte?</summary><ul>${KARTE.map(k=>`<li><b>${k[0]} ${k[1]}:</b> ${k[2]}</li>`).join('')}</ul></details></div>`;
+}
+
+/* ===== Restzeit-Scheibe und erster Schritt ===== */
+// Wie eine Zeitscheibe: Die farbige Fläche zeigt die Minuten, die für diese Aufgabe noch geplant sind (Ziffernblatt 60 Min.).
+function discPath(rest){
+  const m=Math.max(0,Math.min(60,rest));if(m<=0)return'';if(m>=60)return'M50 6 A44 44 0 1 1 49.99 6 Z';
+  const a=m/60*2*Math.PI,x=50+44*Math.sin(-a),y=50-44*Math.cos(-a);
+  return `M50 50 L50 6 A44 44 0 ${m>30?1:0} 0 ${x.toFixed(2)} ${y.toFixed(2)} Z`;
+}
+function restDisc(t){
+  const P=planToday(t)||planMin(t)||20,el=(Date.now()-S.running.at)/60000,rest=Math.round(P-el);
+  const ticks=Array.from({length:12},(_,i)=>{const a=i/12*2*Math.PI;return `<line x1="${(50+46*Math.sin(a)).toFixed(1)}" y1="${(50-46*Math.cos(a)).toFixed(1)}" x2="${(50+49*Math.sin(a)).toFixed(1)}" y2="${(50-49*Math.cos(a)).toFixed(1)}"/>`}).join('');
+  return `<div class="disc" data-disc="${S.running.at}" data-p="${P}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" class="d-bg"/><path class="d-rest" d="${discPath(rest)}"/><g class="d-tick">${ticks}</g><circle cx="50" cy="50" r="4" class="d-mitte"/></svg>
+  <div class="d-lab" aria-live="off">${rest>0?`noch ${rest} Min.`:'Zeit um, mach in Ruhe fertig'}</div></div>`;
+}
+function tickDiscs(){document.querySelectorAll('[data-disc]').forEach(el=>{const P=+el.dataset.p,rest=Math.round(P-(Date.now()-+el.dataset.disc)/60000);
+  const pth=el.querySelector('.d-rest');if(pth)pth.setAttribute('d',discPath(rest));const l=el.querySelector('.d-lab');if(l)l.textContent=rest>0?`noch ${rest} Min.`:'Zeit um, mach in Ruhe fertig'})}
+// Der erste Mini-Schritt soll so klein sein, dass man nicht Nein sagen kann.
+function firstStep(t){
+  const ti=String(t.title||''),sub=String(t.subject||'');
+  if(t.kind==='lern'&&t.examId&&cardsOf(t.examId).length)return'Karteikarten öffnen und die erste Karte umdrehen.';
+  if(/vokab|wörter|vocab/i.test(ti+' '+sub)&&/vokab|wörter|vocab/i.test(ti))return'Vokabelheft aufschlagen und die ersten fünf Wörter abdecken.';
+  const pg=/(?:S\.|Seite)\s*(\d+)/i.exec(ti),nr=/(?:Nr\.|Aufgabe|A)\s*(\d+[a-z]?)/i.exec(ti);
+  if(pg)return `Buch auf Seite ${pg[1]} aufschlagen${nr?` und Nummer ${nr[1]} einmal durchlesen`:''}.`;
+  if(/\bAB\b|arbeitsblatt|blatt/i.test(ti))return'Arbeitsblatt hinlegen und die erste Aufgabe durchlesen.';
+  if(/aufsatz|text schreiben|erörterung|bericht|zusammenfassung/i.test(ti))return'Heft aufschlagen und nur die Überschrift schreiben.';
+  if(t.kind==='lern')return'Hefteintrag zum Thema aufschlagen und die Überschrift laut vorlesen.';
+  return'Heft und Buch auf den Tisch, Datum ins Heft schreiben.';
+}
+
+/* ===== Applaus von den Fans ===== */
+// Bei Tagessieg und nach einer echten Lerneinheit bekommen Mama und Papa eine Nachricht. Ein Tipp darauf öffnet den
+// Lernplaner mit ?applaus=…, das schreibt einen Applaus (Sammlung clap). Das Kind sieht ihn oben und bekommt eine Nachricht.
+function clapWhat(ref){
+  const m=/^sieg-(\d{4}-\d{2}-\d{2})$/.exec(ref||'');if(m)return m[1]===iso(today())?'deinen Tagessieg':`deinen Tagessieg am ${fmt(m[1])}`;
+  const t=/^t-(.+)$/.exec(ref||'');if(t){const x=S.tasks.find(y=>y.id===t[1]);return x?`${x.subject}: ${x.title}`:'deine Lerneinheit'}
+  return 'dein Spiel heute';
+}
+function sendClap(ref){
+  if(kidDevice()||!devMe)return false;
+  if(S.claps.some(c=>c.ref===ref&&c.from===devMe)){ui.msg='Du hast dafür schon geklatscht.';ui.msgType='okn';return false}
+  const me=persons.find(p=>p.id===devMe);
+  S.claps.push({id:uid(),ref,what:clapWhat(ref),from:devMe,name:me?me.name:'',at:Date.now(),date:iso(today())});
+  const kid=persons.find(p=>p.id===S.settings.kidId);
+  ui.msg=`Applaus gesendet. ${kid?kid.name:'Er'} sieht ihn gleich.`;ui.msgType='okn';save();return true;
+}
+function applausFromUrl(){
+  const q=new URLSearchParams(location.search),ref=q.get('applaus');if(!ref)return;
+  q.delete('applaus');history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash);
+  if(sendClap(ref))render();else render();
+}
+const CLAP_KEY='lp-applaus-gesehen';
+function newClaps(){let seen=0;try{seen=+localStorage.getItem(CLAP_KEY)||0}catch(e){}return S.claps.filter(c=>c.at>seen&&Date.now()-c.at<3*86400000)}
+function clapBanner(){
+  if(!kidDevice())return'';const cs=newClaps();if(!cs.length)return'';
+  const by={};cs.forEach(c=>{(by[c.name||'Jemand']=by[c.name||'Jemand']||[]).push(c.what)});
+  return `<div class="card applaus" role="status"><div class="ap-hand" aria-hidden="true">👏</div><div class="grow">${Object.entries(by).map(([n,w])=>`<b>${esc(n)}</b> klatscht für ${esc([...new Set(w)].join(' und '))}.`).join('<br>')}</div><button class="btn sm" data-act="clapok">Danke!</button></div>`;
+}
+// Auf dem Gerät von Mama oder Papa: Applaus für heute direkt in der App.
+function clapButton(){
+  if(kidDevice()||!devMe||!REMOTE)return'';const T=iso(today());
+  const ref=S.wins[T]?`sieg-${T}`:`tag-${T}`;
+  if(!goalsOn(T))return'';
+  const done=S.claps.some(c=>c.ref===ref&&c.from===devMe);
+  return `<div class="row ap-row"><button class="btn sm${done?'':' primary'}" data-act="clap" data-v="${ref}"${done?' disabled':''}>👏 ${done?'Geklatscht':S.wins[T]?'Applaus für den Tagessieg':'Applaus für heute'}</button></div>`;
+}
+
+/* ===== Anpfiff selbst wählen ===== */
+// Wenn-dann-Plan (Mental Contrasting mit Implementation Intentions, WOOP): Er wählt seine Anpfiff-Zeit, nennt,
+// was ihn abhalten könnte, und was er dann tut. Pünktlich heißt dann pünktlich zu seiner eigenen Zeit.
+// Hindernis: [Knopf, „Wenn …“-Satzteil, mögliche Pläne]
+const HINDER={
+  'Handy und Videos':['dich Handy und Videos locken',['Handy weg, nur der Lernplaner bleibt offen','Erst Anpfiff, Videos gibt es nach dem Abpfiff']],
+  'Ich bin müde':['du müde bist',['Erst 5 Minuten Bewegung, dann Anpfiff','Ein Glas Wasser und Fenster auf, dann los']],
+  'Freunde oder draußen':['Freunde rufen oder du raus willst',['Ich sage: Ich komme nach dem Abpfiff','Erst die kürzeste Aufgabe, raus geht es in der Pause']],
+  'Keine Lust':['du keine Lust hast',['Ich fange mit der leichtesten Aufgabe an','Nur 5 Minuten anfangen, dann sehe ich weiter']],
+  'Was anderes':['dich etwas anderes abhält',['Ich fange trotzdem pünktlich an']],
+};
+const kickPlanOn=()=>S.settings.kickPlan!==false;
+const kickPlan=d=>(S.days[d]||{}).kplan||null;
+function kickBase(){const w=windowsFor(today(),false).wins;return w.length?w[0][0]:null}
+// Maßstab für „pünktlich“: seine eigene Zeit, sonst der geplante Beginn.
+function kickTarget(){const p=kickPlan(iso(today()));return p?toMin(p.at):kickBase()}
+function kickChoices(total){
+  const base=kickBase();if(base==null)return[];
+  const n=nowMin(),span=Math.max(0,+(S.settings.kickSpan??45)),latest=toMin(S.settings.latest);
+  const from=Math.max(Math.ceil((n+5)/15)*15,base-30),out=[];
+  for(let m=from;m<=base+span&&out.length<5;m+=15){if(m+Math.max(15,total)<=latest)out.push(m)}
+  return out;
+}
+function kickPlanBox(total){
+  const T=iso(today()),p=kickPlan(T);
+  if(p&&!ui.kpEdit)return `<div class="kplan"><b>Dein Plan:</b> Anpfiff um ${esc(p.at)} Uhr.${p.wenn&&p.dann?` Wenn ${esc(p.wenn)}, dann: ${esc(p.dann)}.`:''}${nowMin()<toMin(p.at)?' <button class="lnk" data-act="kpedit">Ändern</button>':''}</div>`;
+  if(!kickPlanOn())return'';
+  const ch=kickChoices(total);if(!ch.length)return'';
+  const k=ui.kp||{};
+  if(!k.at)return `<div class="kplan"><div class="q">Wann pfeifst du heute an?</div><div class="row wrap">${ch.map(m=>`<button class="btn sm" data-act="kpat" data-v="${hm(m)}">${hm(m)}</button>`).join('')}</div>${p?'<button class="lnk" data-act="kpcancel">Doch nicht ändern</button>':''}</div>`;
+  if(!k.hind)return `<div class="kplan"><div class="q">Anpfiff um ${esc(k.at)}. Was könnte dich heute abhalten?</div><div class="row wrap">${Object.keys(HINDER).map(h=>`<button class="btn sm" data-act="kphind" data-v="${esc(h)}">${esc(h)}</button>`).join('')}</div></div>`;
+  return `<div class="kplan"><div class="q">Und wenn das passiert, was machst du dann?</div><div class="row wrap">${HINDER[k.hind][1].map(x=>`<button class="btn sm" data-act="kpdann" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`;
+}
+
 /* ===== Lernmodus ===== */
 // Eine Web-App kann das Verlassen nicht verhindern (dafür: Geführter Zugriff am iPhone). Sie merkt es aber,
 // rechnet die Zeit nicht als Lernzeit, belohnt Aufgaben ohne App-Wechsel und meldet längeres Wegbleiben.
@@ -834,12 +1067,15 @@ function lmStop(msg){if(!S.lm)return;S.lm=Object.assign({},S.lm,{on:false,awayAt
 // Zeit, in der jemand weg war, ohne die Zeit einer Pause.
 function goneMs(from,to){const b=S.brk;let g=to-from;if(b&&b.at&&b.until){const o=Math.min(to,b.until)-Math.max(from,b.at);if(o>0)g-=o}return Math.max(0,g)}
 function lmHide(){if(!lmHere()||S.lm.awayAt)return;S.lm.awayAt=Date.now();writeCache();beam()}
-function lmExt(){if(lmHere()){S.lm.ext=Date.now();writeCache();beam()}}
+function lmExt(kind){if(lmHere()){S.lm.ext=Date.now();S.lm.extKind=kind||null;writeCache();beam()}}
 function lmShow(){
   if(!S.lm||!S.lm.awayAt)return;
   const now=Date.now(),g=goneMs(S.lm.awayAt,now),ext=S.lm.ext;S.lm.awayAt=null;
   // Ludus Latinus oder ein Übungsblatt geöffnet: das ist Arbeit, keine Ablenkung.
-  if(ext){S.lm.ext=null;save();render();return}
+  // Der Kurzbefehl für den Fokus braucht nur Sekunden. Wer länger als zwei Minuten bleibt, war abgelenkt.
+  const kb=S.lm.extKind==='kb';S.lm.extKind=null;
+  if(ext&&!(kb&&g>=120000)){S.lm.ext=null;save();render();return}
+  S.lm.ext=null;
   if(lmHere()&&g>=20000){S.lm.leaves++;S.lm.away+=g;S.lm.clean=false;ui.back=Math.max(1,Math.round(g/60000));
     if(g>=60000)concede(`Abgelenkt: ${Math.round(g/60000)} Min. aus der App`);
     if(S.running)S.running=Object.assign({},S.running,{at:S.running.at+g})}
@@ -957,7 +1193,7 @@ function finish(id){
   if(S.running&&S.running.id===id){actual=Math.max(1,Math.round((Date.now()-S.running.at)/60000));S.running=null}
   else actual=Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]));
   if(!t.fixed){const r=actual/t.est;learn(paceKey(t),r);learn(t.subject,r);learn('_all',r)}
-  Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel,again:false});
+  Object.assign(t,{done:true,doneAt:iso(today()),actual,planned:P,feel:ui.fbFeel,again:false,fin:kidDevice()?Date.now():null});
   award(PTS.task,'Tor!',t.id);
   if(lmActive()){if(S.lm.clean)award(1,'Fokus-Tor',t.id);S.lm.clean=true}
   if(ui.fbFeel==='schwer'){
@@ -1536,13 +1772,13 @@ function nextLine(rest){
 }
 function focusActions(t){
   const run=S.running&&S.running.id===t.id;
-  return run?`<div class="act"><div class="run"><span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</div><div class="sub c">läuft</div><button class="btn primary xl" data-act="check" data-id="${t.id}">Fertig</button></div>`
-    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">${t.kind==='lern'&&kidDevice()?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
+  return run?`<div class="act">${restDisc(t)}<div class="run"><span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</div><div class="sub c">läuft</div><button class="btn primary xl" data-act="check" data-id="${t.id}">Fertig</button></div>`
+    :`<div class="act"><div class="first"><b>Erster Schritt:</b> ${esc(firstStep(t))}</div><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">${t.kind==='lern'&&kidDevice()?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
 }
 function renderFocus(plan){
   const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmHere();
   let h=whoCard();if(h)return h;
-  h=tafel()+(ui.report?spielbericht():'')+introCard();
+  h=tafel()+clapBanner()+clapButton()+fokusOffBox()+(ui.report?spielbericht():'')+introCard();
   if(lmActive()&&!lm){const L=S.lm,kn=(persons.find(p=>p.id===S.settings.kidId)||{}).name||'Euer Sohn';h+=`<div class="lmline">${esc(kn)} ist gerade im Lernmodus (seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}). Auf diesem Gerät zählt nichts davon.</div>`}
   if(lm){const L=S.lm;h+=`<div class="lmline">Lernmodus seit ${hm(Math.round((L.since-today().getTime())/60000))} Uhr${L.leaves?`, ${L.leaves}-mal raus`:''}</div>`}
   if(lm&&ui.back)h+=`<div class="note"><b>Willkommen zurück!</b> Du warst ${ui.back} Min. weg. ${ui.back>=1&&S.conc.some(c=>c.date===T&&Date.now()-c.at<120000)?'Der Schweinehund hat getroffen, und den':'Den'} Kempa-Trick gibt es für diese Aufgabe nicht mehr. Die Zeit zählt nicht als Lernzeit. <button class="lnk" data-act="backok">Weiter</button></div>`;
@@ -1581,13 +1817,14 @@ function renderFocus(plan){
   }
   // 2. Vor dem Anpfiff: was heute ansteht, ein Knopf
   if(hasWork&&!S.kick[T]){
-    const w=windowsFor(today(),false).wins,dl=w.length?w[0][0]+15:null,n=nowMin(),min=q.reduce((a,x)=>a+x.P,0);
+    const w=windowsFor(today(),false).wins,tg=kickTarget(),own=!!kickPlan(T),dl=tg!=null?tg+(own?5:15):null,n=nowMin(),min=q.reduce((a,x)=>a+x.P,0);
     const last=day.items.length?day.items[day.items.length-1]:null,ends=last?last.segs[last.segs.length-1][1]:null;
     const rv=pendingReviews().length;
     h+=`<div class="card kickk"><div class="k-lab">Heimspiel gegen den Schweinehund</div><div class="k-big">${q.length===1?'Eine Aufgabe':q.length+' Aufgaben'}, etwa ${min} Min.</div>
       <ol class="k-list">${rv?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kurze Spielanalyse</span><span class="n-min">1 Min.</span></li>`:''}${q.slice(0,5).map(x=>`<li><span class="dot" style="background:${col(x.t.subject)}"></span><span class="grow">${esc(x.t.title)}</span><span class="n-min">${x.P} Min.</span></li>`).join('')}${q.length>5?`<li class="n-more">und ${q.length-5} weitere</li>`:''}${S.settings.checksOn?`<li><span class="dot" style="background:var(--tinte2)"></span><span class="grow">Kabinen-Check</span></li>`:''}</ol>
       <div class="chances"><div><span class="ball" aria-hidden="true"></span><span>${q.length+(S.settings.checksOn?1:0)} Tore für dich sind drin${dl&&n<=dl&&n>=dl-105?`, dazu ein Tempogegenstoß, wenn du bis ${hm(dl)} anfängst`:''}.</span></div>
-      <div><span class="ball opp" aria-hidden="true"></span><span>Der Schweinehund trifft, wenn du dich ablenken lässt${w.length&&n<=w[0][0]+30?` oder erst nach ${hm(w[0][0]+30)} anfängst`:''}.</span></div></div>
+      <div><span class="ball opp" aria-hidden="true"></span><span>Der Schweinehund trifft, wenn du dich ablenken lässt${tg!=null&&n<=tg+30?` oder erst nach ${hm(tg+30)} anfängst`:''}.</span></div></div>
+      ${kickPlanBox(min)}
       <div class="act"><button class="btn primary xl" data-act="kick">Anpfiff</button><div class="sub c">${ends?`Wenn du jetzt anfängst, bist du gegen ${hm(ends)} fertig.`:''}</div>${jokerUsed()?'':'<button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button>'}</div></div>`;
     return h+foot();
   }
@@ -1660,13 +1897,13 @@ function renderPokale(){
   <div class="rgrid"><div><h3><span class="ball" aria-hidden="true"></span>Du triffst</h3><ul>
     <li><b>Tor:</b> jede erledigte Aufgabe, der Kabinen-Check, die Spielanalyse nach einer Prüfung, die Besprechung am Wochenende</li>
 <li><b>Lernen zählt mit der Uhr:</b> Bei Lern-Aufgaben gibt es das Tor ab zwei Dritteln der geplanten Zeit. Bist du früher fertig oder hast ohne Handy gelernt, schauen Mama oder Papa kurz drüber.</li>
-    <li><b>Tempogegenstoß:</b> pünktlich angefangen</li>
+    <li><b>Tempogegenstoß:</b> pünktlich angefangen, zu deiner selbst gewählten Zeit oder früher</li>
     <li><b>Kempa-Trick:</b> im Lernmodus eine ganze Aufgabe ohne Ablenkung</li></ul></div>
   <div><h3><span class="ball opp" aria-hidden="true"></span>Der Schweinehund trifft</h3><ul>
     <li>wenn du im Lernmodus länger als eine Minute aus der App gehst. Auszeit, Halbzeit und alles, was du über die Knöpfe im Lernplaner öffnest (Ludus Latinus, Übungsblätter, Lern-Apps), zählen nicht.</li>
     <li>wenn du mehr als eine halbe Stunde zu spät anfängst</li></ul></div></div>
   <ol class="rules">
-  <li><b>Tagessieg.</b> Alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.</li>
+  <li><b>Tagessieg.</b> Alles geschafft, Kabinen-Check gemacht und mehr Tore als der Schweinehund.${REMOTE&&winMinutes()?` Dafür gibt es ${winMinutes()} Minuten Bildschirmzeit im Familienplan.`:''}</li>
   <li><b>Wochenspiel.</b> Mit ${wg} Tagessiegen von Montag bis Freitag gewinnst du die Woche. Dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.</li>
   <li><b>Aufstieg.</b> Deine Tore zählen für die Liga, Gegentore nicht. In jeder neuen Liga gibt es ein neues Trikot.</li>
   <li><b>Spiel verlegen.</b> Einmal pro Woche darfst du sagen: Heute geht gar nichts. Dann gibt es keine Wertung, nur was morgen fällig ist, bleibt. Das Wochenspiel zählt einen Spieltag weniger.</li>
@@ -1675,7 +1912,7 @@ function renderPokale(){
   const T=iso(today()),w=weekInfo();
   const prize=w.prize?(w.redeemed?'Siegprämie eingelöst. Neues Spiel ab Montag.':`Gewonnen! Freitag und Samstag je ${bt} Min. länger aufbleiben.`)
     :w.possible?`Noch ${w.goal-w.won} Tagessieg${w.goal-w.won>1?'e':''}, dann darfst du Freitag und Samstag ${bt} Min. länger aufbleiben.`:'Diese Woche reicht es nicht mehr für die Prämie. Am Montag geht es neu los.';
-  let h=msgBox()+`<div class="card"><h2>Wochenspiel</h2><div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d)),won=S.wins[d];
+  let h=msgBox()+spielerkarte()+`<div class="card"><h2>Wochenspiel</h2><div class="wk">${w.days.map((d,i)=>{const fr=isFree(parse(d)),won=S.wins[d];
     return `<div class="${won?'won':''} ${d===T?'now':''}"><span>${['Mo','Di','Mi','Do','Fr'][i]}</span><b>${won?'Sieg':fr?'frei':verlegt(d)?'verlegt':d<T?'–':'&nbsp;'}</b></div>`}).join('')}</div><div class="sub" style="margin-top:10px">${prize}</div></div>`+rules;
   h+=`<div class="card"><div class="sub">Deine Liga</div><div class="big">${esc(L.name)}</div>
   <div class="bar"><div style="width:${pct}%"></div></div>
@@ -1854,6 +2091,10 @@ function renderEltern(plan){
   ${tog('Lernmodus beim Anpfiff','focusMode',st.focusMode!==false,'Nur noch die aktuelle Aufgabe, Beenden mit PIN, Fokus-Tore')}
   ${sr('Meldung an euch nach',num('awayAlert',st.awayAlert||5,2,30),'Min. außerhalb')}
   ${tog('Abfrage durch Claude (Test)','quizOn',st.quizOn!==false,'Fragen zu jeder Prüfungs-Lerneinheit')}
+  ${REMOTE?`${FOKUS_HILFE}
+  ${tog('Anpfiff schaltet den Lernfokus ein','fokusKb',!!st.fokusKb,'über die Kurzbefehle auf seinem iPhone, siehe Anleitung')}
+  <label class="srow col"><span>Name der Kurzbefehle<small>Zum Einschalten und zum Ausschalten</small></span><span class="row"><input name="fokusAn" value="${esc(st.fokusAn||'Lernfokus an')}" maxlength="60"><input name="fokusAus" value="${esc(st.fokusAus||'Lernfokus aus')}" maxlength="60"></span></label>
+  <div class="row"><button type="button" class="btn sm" data-act="fktest">Testen</button><span class="sub">auf seinem Handy tippen</span></div>`:''}
   <h3 class="sh">Lernfrei</h3>
   ${tog('Sonntag','sundayFree',st.sundayFree)}
   ${tog('Ferien und Feiertage','holidaysFree',st.holidaysFree!==false)}
@@ -1866,6 +2107,11 @@ function renderEltern(plan){
   <h3 class="sh">Wochenspiel</h3>
   ${sr('Tagessiege für die Prämie',num('winGoal',st.winGoal,1,5),'von 5')}
   ${sr('Länger aufbleiben',num('bedtimeMin',st.bedtimeMin,5,120),'Min.')}
+  ${REMOTE?sr('Tagessieg bringt Bildschirmzeit',num('winMin',st.winMin??10,0,60),'Min. im Familienplan, 0 = aus'):''}
+  ${REMOTE?tog('Applaus-Nachrichten an euch','applausOn',st.applausOn!==false,'bei Tagessieg und nach einer echten Lerneinheit, ein Tipp darauf klatscht'):''}
+  <h3 class="sh">Anpfiff</h3>
+  ${tog('Er wählt seine Anpfiff-Zeit selbst','kickPlan',st.kickPlan!==false,'mit Wenn-dann-Plan, pünktlich heißt dann pünktlich zu seiner Zeit')}
+  ${sr('Spätester Anpfiff nach Plan',num('kickSpan',st.kickSpan??45,0,120),'Min. nach dem geplanten Beginn')}
   <h3 class="sh">Zugang</h3>
   ${REMOTE&&kids.length?`<label class="srow col"><span>Lernplaner gehört zu</span><select name="kidId"><option value="">bitte wählen</option>${kids.map(k=>`<option value="${esc(k.id)}" ${st.kidId===k.id?'selected':''}>${esc(k.name)}</option>`).join('')}</select></label>`:''}
   ${sr('Neue PIN',`<input name="pin" inputmode="numeric" autocomplete="off" placeholder="••••">`,'')}
@@ -1923,7 +2169,21 @@ document.addEventListener('click',e=>{
     case'full':ui.full=!ui.full;ui.day=0;ui.fb=null;break;
     case'focus':ui.focus=id;ui.fb=null;ui.reorder=false;window.scrollTo(0,0);break;
     case'reorder':ui.reorder=!ui.reorder;break;
-    case'kick':{const T=iso(today()),w=windowsFor(today(),false).wins,n=nowMin();S.kick[T]=hm(n);lmStart();if(w.length&&n>=w[0][0]-90&&n<=w[0][0]+15)award(PTS.kick,'Pünktlicher Anpfiff');else if(w.length&&n>w[0][0]+30)concede(`Zu spät angepfiffen (geplant ${hm(w[0][0])})`);save();break}
+    case'kick':{const T=iso(today()),tg=kickTarget(),own=!!kickPlan(T),n=nowMin();S.kick[T]=hm(n);lmStart();ui.kp=null;ui.kpEdit=false;
+      if(fokusOn())setTimeout(()=>runShortcut(S.settings.fokusAn||'Lernfokus an'),300);
+      // Mit eigenem Plan zählt „pünktlich“ bis 5 Minuten nach seiner Zeit, sonst wie bisher bis 15 Minuten nach dem Beginn.
+      // Früher anfangen zählt auch, sobald die Schule aus ist.
+      if(tg!=null&&n>=Math.min(tg-90,dayStart(today())-60)&&n<=tg+(own?5:15))award(PTS.kick,'Pünktlicher Anpfiff');else if(tg!=null&&n>tg+30)concede(`Zu spät angepfiffen (${own?'dein Plan':'geplant'} ${hm(tg)})`);save();break}
+    case'kpat':ui.kp={at:b.dataset.v};break;
+    case'clap':sendClap(b.dataset.v);break;
+    case'fkoff':{const T=iso(today());S.days[T]=Object.assign({},S.days[T]||{},{fokusAus:true});save();runShortcut(S.settings.fokusAus||'Lernfokus aus');break}
+    case'fktest':runShortcut(S.settings.fokusAn||'Lernfokus an');break;
+    case'clapok':try{localStorage.setItem(CLAP_KEY,String(Math.max(...S.claps.map(c=>c.at),0)))}catch(e){}break;
+    case'kphind':ui.kp=Object.assign({},ui.kp,{hind:b.dataset.v});break;
+    case'kpdann':{const T=iso(today()),k=Object.assign({},ui.kp,{wenn:(HINDER[(ui.kp||{}).hind]||[''])[0],dann:b.dataset.v,set:Date.now()});S.days[T]=Object.assign({},S.days[T]||{},{kplan:k});ui.kp=null;ui.kpEdit=false;
+      ui.msg=`Abgemacht: Anpfiff um ${k.at} Uhr. Um ${k.at} kommt eine Erinnerung.`;ui.msgType='okn';save();break}
+    case'kpedit':ui.kpEdit=true;ui.kp=null;break;
+    case'kpcancel':ui.kpEdit=false;ui.kp=null;break;
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':{const ct=S.tasks.find(x=>x.id===id);
       // Läuft die Uhr bei einer Lern-Aufgabe noch keine zwei Drittel der Zeit: erst ermutigen weiterzumachen.
@@ -2070,6 +2330,9 @@ document.addEventListener('submit',e=>{
       st.buffer=+v.buffer||0;st.blockMax=Math.min(45,Math.max(10,+v.blockMax||20));st.pause=+v.pause||0;st.longAfter=Math.max(20,+v.longAfter||40);st.longPause=Math.max(5,+v.longPause||15);st.breakIdeas=String(v.breakIdeas||'').slice(0,1000);st.grade=Math.min(13,Math.max(5,+v.grade||7));st.focusMode=!!v.focusMode;st.sites=String(v.sites||'').slice(0,2000);st.awayAlert=Math.min(30,Math.max(2,+v.awayAlert||5));st.quizOn=!!v.quizOn;st.sundayFree=!!v.sundayFree;st.holidaysFree=!!v.holidaysFree;
       st.ludusOn=!!v.ludusOn;st.ludusMin=Math.max(5,+v.ludusMin||15);st.ludusUrl=(v.ludusUrl||'').trim();
       st.checksOn=!!v.checksOn;st.winGoal=Math.min(5,Math.max(1,+v.winGoal||4));st.bedtimeMin=Math.max(5,+v.bedtimeMin||30);
+      if(v.winMin!==undefined)st.winMin=Math.min(60,Math.max(0,+v.winMin||0));
+      if(REMOTE){st.fokusKb=!!v.fokusKb;st.fokusAn=String(v.fokusAn||'').trim().slice(0,60)||'Lernfokus an';st.fokusAus=String(v.fokusAus||'').trim().slice(0,60)||'Lernfokus aus'}
+      st.kickPlan=!!v.kickPlan;if(REMOTE)st.applausOn=!!v.applausOn;st.kickSpan=Math.min(120,Math.max(0,+v.kickSpan||0));
       if(v.pin&&v.pin.trim())st.pin=v.pin.trim();
       if(v.kidId!==undefined)st.kidId=v.kidId;
       if(REMOTE)st.pushOn=!!v.pushOn;
@@ -2092,7 +2355,7 @@ document.addEventListener('change',e=>{
   if(el.matches&&el.matches('select[data-due]')){const f=el.closest('form'),d=f&&f.querySelector('input[name=due]');if(d)d.value=nextLesson(el.value)}
 });
 
-setInterval(()=>{document.querySelectorAll('[data-elapsed]').forEach(el=>el.textContent=Math.round((Date.now()-+el.dataset.elapsed)/60000))},15000);
+setInterval(()=>{document.querySelectorAll('[data-elapsed]').forEach(el=>el.textContent=Math.round((Date.now()-+el.dataset.elapsed)/60000));tickDiscs()},15000);
 
 /* ===== Start ===== */
 async function init(){
@@ -2115,6 +2378,7 @@ async function init(){
   }
   render();push();
   setTimeout(showNews,700);
+  if(authOk){payWins();setTimeout(applausFromUrl,400)}
   const refresh=async()=>{if(ui.fb||ui.edit||ui.quiz||document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
     try{const a=await pull(false),b=await loadFam();if(a||b)render();else syncDot()}catch(e){ui.sync='err';syncDot()}};
   setInterval(refresh,45000);
@@ -2125,6 +2389,13 @@ async function init(){
 // sein als alle bisherigen. eltern:1 zeigt einen Punkt nur auf den Geräten der Eltern.
 const NEWS_KEY='lp-neu-gesehen';
 const NEUES=[
+  {id:'2026-11-19a',datum:'19. November',titel:'Dein Anpfiff, Applaus und Spielerkarte',punkte:[
+    {t:'Tagessieg bringt Bildschirmzeit: Für jeden Tagessieg gibt es Minuten auf deinem Konto im Familienplan.'},
+    {t:'Du wählst deine Anpfiff-Zeit selbst und überlegst vorher, was dich abhalten könnte und was du dann machst. Pünktlich heißt dann pünktlich zu deiner Zeit. Früher anfangen zählt auch.'},
+    {t:'Applaus: Bei einem Tagessieg oder nach einer Lerneinheit bekommen Mama und Papa eine Nachricht und können für dich klatschen. Das siehst du oben auf der Heute-Seite.'},
+    {t:'Spielerkarte unter Pokale: sechs Werte wie Tempo, Ausdauer und Fokus aus den letzten 14 Tagen. Die Pfeile zeigen, was sich seit letzter Woche getan hat.'},
+    {t:'Bei der laufenden Aufgabe zeigt eine rote Scheibe, wie viel Zeit noch geplant ist. Vor dem Start steht ein erster kleiner Schritt.'},
+    {t:'Neue Einstellungen: Minuten pro Tagessieg (Standard 10), Applaus-Nachrichten, selbst gewählter Anpfiff und spätester Anpfiff nach Plan. Unter Lernmodus gibt es eine Anleitung für den Fokus am iPhone und einen Schalter, mit dem der Anpfiff den Fokus über einen Kurzbefehl einschaltet.',eltern:1}]},
   {id:'2026-11-18d',datum:'18. November, mittags',titel:'Lernen zählt mit der Uhr',punkte:[
     {t:'Bei Lern-Aufgaben gibt es das Tor ab zwei Dritteln der geplanten Zeit, gemessen mit „Start“. Zeit in anderen Apps zählt nicht mit.'},
     {t:'Bist du früher fertig, zeigt die App, wie viele Minuten noch fehlen, und schlägt etwas vor, zum Beispiel Karteikarten. Mit „Ich bin wirklich fertig“ schauen Mama oder Papa kurz drüber. Es gibt kein Gegentor, nur das Tor kommt erst mit ihrer Bestätigung.'},

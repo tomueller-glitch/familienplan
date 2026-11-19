@@ -22,8 +22,19 @@ if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
 }
-const FORM_SHEETS = ['foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
+const FORM_SHEETS = ['shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
 const EPOCH = '1970-01-01T00:00:00Z';
+// Küchen-Display: Mit ?anzeige=kueche merkt sich das Gerät, dass es als Anzeige an der Wand hängt (?anzeige=aus beendet).
+const DISPLAY_KEY = 'essensplan.anzeige';
+let display = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('anzeige');
+    if (q === 'kueche') localStorage.setItem(DISPLAY_KEY, 'kueche');
+    else if (q === 'aus') localStorage.removeItem(DISPLAY_KEY);
+    if (q) history.replaceState(null, '', location.pathname + location.hash);
+    return localStorage.getItem(DISPLAY_KEY);
+  } catch (e) { return null; }
+})();
 
 const state = {
   phase: 'laden',            // laden, anmelden, einrichten, wer, app, fehler
@@ -87,8 +98,8 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
-const ADULT_FORMS = new Set(['erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
+const ADULT_ACTIONS = new Set(['anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_FORMS = new Set(['stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
 // Brotbox: bewerten dürfen die Kinder. Gibt es keine Erwachsenen, alle.
@@ -296,7 +307,7 @@ async function enter() {
     await store.savePersons(state.data.persons);
   }
   state.week = defaultWeek();
-  state.phase = personById(state.me) ? 'app' : 'wer';
+  state.phase = display ? 'anzeige' : personById(state.me) ? 'app' : 'wer';
   if (HASH_TABS.includes(location.hash.slice(1))) state.tab = location.hash.slice(1);
   readStartParams();
   carryOver();
@@ -465,6 +476,7 @@ async function commit(apply, persist) {
 /* ---------- Zeichnen ---------- */
 
 function refresh() {
+  state.loadedAt = Date.now();
   grantBonus();
   useImported((KI.settingOf(state.data.settings, 'abfuhr') || {}).liste);
   stats = L.computeStats(state.data.dishes, state.data.plan, state.data.ratings, L.todayISO(), state.data.hearts);
@@ -527,6 +539,8 @@ function render() {
   const viewKey = `${state.phase}|${state.tab}|${state.week}`;
   const scrollY = window.scrollY;
   app.innerHTML = view();
+  document.documentElement.classList.toggle('anzeige-modus', state.phase === 'anzeige');
+  if (state.phase === 'anzeige') keepAwake(true);
   scheduleDinnerSync();
   scheduleContextSync();
   if (viewKey === lastView) window.scrollTo(0, scrollY); else window.scrollTo(0, 0);
@@ -545,9 +559,89 @@ function view() {
     case 'anmelden': return viewLogin();
     case 'einrichten': return viewSetup();
     case 'wer': return viewWho();
+    case 'anzeige': return viewDisplay();
     default: return viewApp();
   }
 }
+
+/* ---------- Küchen-Display ---------- */
+// Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
+// Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
+// und hält den Bildschirm wach. Nachts (22 bis 6 Uhr) wird es dunkler.
+function viewDisplay() {
+  const now = new Date();
+  const today = L.todayISO();
+  const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const night = now.getHours() >= 22 || now.getHours() < 6;
+  const away = holidayOf(today);
+
+  // Abendessen
+  const p = planOf(today);
+  const dish = p && !p.skipped ? dishById(p.dish_id) : null;
+  const info = dinnerOf(today);
+  const names = (list) => list.map((x) => x.person.name).join(' und ');
+  const dinnerMeta = [
+    dish ? `${info.time} Uhr` : '',
+    info.away.length ? `ohne ${names(info.away)}` : info.eaters ? (info.eaters === state.data.persons.length ? 'alle da' : `${info.eaters} am Tisch`) : '',
+    ...info.later.map((x) => `${x.person.name} kommt ${String(Math.floor(x.home / 60)).padStart(2, '0')}:${String(x.home % 60).padStart(2, '0')}`),
+  ].filter(Boolean);
+  const pm = planOf(L.addDays(today, 1));
+  const tomorrow = pm && !pm.skipped ? dishById(pm.dish_id) : null;
+  const dinner = away && away.weg !== false
+    ? `<p class="anz-gericht">${esc(away.name || 'Urlaub')}</p><p class="anz-meta">Bis ${esc(L.fmtLong(away.bis))}</p>`
+    : `<p class="anz-gericht">${dish ? esc(dish.name) : p && p.skipped ? 'Heute kein Abendessen geplant' : 'Noch nichts geplant'}</p>
+      ${dinnerMeta.length && dish ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : ''}
+      ${tomorrow ? `<p class="anz-morgen">Morgen: ${esc(tomorrow.name)}</p>` : ''}`;
+
+  // Ampeln
+  const lamps = [];
+  if (A.kmTask(state.data.tasks)) for (const x of A.kmView(kmValue(), state.data.taskLog)) lamps.push({ name: x.name, stufe: x.stufe, text: x.pending ? 'gemeldet' : KM_WORT[x.stufe] });
+  if (A.smTask(state.data.tasks)) { const v = smNow(); lamps.push({ name: 'Spülmaschine', stufe: v.stufe, text: v.pending ? 'gemeldet' : v.stufe === 'gelb' && v.bis ? `läuft bis ${clockOf(v.bis)}` : SM_WORT[v.stufe] }); }
+  if (stOn()) { const v = stNow(); lamps.push({ name: 'Stall', stufe: v.stufe, text: v.pending ? 'gemeldet' : v.stufe === 'gruen' ? `wieder am ${L.WD_SHORT[L.wdIndex(v.due)]}` : v.left < 0 ? `${stLate(v)} dran` : ST_WORT[v.stufe] }); }
+  const ampeln = lamps.length ? `<section class="anz-feld anz-ampeln"><h2>Ampeln</h2><ul>${lamps.map((x) => `<li class="s-${x.stufe}"><span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'rot' ? 'Rot' : x.stufe === 'gelb' ? 'Gelb' : 'Grün'}">${kmLamps(x.stufe)}</span><span class="anz-a-name">${esc(x.name)}</span><span class="anz-a-text">${esc(x.text)}</span></li>`).join('')}</ul></section>` : '';
+
+  // Termine und Tonne
+  const evs = T.eventsOn(state.data.events, today).slice().sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+  const who = (e) => (e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', ');
+  const bin = A.trashTomorrow(today);
+  const termine = `<section class="anz-feld anz-heute"><h2>Heute</h2>
+    ${evs.length || bin ? `<ul class="anz-termine">${evs.map((e) => `<li><span class="anz-zeit">${esc(String(e.start_time || '').slice(0, 5))}</span><span>${esc(e.title)}${who(e) ? `<small>${esc(who(e))}</small>` : ''}</span></li>`).join('')}
+      ${bin ? `<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>` : ''}</ul>` : '<p class="anz-leer">Keine Termine.</p>'}</section>`;
+
+  // Kinder
+  const kids = kidsList();
+  const kinder = kids.length && !(away && away.weg !== false) ? `<section class="anz-feld anz-kinder"><h2>Aufgaben</h2><ul>${kids.map((k) => {
+    const fixed = A.tasksFor(state.data.tasks, state.data.taskLog, k.id, today).fixed.filter((f) => !stHides(f.task));
+    const must = A.mustToday(fixed, today);
+    const open = must.filter((f) => !f.done);
+    const acc = A.account(state.data.taskLog, k.id, capOf(k), nowMs(), today);
+    return `<li><span class="anz-k-name">${avatar(k, true)}${esc(k.name)}</span>
+      <span class="anz-k-text">${!must.length ? 'Heute keine festen Aufgaben' : open.length ? `Noch offen: ${esc(open.map((f) => f.label).join(', '))}` : 'Alles erledigt'}</span>
+      <span class="anz-k-min">${acc.balance} Min.</span></li>`;
+  }).join('')}</ul></section>` : '';
+
+  // Einkauf
+  const open = state.data.shopping.filter((i) => i.week_start === L.mondayOf(today) && !i.checked && i.category !== 'vorhanden').length;
+
+  return `<div class="anzeige${night ? ' nacht' : ''}">
+    <header class="anz-kopf"><div class="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
+      <span class="anz-uhr">${hm(now)}</span></header>
+    <div class="anz-raster${lamps.length ? '' : ' ohne-ampeln'}">
+      <section class="anz-feld anz-essen"><h2>Heute Abend</h2>${dinner}</section>
+      ${ampeln}
+      ${termine}
+      ${kinder}
+    </div>
+    <footer class="anz-fuss"><span>${open ? `${open} ${open === 1 ? 'Sache' : 'Sachen'} auf der Einkaufsliste` : 'Einkaufsliste leer'}</span>
+      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}</span>
+      <button class="anz-aus" data-action="anzeige-aus">Anzeige beenden</button></footer>
+  </div>`;
+}
+setInterval(() => { if (state.phase === 'anzeige' && document.visibilityState === 'visible' && !state.sheet) render(); }, 30000);
+setInterval(() => {
+  if (state.phase !== 'anzeige' || store.offline || document.visibilityState !== 'visible') return;
+  store.loadAll().then((d) => { state.data = normalize(d); state.loadedAt = Date.now(); refresh(); }).catch(() => {});
+}, 10 * 60000);
 
 function viewError() {
   return `<div class="tor"><h1>Keine Verbindung</h1>
@@ -1901,9 +1995,9 @@ function sheetReview() {
     ${e.cooked ? `<ul class="rb-liste">${meals}</ul>
     <p class="meta">${[e.best ? `Am besten kam ${esc(e.best.dish)} an (${stars1(e.best.avg)} Sterne).` : '', e.worst && e.worst.avg < 3.5 ? `Am wenigsten ${esc(e.worst.dish)} (${stars1(e.worst.avg)}).` : '', e.hearts.length ? `Herz der Woche: ${e.hearts.map((h) => `${esc(h.person)} für ${esc(h.dish)}`).join(', ')}.` : ''].filter(Boolean).join(' ') || 'Noch keine Sterne vergeben.'}</p>` : '<p class="meta">In dieser Woche war kein Abendessen geplant.</p>'}`;
   const kinder = v.kinder.length ? `<h3 class="abteilung">Aufgaben der Kinder</h3><ul class="rb-kinder">${v.kinder.map((k) => `<li><strong>${esc(k.name)}</strong>
-    <span>${k.basicsDue ? `Grundaufgaben an ${k.basicsOk} von ${k.basicsDue} Tagen geschafft` : 'Keine Grundaufgaben'}${k.bonus ? `, Wochenbonus ${k.bonus} Min.` : ''}.</span>
+    <span>${k.basicsDue ? `Grundaufgaben an ${k.basicsOk} von ${k.basicsDue} Tagen geschafft` : 'Keine Grundaufgaben'}${k.bonus ? `, Wochenbonus ${k.bonus} Min.` : ''}${k.siege ? `, ${k.siege === 1 ? 'ein Tagessieg' : `${k.siege} Tagessiege`} im Lernplaner (${k.siegMin} Min.)` : ''}.</span>
     <span>${k.extras ? `${k.extras} ${k.extras === 1 ? 'Extra-Aufgabe' : 'Extra-Aufgaben'}, ${k.earned} Min. verdient` : 'Keine Extra-Aufgaben'}${k.redeemed ? `, ${k.redeemed} Min. eingelöst` : ''}.</span>
-    ${k.muell || k.spuel || k.rejected ? `<span>${[k.muell ? `Müll ${k.muell}-mal rausgebracht` : '', k.spuel ? `Spülmaschine ${k.spuel}-mal ausgeräumt` : '', k.rejected ? `${k.rejected}-mal nicht anerkannt` : ''].filter(Boolean).join(', ')}.</span>` : ''}</li>`).join('')}</ul>` : '';
+    ${k.muell || k.spuel || k.stall || k.rejected ? `<span>${[k.muell ? `Müll ${k.muell}-mal rausgebracht` : '', k.spuel ? `Spülmaschine ${k.spuel}-mal ausgeräumt` : '', k.stall ? `Stall ${k.stall}-mal sauber gemacht` : '', k.rejected ? `${k.rejected}-mal nicht anerkannt` : ''].filter(Boolean).join(', ')}.</span>` : ''}</li>`).join('')}</ul>` : '';
   const l = r.lern;
   const lernen = l === undefined && state.lp ? '<h3 class="abteilung">Lernen</h3><p class="meta">Wird geladen …</p>'
     : l ? `<h3 class="abteilung">Lernen</h3><ul class="rb-kinder"><li>
@@ -2279,7 +2373,7 @@ function fmtClock(ms) {
 function taskBadge() {
   if (!state.data.tasks.length) return 0;
   if (canPlan() && state.data.persons.some(isAdult)) return state.data.taskLog.filter((e) => e.status === 'offen').length;
-  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done).length + (kmFor(personById(state.me)) ? kmRedOpen() : 0) + (smFor(personById(state.me)) ? smRedOpen() : 0);
+  if (isKidMe()) return A.tasksFor(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).fixed.filter((f) => !f.done && !stHides(f.task)).length + (kmFor(personById(state.me)) ? kmRedOpen() : 0) + (smFor(personById(state.me)) ? smRedOpen() : 0) + (stFor(personById(state.me)) ? stRedOpen() : 0);
   return 0;
 }
 
@@ -2377,6 +2471,7 @@ function accountCard(person, compact) {
     <p class="meta">${esc(lines.join(', '))}</p>
     ${acc.todayCapped ? '<p class="meta">Das Tageslimit ist erreicht. Weitere Aufgaben zählen erst morgen wieder.</p>' : ''}
     ${compact && canPlan() ? `<div class="knopfreihe"><button class="knopf zweit" data-action="einloesen" data-id="${esc(person.id)}"${acc.balance ? '' : ' disabled'}>Bildschirmzeit einlösen</button></div>` : ''}
+    ${!compact && isKidMe() && state.me === person.id ? shopTeaser(person) : ''}
   </div>`;
 }
 
@@ -2425,11 +2520,12 @@ function fixedSections(fixed, today) {
 
 function kidTasks(person) {
   const today = L.todayISO();
-  const { fixed, extras: allExtras } = A.tasksFor(state.data.tasks, state.data.taskLog, person.id, today);
-  // Den Küchenmüll gibt es nur über die Ampel, nicht als Extra-Aufgabe.
+  const { fixed: allFixed, extras: allExtras } = A.tasksFor(state.data.tasks, state.data.taskLog, person.id, today);
+  // Den Küchenmüll, die Spülmaschine und (mit Ampel) den Stall gibt es nur über die Ampel.
   const km = A.kmTask(state.data.tasks);
   const sm = A.smTask(state.data.tasks);
-  const extras = allExtras.filter((x) => (!km || x.task.id !== km.id) && (!sm || x.task.id !== sm.id));
+  const extras = allExtras.filter((x) => (!km || x.task.id !== km.id) && (!sm || x.task.id !== sm.id) && !stHides(x.task));
+  const fixed = allFixed.filter((f) => !stHides(f.task));
   const week = L.mondayOf(today);
   const doneWeek = state.data.taskLog.filter((e) => e.person_id === person.id && e.day >= week && e.day <= today && e.minutes !== 0)
     .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
@@ -2437,23 +2533,25 @@ function kidTasks(person) {
   const away = h && h.weg !== false ? h : null;
   return `${accountCard(person)}${bonusCard(person)}
     <h2 class="abschnitt">${L.fmtLong(today)}</h2>
-    ${away ? '' : kmCard(person)}
+    ${away ? '' : kmCard(person) + stCard(person)}
     ${away ? `<div class="kasten-text"><strong>${esc(away.name || 'Urlaub')}</strong>Bis ${esc(L.fmtLong(away.bis))} pausieren die festen Aufgaben. Wer trotzdem hilft, kann eine Extra-Aufgabe abhaken.</div>` : fixedSections(fixed, today)}
     ${fixed.some((f) => f.bin) || state.data.tasks.some((t) => t.schedule === 'tonne' && (t.who || []).includes(person.id)) ? reminderBox() : ''}
     ${extras.length ? `<h2 class="abschnitt abstand">Extra-Aufgaben</h2><p class="meta unter">Wenn es nötig ist und du Zeit hast.</p>${basicsHint(person, today, away)}<ul class="posten">${extras.map(extraRow).join('')}</ul>` : ''}
     ${wishCard(person)}
-    ${doneWeek.length ? `<h2 class="abschnitt abstand">Diese Woche</h2><ul class="verlauf">${doneWeek.map((e) => `<li><span>${L.WD_SHORT[L.wdIndex(e.day)]}</span><span class="v-text">${esc(e.label)}</span>${e.minutes < 0 ? `<span class="chip">${e.minutes} Min. eingelöst</span>` : statusChip(e)}</li>`).join('')}</ul>` : ''}`;
+    ${doneWeek.length ? `<h2 class="abschnitt abstand">Diese Woche</h2><ul class="verlauf">${doneWeek.map((e) => `<li><span>${L.WD_SHORT[L.wdIndex(e.day)]}</span><span class="v-text">${esc(e.label)}</span>${e.minutes < 0 ? shopChip(e) : statusChip(e)}</li>`).join('')}</ul>` : ''}`;
 }
 
 function parentTasks() {
   const pending = state.data.taskLog.filter((e) => e.status === 'offen').sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
   const today = L.todayISO();
   const kids = kidsList();
-  const free = pending.filter((e) => !lockOf(e).length);
+  // Käufe im Minuten-Shop lösen die Eltern selbst ein, deshalb nicht bei „Alle bestätigen“.
+  const free = pending.filter((e) => !lockOf(e).length && !A.isShop(e));
   ensureFotoLinks(pending.filter(fotoEntry).map((e) => e.id));
   const queue = pending.length ? `<h2 class="abschnitt">Zu bestätigen</h2><ul class="posten bestaetigen">${pending.map((e) => {
     const p = personById(e.person_id);
     const lock = lockOf(e);
+    if (A.isShop(e)) return shopQueueRow(e, p, today);
     return `<li${lock.length ? ' class="gesperrt"' : ''}><div class="extra-zeile">${avatar(p, true)}<span class="p-text"><span class="p-name">${esc(e.label)}</span>
       <span class="p-menge">${esc(p ? p.name : '')}, ${e.day === today ? 'heute' : `${L.WD_SHORT[L.wdIndex(e.day)]} ${L.fmtShort(e.day)}`}, ${e.minutes ? `+${e.minutes} Min.` : 'Grundaufgabe'}</span>
       ${lock.length ? `<span class="p-wofuer">Wartet auf die Grundaufgaben: ${esc(lock.join(', '))}</span>` : ''}${fotoEntry(e) ? fotoThumb(e) : ''}</span>
@@ -2464,15 +2562,15 @@ function parentTasks() {
     const { fixed } = A.tasksFor(state.data.tasks, state.data.taskLog, k.id, today);
     const must = A.mustToday(fixed, today);
     const open = must.filter((f) => !f.done).map((f) => f.label);
-    const week = fixed.filter((f) => !must.includes(f) && !f.done).map((f) => f.label);
+    const week = fixed.filter((f) => !must.includes(f) && !f.done && !stHides(f.task)).map((f) => f.label);
     const line = !fixed.length ? 'Heute keine festen Aufgaben.'
       : `${open.length ? `Heute noch offen: ${esc(open.join(', '))}.` : must.length ? 'Heute alles erledigt.' : ''}${week.length ? ` Diese Woche noch: ${esc(week.join(', '))}.` : ''}`.trim() || 'Heute keine festen Aufgaben.';
     return `${accountCard(k, true).replace(/<\/div>\s*$/, '')}
       <p class="meta">${line}</p></div>`;
   }).join('');
-  const kmBox = kmParent() + smParent();
+  const kmBox = kmParent() + smParent() + stParent();
   return `${queue}${kmBox ? `<div${pending.length ? ' class="km-abstand"' : ''}>${kmBox}</div>` : ''}<h2 class="abschnitt mit-info${pending.length || kmBox ? ' abstand' : ''}">Minutenkonten ${infoBtn('konten', 'Wie die Minuten verfallen')}</h2>${infoText('konten', `Verdiente Minuten verfallen ${A.EXPIRY_HOURS} Stunden nach der Bestätigung. Beim Einlösen gehen die ältesten zuerst weg.`)}<div class="konten">${cards}</div>
-    <div class="knopfreihe"><button class="knopf zweit" data-action="aufgaben-liste">Aufgaben verwalten</button></div>
+    <div class="knopfreihe"><button class="knopf zweit" data-action="aufgaben-liste">Aufgaben verwalten</button><button class="knopf zweit" data-action="shop-verwalten">Minuten-Shop</button></div>
     ${reminderBox()}${abfuhrBox(false)}`;
 }
 
@@ -2557,6 +2655,7 @@ function kmConfirmed(entries) {
   const bins = [...new Set(entries.filter((e) => e.status === 'bestaetigt').map(A.kmBinOf).filter(Boolean))].filter((b) => st[b].stufe !== 'gruen');
   if (bins.length) kmSave(Object.fromEntries(bins.map((b) => [b, 'gruen'])));
   smConfirmed(entries);
+  stConfirmed(entries);
 }
 const kmRedOpen = () => A.kmView(kmValue(), state.data.taskLog).filter((x) => x.stufe === 'rot' && !x.pending).length;
 
@@ -2587,6 +2686,145 @@ function smWatch(v) {
   if (smTimer && smTimer.bis === v.bis) return;
   if (smTimer) clearTimeout(smTimer.id);
   smTimer = end > 0 && end < 12 * 3600000 ? { bis: v.bis, id: setTimeout(() => { smTimer = null; render(); }, end + 1000) } : null;
+}
+
+/* ---------- Stall ---------- */
+// Ampel nach Rhythmus (Logik in js/aufgaben.js). Die Eltern stellen ein, alle wie viele Tage der Stall dran ist.
+// Gelb heißt morgen, Rot heißt heute oder überfällig. Die Bestätigung einer Meldung startet den Rhythmus neu.
+const ST_WORT = { rot: 'Heute dran', gelb: 'Morgen dran', gruen: 'Sauber' };
+const stValue = () => KI.settingOf(state.data.settings, 'stall');
+const stOn = () => !!A.stTask(state.data.tasks) && A.stState(stValue()).on;
+const stHides = (task) => !!task && stOn() && task.id === (A.stTask(state.data.tasks) || {}).id;
+const stKids = () => { const t = A.stTask(state.data.tasks); return t ? A.assignees(t, L.todayISO()).filter((id) => kidsList().some((k) => k.id === id)) : []; };
+const stFor = (person) => !!person && stOn() && stKids().includes(person.id);
+const stNow = () => A.stView(stValue(), state.data.taskLog, L.todayISO());
+const stTitle = () => (/meerschw/i.test((A.stTask(state.data.tasks) || {}).name || '') ? 'Meerschweinchen-Stall' : 'Stall');
+const stLate = (v) => (v.left < 0 ? (v.left === -1 ? 'seit gestern' : `seit ${-v.left} Tagen`) : '');
+function stDue(v) {
+  if (v.left < 0) return `${stLate(v)} fällig`;
+  if (v.left === 0) return 'heute fällig';
+  if (v.left === 1) return 'morgen fällig';
+  return `nächstes Mal am ${L.fmtLong(v.due)}`;
+}
+function stSave(changes) {
+  const cur = A.stState(stValue());
+  const value = { on: cur.on, tage: cur.tage, last: cur.last, by: cur.by, ...changes };
+  const row = { key: 'stall', value, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'stall'), row]; }, () => store.saveSettings([row]));
+}
+function stConfirmed(entries) {
+  const e = entries.filter((x) => A.isSt(x) && x.status === 'bestaetigt').pop();
+  if (!e) return;
+  const cur = A.stState(stValue());
+  if (!cur.last || e.day >= cur.last) stSave({ last: e.day, by: e.person_id });
+}
+const stRedOpen = () => { const v = stNow(); return v.on && v.stufe === 'rot' && !v.pending ? 1 : 0; };
+function stCard(person) {
+  const t = A.stTask(state.data.tasks);
+  if (!t || !stFor(person)) return '';
+  const v = stNow();
+  const title = stTitle();
+  if (v.stufe === 'gruen' && !v.pending) {
+    return `<div class="km-karte ruhig st-karte"><div class="km-kopf"><strong>${title}</strong></div>
+      <div class="km-ruhig"><span class="km-mini"><span class="km-ampel klein" role="img" aria-label="${title}: Grün, sauber">${kmLamps('gruen')}</span>Sauber</span></div>
+      <p class="km-text">Gerade nichts zu tun, ${esc(stDue(v))}.</p></div>`;
+  }
+  const reward = t.minutes ? `, +${t.minutes} Min.` : '';
+  const [head, text] = v.pending
+    ? ['Gemeldet.', v.pending.person_id === person.id ? 'Mama oder Papa schauen noch drüber.' : `${esc((personById(v.pending.person_id) || {}).name || 'Jemand')} hat ihn sauber gemacht.`]
+    : v.stufe === 'gelb' ? ['Morgen dran.', 'Du kannst ihn auch heute schon sauber machen.']
+      : v.left < 0 ? ['Überfällig.', `Schon ${stLate(v)} dran, bitte heute sauber machen.`] : ['Heute dran.', 'Bitte sauber machen.'];
+  const alarm = v.stufe === 'rot' && !v.pending;
+  return `<div class="km-karte st-karte${alarm ? ' alarm' : ''}"><div class="km-kopf"><strong>${title}</strong></div>
+    <div class="km-eimer-liste"><div class="km-eimer s-${v.pending ? 'gelb' : v.stufe} breit">
+      <span class="km-ampel" role="img" aria-label="${title}: ${v.stufe === 'rot' ? 'Rot' : 'Gelb'}, ${ST_WORT[v.stufe]}">${kmLamps(v.stufe)}</span>
+      <p class="km-text"><b>${head}</b> ${text}</p>
+      ${v.canReport ? `<button class="knopf klein breit${v.stufe === 'rot' ? '' : ' zweit'}" data-action="st-raus">Sauber gemacht${reward}</button>` : ''}
+    </div></div></div>`;
+}
+function stParent() {
+  const t = A.stTask(state.data.tasks);
+  if (!t) return '';
+  const v = stNow();
+  const today = L.todayISO();
+  const names = stKids().map((id) => (personById(id) || {}).name).filter(Boolean);
+  const form = `<form class="form st-form" data-form="stall">
+      <div class="st-felder"><label class="feld-label">Sauber machen alle<select class="feld" name="tage">${[3, 4, 5, 6, 7, 8, 10, 14].map((n) => `<option value="${n}"${n === v.tage ? ' selected' : ''}>${n} Tage</option>`).join('')}</select></label>
+      <label class="feld-label">Zuletzt sauber am<input class="feld" type="date" name="last" value="${esc(v.last || today)}" max="${today}"></label></div>
+      <button class="knopf${v.on ? ' zweit' : ''} klein">${v.on ? 'Speichern' : 'Stall-Ampel einschalten'}</button></form>`;
+  if (!v.on) {
+    return `<h2 class="abschnitt abstand">${stTitle()}</h2>
+      <div class="km-karte eltern"><p class="km-text st-intro">Mit der Stall-Ampel seht ihr und ${names.length ? esc(names.join(' und ')) : 'die Kinder'}, wann der Stall wieder dran ist. Stellt ein, alle wie viele Tage er sauber gemacht werden soll und wann es zuletzt war.</p>${form}</div>`;
+  }
+  const at = remindTimes().kind1 || '16:30';
+  return `<h2 class="abschnitt mit-info abstand">${stTitle()} ${infoBtn('stall', 'Wie die Stall-Ampel funktioniert')}</h2>
+    ${infoText('stall', `Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig. Ab Gelb können ${names.length ? esc(names.join(' und ')) : 'die Kinder'} „Sauber gemacht“ melden, eure Bestätigung startet den Rhythmus neu. Bei Rot kommt um ${esc(at)} Uhr eine Push-Nachricht. Solange die Ampel an ist, steht die Stall-Aufgabe nicht mehr in der Wochenliste.`)}
+    <div class="km-karte eltern"><div class="km-eimer s-${v.stufe}">
+      <span class="km-ampel" role="img" aria-label="${stTitle()}: ${ST_WORT[v.stufe]}">${kmLamps(v.stufe)}</span>
+      <p class="km-text"><b>${v.stufe === 'gruen' ? 'Sauber' : v.stufe === 'gelb' ? 'Morgen dran' : v.left < 0 ? 'Überfällig' : 'Heute dran'}</b>${v.stufe === 'gruen' ? `, ${esc(stDue(v))}` : v.left < 0 ? `, ${stLate(v)} dran` : ''}. Zuletzt am ${L.fmtShort(v.last)}, alle ${v.tage} Tage.</p>
+      ${v.pending ? `<p class="km-text">${esc((personById(v.pending.person_id) || {}).name || 'Jemand')} hat ihn sauber gemacht. Oben bestätigen.</p>` : ''}
+      <div class="knopfreihe"><button class="knopf klein${v.stufe === 'gruen' ? ' zweit' : ''}" data-action="st-heute">Heute sauber gemacht</button></div>
+      ${form}
+      <button class="textknopf" data-action="st-aus">Stall-Ampel ausschalten</button>
+    </div></div>`;
+}
+
+/* ---------- Minuten-Shop ---------- */
+// Die Kinder tauschen Minuten gegen Belohnungen, die die Eltern festlegen. Ein Kauf hält die Minuten fest,
+// die Eltern lösen ihn unter „Zu bestätigen“ ein oder buchen ihn zurück.
+const shopNow = () => A.shopState(KI.settingOf(state.data.settings, 'shop'));
+function shopChip(e) {
+  if (!A.isShop(e)) return `<span class="chip">${e.minutes} Min. eingelöst</span>`;
+  if (e.status === 'offen') return `<span class="chip warten">${-e.minutes} Min., wartet</span>`;
+  if (e.status === 'abgelehnt') return '<span class="chip nein">zurückgebucht</span>';
+  return `<span class="chip">${e.minutes} Min. eingelöst</span>`;
+}
+function shopTeaser(person) {
+  const sh = shopNow();
+  if (!sh.on || !sh.items.length) return '';
+  const open = A.shopOpen(state.data.taskLog, person.id);
+  return `<div class="knopfreihe"><button class="knopf zweit" data-action="shop">Minuten-Shop</button></div>
+    ${open.length ? `<p class="meta">Gekauft: ${esc(open.map((e) => String(e.label).replace(/^Minuten-Shop: /, '')).join(', '))}. Mama oder Papa lösen es ein.</p>` : ''}`;
+}
+function sheetShop() {
+  const me = personById(state.me);
+  const acc = A.account(state.data.taskLog, state.me, capOf(me), nowMs(), L.todayISO());
+  const sh = shopNow();
+  const pick = state.shopPick;
+  const rows = sh.items.map((x) => {
+    const ok = acc.balance >= x.cost;
+    const chosen = pick === x.id;
+    return `<li class="shop-zeile${chosen ? ' gewaehlt' : ''}"><span class="shop-preis"><b>${x.cost}</b> Min.</span><span class="shop-name">${esc(x.name)}</span>
+      ${chosen ? `<span class="shop-frage">Für ${x.cost} Minuten kaufen?<span class="knopfreihe"><button class="knopf klein" data-action="shop-ja" data-id="${esc(x.id)}">Ja, kaufen</button><button class="knopf zweit klein" data-action="shop-nein">Abbrechen</button></span></span>`
+        : `<button class="knopf zweit klein" data-action="shop-kaufen" data-id="${esc(x.id)}"${ok ? '' : ' disabled'} aria-label="${esc(x.name)} für ${x.cost} Minuten kaufen">${ok ? 'Kaufen' : `noch ${x.cost - acc.balance} Min.`}</button>`}</li>`;
+  }).join('');
+  return {
+    over: 'Minuten-Shop',
+    title: `${acc.balance} Minuten auf deinem Konto`,
+    body: `<p class="meta" style="margin-bottom:12px">Statt Bildschirmzeit kannst du deine Minuten hier eintauschen. Mama oder Papa lösen den Kauf ein. Klappt es nicht, bekommst du die Minuten zurück.</p>
+      <ul class="shop-liste">${rows}</ul>`,
+  };
+}
+function sheetShopAdmin() {
+  const sh = shopNow();
+  const rows = [...sh.items, { id: '', name: '', cost: '' }, { id: '', name: '', cost: '' }];
+  return {
+    over: 'Aufgaben',
+    title: 'Minuten-Shop',
+    body: `<p class="meta" style="margin-bottom:12px">Hier legt ihr fest, wofür die Kinder ihre Minuten eintauschen können. Ein Kauf landet bei „Zu bestätigen“. „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Leere Zeilen werden ignoriert.</p>
+      <form class="form" data-form="shop">
+        <label class="schalter" style="margin-bottom:10px"><input type="checkbox" name="on"${sh.on || !sh.set ? ' checked' : ''}> Shop für die Kinder anzeigen</label>
+        <div class="shop-admin">${rows.map((x, i) => `<div class="shop-admin-zeile"><input type="hidden" name="id" value="${esc(x.id || `s${Date.now().toString(36)}${i}`)}">
+          <input class="feld" name="name" value="${esc(x.name)}" placeholder="Belohnung" aria-label="Belohnung ${i + 1}" maxlength="80">
+          <input class="feld shop-kosten" name="cost" type="number" inputmode="numeric" min="1" max="600" value="${esc(String(x.cost))}" placeholder="Min." aria-label="Preis in Minuten ${i + 1}"></div>`).join('')}</div>
+        <button class="knopf breit">Speichern</button></form>`,
+  };
+}
+function shopQueueRow(e, p, today) {
+  return `<li class="shop-kauf"><div class="extra-zeile">${avatar(p, true)}<span class="p-text"><span class="p-name">${esc(String(e.label).replace(/^Minuten-Shop: /, ''))}</span>
+      <span class="p-menge">${esc(p ? p.name : '')}, ${e.day === today ? 'heute' : `${L.WD_SHORT[L.wdIndex(e.day)]} ${L.fmtShort(e.day)}`}, im Minuten-Shop für ${-e.minutes} Min. gekauft</span></span>
+      <span class="ja-nein"><button class="knopf klein" data-action="log-ok" data-id="${esc(e.id)}" aria-label="${esc(e.label)} einlösen">Erledigt</button>
+      <button class="knopf zweit klein" data-action="log-nein" data-id="${esc(e.id)}" aria-label="${esc(e.label)} zurückbuchen">Zurückbuchen</button></span></div></li>`;
 }
 
 // Karte für das Kind, immer an derselben Stelle unter dem Datum: Mülleimer und Spülmaschine.
@@ -2843,7 +3081,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3196,6 +3434,8 @@ function sheetFamily() {
       ${fold(backupBlock(), state.backups !== undefined || !!state.backupBusy)}
       ${edit ? fold(aiCostBlock()) : ''}
       ${fold(abfuhrBox(true), abfuhrLow())}
+      ${edit ? fold(`<div class="kasten-text"><strong>Küchen-Display</strong>Ein altes Tablet in der Küche zeigt dann groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Nur zum Anschauen, ohne Personenwahl, der Bildschirm bleibt an. Zurück geht es unten über „Anzeige beenden“.
+      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="anzeige-an">Dieses Gerät wird Küchen-Display</button></div></div>`) : ''}
       ${edit ? fold(`<div class="kasten-text"><strong>Von Hand mit Claude im Chat</strong>Für den Weg ohne automatischen Wochenplan: die Auswertung in den Chat mit Claude kopieren und den fertigen Plan hier wieder einfügen.
       <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="export">Auswertung erstellen</button><button class="knopf zweit klein" data-action="import">Plan einfügen</button></div></div>`) : ''}
       <div class="kasten-text">${store.mode === 'local'
@@ -3446,6 +3686,8 @@ function sheetAppWishes() {
 const HELP_KIDS = [
   ['Aufgaben und Bildschirmzeit', 'Unter „Aufgaben“ stehen deine Aufgaben für heute. Grundaufgaben wie Tisch decken gehören einfach dazu. Was noch offen ist, steht ganz oben in der Woche, und nachmittags und abends kommt eine Erinnerung. Mama oder Papa schauen auch bei Grundaufgaben drüber. Für Extra-Aufgaben gibt es Minuten Bildschirmzeit, sobald Mama oder Papa sie bestätigen. Die Minuten gibt es erst, wenn deine Grundaufgaben für heute erledigt sind. Verdiente Minuten verfallen nach drei Tagen, oben siehst du dein Konto.'],
   ['Spülmaschine', 'Neben den Mülleimern siehst du die Ampel der Spülmaschine. Grün heißt: wird eingeräumt. Gelb heißt: läuft noch, wenn sie fertig ist, kommt eine Nachricht aufs Handy. Rot heißt: fertig, bitte ausräumen. Danach auf „Ausgeräumt“ tippen. Bestätigen Mama oder Papa, gibt es die Minuten und die Ampel springt auf Grün.'],
+  ['Stall', 'Bist du mit dem Stall dran, siehst du unter „Aufgaben“ seine Ampel. Grün heißt: sauber, gerade nichts zu tun. Gelb heißt: morgen dran, du kannst ihn aber schon heute machen. Rot heißt: heute dran. Nach dem Saubermachen auf „Sauber gemacht“ tippen. Bei Rot kommt nachmittags eine Nachricht.'],
+  ['Minuten-Shop', 'Unter „Aufgaben“ bei deinem Minutenkonto öffnet „Minuten-Shop“ eine Liste mit Belohnungen, zum Beispiel das Abendessen aussuchen. Kaufen hält die Minuten fest, Mama oder Papa lösen den Kauf ein. Klappt es gerade nicht, bekommst du die Minuten zurück.'],
   ['Foto als Nachweis', 'Bei manchen Aufgaben möchten Mama oder Papa ein Foto sehen. Dann öffnet sich beim Abhaken die Kamera. Mach ein Foto, auf dem man sieht, dass es erledigt ist, und tipp auf „Erledigt melden“.'],
   ['Mülleimer in der Küche', 'Unter „Aufgaben“ siehst du direkt unter dem Datum die Ampel für Plastikmüll und Restmüll. Grün heißt: noch Platz, gerade nichts zu tun. Gelb heißt: fast voll, du kannst ihn schon rausbringen. Rot heißt: voll, bitte jetzt rausbringen, dazu kommt eine Nachricht aufs Handy. Danach auf „Rausgebracht“ tippen. Bestätigen Mama oder Papa, gibt es die Minuten und die Ampel springt auf Grün.'],
   ['Tonne', 'Bist du mit der Tonne dran, kommt am Vorabend ab 18 Uhr eine Erinnerung. Hak die Aufgabe ab, wenn die Tonne an der Straße steht. Um 21 Uhr schauen Mama und Papa nach.'],
@@ -3463,6 +3705,10 @@ const HELP_ADULTS = [
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
+  ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
+  ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“.'],
+  ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
   ['Müll-Ampel in der Küche', 'Unter „Aufgaben“ schaltet ihr für Plastikmüll und Restmüll die Ampel: einfach auf Rot, Gelb oder Grün tippen. Bei Grün können die Kinder den Eimer nicht melden, bei Gelb und Rot schon („Rausgebracht“, mit den Minuten der Aufgabe „Müll aus der Küche rausbringen“). Bei Rot bekommen die Kinder eine Push-Nachricht, zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen. Bestätigt ihr die Meldung, springt die Ampel von selbst auf Grün.'],
@@ -3621,7 +3867,7 @@ async function keepAwake(on) {
     if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch (e) { wakeLock = null; }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ((state.sheet && state.sheet.type === 'kochen') || state.shopMode)) keepAwake(true); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ((state.sheet && state.sheet.type === 'kochen') || state.shopMode || state.phase === 'anzeige')) keepAwake(true); });
 
 let audioCtx = null;
 function beep() {
@@ -4822,6 +5068,46 @@ const actions = {
     if (needsFoto(task)) { startFoto(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid())); return; }
     logTask(task, `${task.name}: ${x.name}`, A.kmId(bin, L.uid()));
   },
+  'st-raus': () => {
+    const task = A.stTask(state.data.tasks);
+    const v = stNow();
+    if (!task || !isKidMe()) return;
+    if (!v.canReport) { toast(v.pending ? 'Ist schon gemeldet.' : 'Der Stall ist noch sauber, gerade nichts zu tun.'); return; }
+    if (needsFoto(task)) { startFoto(task, task.name, A.stId(L.uid())); return; }
+    logTask(task, task.name, A.stId(L.uid()));
+  },
+  'st-heute': () => {
+    const v = stNow();
+    if (v.pending) decide([v.pending.id], 'bestaetigt');
+    else stSave({ last: L.todayISO(), by: state.me });
+    toast('Stall ist sauber. Die Ampel steht auf Grün.');
+  },
+  'st-aus': () => { stSave({ on: false }); toast('Stall-Ampel ausgeschaltet. Die Aufgabe steht wieder in der Wochenliste.'); },
+  shop: () => { state.shopPick = null; openSheet({ type: 'shop' }); },
+  'shop-kaufen': ({ id }) => { state.shopPick = id; renderSheet(); },
+  'shop-nein': () => { state.shopPick = null; renderSheet(); },
+  'shop-ja': ({ id }) => {
+    const item = shopNow().items.find((x) => x.id === id);
+    const me = personById(state.me);
+    if (!item || !me || !isKidMe()) return;
+    const acc = A.account(state.data.taskLog, state.me, capOf(me), nowMs(), L.todayISO());
+    if (acc.balance < item.cost) { toast(`Dafür fehlen noch ${item.cost - acc.balance} Minuten.`); state.shopPick = null; renderSheet(); return; }
+    const now = nowStamp();
+    const entry = { id: A.shopId(L.uid()), person_id: state.me, task_id: null, day: L.todayISO(), label: `Minuten-Shop: ${item.name}`, minutes: -item.cost, status: 'offen', created_at: now, decided_by: null, decided_at: null };
+    commit(() => { state.data.taskLog = [...state.data.taskLog, entry]; }, () => store.saveLog([entry]));
+    state.shopPick = null;
+    closeSheet();
+    toast(`Gekauft: ${item.name}. Mama oder Papa lösen es ein.`);
+  },
+  'shop-verwalten': () => openSheet({ type: 'shop-admin' }),
+  'anzeige-an': () => {
+    try { localStorage.setItem(DISPLAY_KEY, 'kueche'); } catch (e) { /* ohne Speicher gilt es bis zum Neuladen */ }
+    display = 'kueche'; closeSheet(); state.phase = 'anzeige'; state.loadedAt = Date.now(); render();
+  },
+  'anzeige-aus': () => {
+    try { localStorage.removeItem(DISPLAY_KEY); } catch (e) { /* egal */ }
+    display = null; keepAwake(false); state.phase = personById(state.me) ? 'app' : 'wer'; render();
+  },
   'sm-raus': () => {
     const task = A.smTask(state.data.tasks);
     const v = smNow();
@@ -4867,7 +5153,7 @@ const actions = {
   },
   'log-ok': ({ id }) => decide([id], 'bestaetigt'),
   'log-nein': ({ id }) => decide([id], 'abgelehnt'),
-  'log-alle': () => decide(state.data.taskLog.filter((e) => e.status === 'offen' && !lockOf(e).length).map((e) => e.id), 'bestaetigt'),
+  'log-alle': () => decide(state.data.taskLog.filter((e) => e.status === 'offen' && !lockOf(e).length && !A.isShop(e)).map((e) => e.id), 'bestaetigt'),
   'grund-bestaetigen': () => {
     const row = { key: 'aufgaben', value: { ...(KI.settingOf(state.data.settings, 'aufgaben') || {}), grund_bestaetigen: !basicsConfirm() }, updated_at: new Date().toISOString() };
     commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'aufgaben'), row]; }, () => store.saveSettings([row]));
@@ -5570,6 +5856,24 @@ const forms = {
     commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'aufgaben'), row]; }, () => store.saveSettings([row]));
     toast('Erinnerungen gespeichert.');
     renderSheet();
+  },
+  stall: (fd) => {
+    const tage = Math.max(1, Math.min(60, parseInt(fd.get('tage'), 10) || 7));
+    const raw = String(fd.get('last') || '');
+    const today = L.todayISO();
+    const last = /^\d{4}-\d{2}-\d{2}$/.test(raw) && raw <= today ? raw : today;
+    const was = A.stState(stValue()).on;
+    stSave({ on: true, tage, last, by: state.me });
+    toast(was ? 'Stall-Ampel gespeichert.' : 'Stall-Ampel ist an.');
+  },
+  shop: (fd) => {
+    const ids = fd.getAll('id').map(String), names = fd.getAll('name').map((x) => String(x).trim()), costs = fd.getAll('cost');
+    const items = ids.map((id, i) => ({ id, name: names[i].slice(0, 80), cost: Math.max(1, Math.min(600, parseInt(costs[i], 10) || 0)) }))
+      .filter((x, i) => x.name && parseInt(costs[i], 10) > 0);
+    const row = { key: 'shop', value: { aus: !fd.get('on'), items }, updated_at: new Date().toISOString() };
+    commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'shop'), row]; }, () => store.saveSettings([row]));
+    closeSheet();
+    toast(items.length ? `Minuten-Shop gespeichert, ${items.length} ${items.length === 1 ? 'Belohnung' : 'Belohnungen'}.` : 'Minuten-Shop ist leer.');
   },
   wochenbonus: (fd) => {
     const n = Math.max(0, Math.min(120, parseInt(fd.get('minuten'), 10) || 0));

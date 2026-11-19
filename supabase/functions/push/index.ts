@@ -369,6 +369,17 @@ export function dueMessages(data: {
     out.push({ key: `offen:${e.id}`, to: adults, ttl: DAY / 1000, msg: { title: 'Aufgabe erledigt, bitte bestätigen', body, tag: 'offen', url: './#aufgaben' } });
   }
 
+  // Minuten-Shop: Ein Kauf geht an die Eltern, das Einlösen oder Zurückbuchen an das Kind.
+  const shopName = (e: Row) => String(e.label || '').replace(/^Minuten-Shop: /, '');
+  for (const e of data.log.filter((x) => String(x.id || '').startsWith('shop-'))) {
+    if (e.status === 'offen' && recent(e.created_at) && adults.length) {
+      out.push({ key: `shop:${e.id}`, to: adults, ttl: DAY / 1000, msg: { title: 'Gekauft im Minuten-Shop', body: `${name(e.person_id)}: ${shopName(e)} für ${-Number(e.minutes)} Min. Bitte einlösen.`, tag: 'shop', url: './#aufgaben' } });
+    } else if (e.status !== 'offen' && e.decided_by && recent(e.decided_at)) {
+      const ok = e.status === 'bestaetigt';
+      out.push({ key: `shop-fertig:${e.id}`, to: [e.person_id], ttl: 6 * 3600, msg: { title: ok ? `Eingelöst: ${shopName(e)}` : 'Minuten zurückgebucht', body: ok ? 'Viel Spaß damit!' : `${shopName(e)} klappt gerade nicht. Die ${-Number(e.minutes)} Minuten sind wieder auf deinem Konto.`, tag: 'shop', url: './#aufgaben' } });
+    }
+  }
+
   // Aufgaben der Kinder: eine Erinnerung am Nachmittag, eine mit Nachdruck am Abend, danach der Stand für die Eltern.
   // Die Uhrzeiten stellen die Eltern unter „Aufgaben verwalten“ ein (Standard 16:30, 19:00 und 20:00, leer heißt aus).
   const times = reminderTimes(data.erinnerung);
@@ -1895,6 +1906,8 @@ export type LpData = {
   settings: Row; schoolEnd: Row; timetable: Row | null; open: Row[]; done: Row[]; exams: Row[]; help: Row[];
   /** Lerneinheiten, die auf die Bestätigung der Eltern warten (zu kurz oder ohne Uhr). */
   checks?: Row[];
+  /** Applaus der Eltern (Sammlung clap), nur die letzten Stunden. */
+  claps?: Row[];
   wins: Record<string, boolean>; kick: Record<string, string>; meets: Record<string, string>;
   lm?: Row | null; brk?: Row | null; days?: Record<string, Row>;
 };
@@ -1919,6 +1932,7 @@ export function lpFromRows(rows: Row[]): LpData {
     else if (r.coll === 'day' && v && v.k) (d.days ||= {})[String(v.k)] = (v.v || {}) as Row;
     else if (r.coll === 'lm') d.lm = v;
     else if (r.coll === 'brk') d.brk = v;
+    else if (r.coll === 'clap') (d.claps ||= []).push(v);
   }
   return d;
 }
@@ -2042,6 +2056,38 @@ export function spuelMessages(value: Row | null, tasks: Row[], log: Row[], perso
   }];
 }
 
+/* ---------- Stall ---------- */
+// Ampel nach Rhythmus aus ep_settings "stall" (gleiche Regeln wie js/aufgaben.js stState): fällig am Tag last + tage.
+// Ist er heute fällig oder überfällig und noch nicht gemeldet (st-…), bekommen die Kinder der Aufgabe einmal am Tag
+// eine Nachricht, zur ersten Erinnerungszeit der Kinder (Standard 16:30). Nicht im Urlaub.
+export function stTaskOf(tasks: Row[]): Row | null {
+  const live = (tasks || []).filter((t) => t.active !== false);
+  return live.find((t) => t.id === 'meerschwein-kaefig')
+    || live.find((t) => /käfig|kaefig|stall/i.test(t.name || '') && !/futter|füttern|fuettern/i.test(t.name || '')) || null;
+}
+export function stallMessages(value: Row | null, tasks: Row[], log: Row[], persons: Row[], nowMs: number, urlaub: Row[] = [], erinnerung?: Row): Due[] {
+  const v: Row = value && typeof value === 'object' ? value : {};
+  if (v.on !== true || !/^\d{4}-\d{2}-\d{2}$/.test(String(v.last || ''))) return [];
+  const { day, min } = berlin(nowMs);
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return [];
+  const at = reminderTimes(erinnerung).kind1 ?? 16 * 60 + 30;
+  if (min < at || min >= Math.min(at + 120, 20 * 60 + 30)) return [];
+  const tage = Math.max(1, Math.min(60, parseInt(String(v.tage), 10) || 7));
+  const due = addDays(String(v.last), tage);
+  if (due > day) return [];
+  if ((log || []).some((e) => String(e.id || '').startsWith('st-') && e.status === 'offen')) return [];
+  const task = stTaskOf(tasks);
+  const kids = persons.filter((p) => !p.adult).map((p) => p.id);
+  const to = task ? assignees(task, day).filter((id) => kids.includes(id)) : [];
+  if (!to.length) return [];
+  const late = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / DAY);
+  return [{
+    key: `stall:${day}`, to, ttl: 4 * 3600,
+    msg: { title: late > 0 ? `Der Stall ist seit ${late === 1 ? 'gestern' : `${late} Tagen`} dran` : 'Heute ist der Stall dran', body: 'Bitte sauber machen und danach in der App auf „Sauber gemacht“ tippen.', tag: 'stall', url: './#aufgaben' },
+  }];
+}
+
 export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
   const out: Due[] = [];
   const st: Row = { afterSchool: 60, latest: '19:30', weekendStart: '10:00', winGoal: 4, bedtimeMin: 30, sundayFree: true, pushOn: true, ...lp.settings };
@@ -2059,6 +2105,22 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
     const g: Record<string, string> = { muede: 'müde', krank: 'krank', aerger: 'Ärger oder Streit', kopf: 'zu viel im Kopf', lust: 'einfach keine Lust' };
     if (adults.length) out.push({ key: `lp-verlegt:${day}`, to: adults, ttl: 6 * 3600, msg: { title: `${kname} hat heute das Spiel verlegt`, body: `${vd.grund ? `Grund: ${g[String(vd.grund)] || vd.grund}. ` : ''}Vielleicht kurz nachfragen, wie es geht.`, tag: 'lernplaner-eltern', url } });
     return out;
+  }
+  // Applaus: Tagessieg und echte Lerneinheiten melden die App den Eltern, ein Tipp klatscht. Applaus geht ans Kind.
+  if (st.applausOn !== false && min >= 7 * 60 && min < 21 * 60 + 30) {
+    const base = url.replace(/[?#].*$/, '');
+    if (adults.length && lp.wins[day]) {
+      out.push({ key: `lp-applaus-sieg:${day}`, to: adults, ttl: 6 * 3600, msg: { title: `Tagessieg für ${kname}!`, body: 'Alles geschafft und mehr Tore als der Schweinehund. Tippen zum Klatschen.', tag: 'lernplaner-applaus', url: `${base}?applaus=sieg-${day}` } });
+    }
+    for (const t of lp.done.filter((x) => x.kind === 'lern' && x.doneAt === day && Number(x.fin) > nowMs - 30 * 60000 && x.checked !== 'ok')) {
+      if (!adults.length) break;
+      out.push({ key: `lp-applaus:${t.id}`, to: adults, ttl: 3 * 3600, msg: { title: `${kname} hat gelernt: ${t.subject}`, body: `${t.title}, ${t.actual} Min. mit der Uhr. Tippen zum Klatschen.`, tag: 'lernplaner-applaus', url: `${base}?applaus=t-${t.id}` } });
+    }
+  }
+  if (kid) {
+    for (const c of (lp.claps || []).filter((x) => Number(x.at) > nowMs - 30 * 60000)) {
+      out.push({ key: `lp-clap:${c.id}`, to: [kid.id], ttl: 3 * 3600, msg: { title: `${c.name || 'Jemand'} klatscht für dich`, body: `Für ${c.what || 'dein Spiel heute'}. Weiter so!`, tag: 'lernplaner-klatschen', url } });
+    }
   }
   // Lerneinheit zu kurz oder ohne Uhr: die Eltern entscheiden, ob sie zählt. Eine Nachricht pro Meldung, nicht nachts.
   if (adults.length && min >= 7 * 60 && min < 21 * 60 + 30) {
@@ -2085,8 +2147,21 @@ export function lernMessages(lp: LpData, persons: Row[], nowMs: number, urlaub: 
   const anzahl = (n: number) => (n === 1 ? 'eine Aufgabe' : `${n} Aufgaben`);
 
   // Anpfiff zur geplanten Startzeit und Endspurt eine Stunde vor Schluss, nur wenn noch etwas offen ist.
+  // Hat er seinen Anpfiff selbst geplant (Wenn-dann-Plan), kommt die Nachricht zu seiner Zeit und erinnert an den Plan.
+  // Ohne Plan fragt die App vorher einmal, wann er anpfeifen will.
   if (kid && active && openToday.length) {
-    if (!lp.kick[day] && min >= start && min < start + 45) {
+    const plan: Row | null = (vd && vd.kplan) || null;
+    const planAt = plan ? hmMin(plan.at, start) : null;
+    // Schulschluss aus dem Stundenplan, sonst aus dem geplanten Beginn zurückgerechnet. An freien Tagen eine Stunde vorher.
+    const endEff = end ?? start - (Number(st.afterSchool) || 0);
+    const askFrom = wd < 5 && schoolDay(day) ? Math.max(endEff + 20, start - 45) : start - 60;
+    if (!plan && !lp.kick[day] && st.kickPlan !== false && min >= askFrom && min < start) {
+      out.push({ key: `lp-plan:${day}`, to: [kid.id], ttl: 2 * 3600, msg: { title: 'Wann pfeifst du heute an?', body: `Heute ${anzahl(openToday.length)}. Wähl deine Anpfiff-Zeit und was du machst, wenn dich etwas abhält.`, tag: 'lernplaner', url } });
+    }
+    if (!lp.kick[day] && planAt != null && min >= planAt && min < planAt + 45) {
+      const wenn = plan && plan.wenn && plan.dann ? ` Wenn ${plan.wenn}, dann: ${plan.dann}.` : '';
+      out.push({ key: `lp-anpfiff-plan:${day}`, to: [kid.id], ttl: 2 * 3600, msg: { title: `Anpfiff! Dein Plan: ${plan!.at} Uhr`, body: `${names(openToday)}.${wenn}`, tag: 'lernplaner', url } });
+    } else if (!lp.kick[day] && planAt == null && min >= start && min < start + 45) {
       out.push({ key: `lp-anpfiff:${day}`, to: [kid.id], ttl: 2 * 3600, msg: { title: 'Anpfiff!', body: `Heute ${anzahl(openToday.length)}: ${names(openToday)}. Wer gleich anfängt, holt ein Extra-Tor.`, tag: 'lernplaner', url } });
     }
     const late = latest - 60;
@@ -2172,7 +2247,8 @@ async function loadLern(store: Store, today: string): Promise<LpData> {
     store.get(`${base}&coll=in.(win,kick)&data->>k=gte.${addDays(mondayOf(today), -7)}`),
   ]);
   const e = await store.get(`${base}&coll=eq.day&data->>k=eq.${today}`).catch(() => []);
-  return lpFromRows([...a, ...b, ...c, ...d, ...e]);
+  const f = await store.get(`${base}&coll=eq.clap&data->>date=gte.${addDays(today, -1)}`).catch(() => []);
+  return lpFromRows([...a, ...b, ...c, ...d, ...e, ...f]);
 }
 
 /* ---------- Datenbank über die REST-Schnittstelle ---------- */
@@ -2458,7 +2534,7 @@ async function runSchedule(nowMs = Date.now()) {
     store.get(`ep_shopping?select=*&due=eq.${today}&checked=is.false`).catch(() => []),
     store.get('ep_dishes?select=*'),
     store.get(`ep_ratings?select=day,person_id&day=eq.${today}`),
-    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell,spuelmaschine,rueckblick)').catch(() => []),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell,spuelmaschine,rueckblick,stall)').catch(() => []),
     store.get(`ep_shopping?select=id,label,added_by,created_at,checked&added_by=not.is.null&created_at=gte.${encodeURIComponent(new Date(nowMs - 12 * 3600000).toISOString())}`).catch(() => []),
   ]);
   const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
@@ -2468,6 +2544,7 @@ async function runSchedule(nowMs = Date.now()) {
   const due = dueMessages({ persons, tasks, log, abfuhr, hearts, plan, shopping, dishes, ratings, urlaub, grundZuerst, added, erinnerung }, nowMs);
   due.push(...muellMessages(setting('kuechenmuell'), tasks, log, persons, nowMs, urlaub));
   due.push(...spuelMessages(setting('spuelmaschine'), tasks, log, persons, nowMs, urlaub));
+  due.push(...stallMessages(setting('stall'), tasks, log, persons, nowMs, urlaub, erinnerung));
   due.push(...reviewMessages(setting('rueckblick'), persons, nowMs, urlaub));
   // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
   try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }

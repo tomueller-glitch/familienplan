@@ -36,12 +36,15 @@ export function weekReview(data, week, opts = {}) {
       id: k.id, name: k.name,
       basicsOk: b.ok, basicsDue: b.due, complete: b.complete,
       bonus: bonus ? bonus.minutes : 0,
-      earned: mine.filter((e) => e.status === 'bestaetigt' && e.minutes > 0 && !A.isBonus(e)).reduce((a, e) => a + e.minutes, 0),
-      redeemed: -mine.filter((e) => e.minutes < 0).reduce((a, e) => a + e.minutes, 0),
-      extras: mine.filter((e) => e.status === 'bestaetigt' && e.minutes > 0 && !A.isBonus(e)).length,
+      earned: mine.filter((e) => e.status === 'bestaetigt' && e.minutes > 0 && !A.capFree(e)).reduce((a, e) => a + e.minutes, 0),
+      siege: mine.filter((e) => A.isSieg(e) && e.status === 'bestaetigt').length,
+      siegMin: mine.filter((e) => A.isSieg(e) && e.status === 'bestaetigt').reduce((a, e) => a + e.minutes, 0),
+      redeemed: -mine.filter((e) => e.minutes < 0 && e.status !== 'abgelehnt').reduce((a, e) => a + e.minutes, 0),
+      extras: mine.filter((e) => e.status === 'bestaetigt' && e.minutes > 0 && !A.capFree(e)).length,
       rejected: mine.filter((e) => e.status === 'abgelehnt').length,
       muell: mine.filter((e) => A.kmBinOf(e) && e.status === 'bestaetigt').length,
       spuel: mine.filter((e) => A.isSm(e) && e.status === 'bestaetigt').length,
+      stall: mine.filter((e) => A.isSt(e) && e.status === 'bestaetigt').length,
     };
   });
 

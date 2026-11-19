@@ -3,6 +3,17 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19a', datum: '19. November', titel: 'Stall-Ampel, Minuten-Shop und Küchen-Display',
+    punkte: [
+      { text: 'Stall-Ampel: Bist du mit dem Stall dran, zeigt eine Ampel unter „Aufgaben“, wann er wieder sauber gemacht werden muss. Gelb heißt morgen, Rot heißt heute. Danach auf „Sauber gemacht“ tippen.', fuer: 'kinder' },
+      { text: 'Stall-Ampel: Unter „Aufgaben“ stellt ihr den Rhythmus ein, zum Beispiel alle 5 Tage, und wann der Stall zuletzt sauber war. Ab Gelb können die Kinder melden, bei Rot kommt nachmittags eine Nachricht. Die Wochenaufgabe ersetzt die Ampel, solange sie an ist.', fuer: 'eltern' },
+      { text: 'Minuten-Shop: Minuten lassen sich gegen Belohnungen tauschen, zum Beispiel das Abendessen aussuchen. Mama oder Papa lösen den Kauf ein.', fuer: 'kinder' },
+      { text: 'Minuten-Shop: Unter „Aufgaben“ legt ihr Belohnungen und Preise fest. Erst nach dem Speichern sehen die Kinder den Shop. Käufe stehen bei „Zu bestätigen“ mit „Erledigt“ und „Zurückbuchen“.', fuer: 'eltern' },
+      { text: 'Küchen-Display: Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster.', fuer: 'eltern' },
+      { text: 'Tagessieg im Lernplaner bringt Minuten auf das Konto. Sie zählen nicht zum Tageslimit.' },
+    ],
+  },
+  {
     id: '2026-11-18c', datum: '18. November, mittags', titel: 'Ampel für die Spülmaschine',
     punkte: [
       { text: 'Neben den Mülleimern gibt es jetzt eine Ampel für die Spülmaschine. Grün: wird eingeräumt. Gelb: läuft. Rot: fertig, bitte ausräumen.' },

@@ -30,7 +30,9 @@ async function open(db, who) {
 }
 const calls = (page, table) => page.evaluate((t) => window.calls.filter((c) => c[0] === 'upsert' && c[1] === t).map((c) => c[2]), table);
 const toastText = (page) => page.evaluate(() => [...document.querySelectorAll('.toast, [role=status]')].map((x) => x.textContent.trim()).filter(Boolean).join(' | '));
-const iso = new Date().toISOString();
+// Die App rechnet mit dem Testtag 18.11. und der echten Uhrzeit. Dieselbe Uhr für die Testdaten.
+const appNow = () => { const n = new Date(); return new Date(2026, 10, 18, n.getHours(), n.getMinutes(), n.getSeconds()).getTime(); };
+const iso = new Date(appNow()).toISOString();
 
 // A: Eltern schalten die Ampel
 {
@@ -79,7 +81,7 @@ const iso = new Date().toISOString();
 // E: Spülmaschine lief bis vor einer Stunde, Kind räumt aus
 {
   const db = base();
-  const past = new Date(Date.now() - 3600000).toISOString();
+  const past = new Date(appNow() - 3600000).toISOString();
   db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'gelb', at: past, by: 'p1', bis: past } }];
   const { page, ctx, errs } = await open(db, 2);
   console.log('E Karte:', (await page.locator('.km-karte').innerText()).replace(/\n+/g, ' | '));
@@ -98,7 +100,7 @@ const iso = new Date().toISOString();
   console.log('F Toast:', await toastText(page));
   await page.locator('[data-action="sm-bis"][data-wert="120"]').click(); await page.waitForTimeout(300);
   let st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'spuelmaschine').pop();
-  console.log('F nach 2 Std.:', st && st.value.stufe, st && Math.round((Date.parse(st.value.bis) - Date.now()) / 60000), 'Min.');
+  console.log('F nach 2 Std.:', st && st.value.stufe, st && Math.round((Date.parse(st.value.bis) - appNow()) / 60000), 'Min.');
   await page.locator('.sm-zeit').fill('23:45'); await page.locator('.sm-zeit').dispatchEvent('change'); await page.waitForTimeout(300);
   st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'spuelmaschine').pop();
   console.log('F um 23:45:', st && new Date(st.value.bis).toTimeString().slice(0, 5), 'Text:', (await page.locator('.km-karte.eltern').last().innerText()).replace(/\n+/g, ' | '));
@@ -119,7 +121,7 @@ const iso = new Date().toISOString();
 // H: Spülmaschine läuft noch, sonst alles grün
 {
   const db = base();
-  db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'gelb', at: iso, by: 'p1', bis: new Date(Date.now() + 5400000).toISOString() } }];
+  db.ep_settings = [{ key: 'spuelmaschine', value: { stufe: 'gelb', at: iso, by: 'p1', bis: new Date(appNow() + 5400000).toISOString() } }];
   const { page, ctx, errs } = await open(db, 3);
   console.log('H Karte:', (await page.locator('.km-karte').innerText()).replace(/\n+/g, ' | '), 'Knöpfe:', await page.locator('[data-action="sm-raus"]').count());
   await page.locator('.km-karte').screenshot({ path: '/tmp/sm_kind_laeuft.png' });
