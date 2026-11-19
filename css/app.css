@@ -1061,3 +1061,4 @@ html.anzeige-modus body::before { display: none; }
 .anz-aufgaben li { display: flex; align-items: center; gap: 12px; padding: 12px 4px; }
 .anz-aufgaben li .p-text { flex: 1; min-width: 0; }
 .anz-aufgaben li.fertig .p-name { opacity: .7; }
+.hinweis-ausgang { display: block; margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--akzent, #D4312A); background: rgba(0,0,0,.04); border-radius: 6px; }
