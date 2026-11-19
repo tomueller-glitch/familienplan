@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19f', datum: '19. November, nachts', titel: 'iPhone-Kalender auf dem Küchen-Display',
+    punkte: [
+      { text: 'Im Familie-Fenster unter Küchen-Display, „Kalender fürs Display“: öffentliche iPhone-Kalender eintragen, etwa einen pro Person, den gemeinsamen und den Dienstplan. Das Display zeigt ihre Termine von heute und morgen mit Farbpunkt der Person, neben den Terminen aus dem Familienplan. Auf den Handys erscheinen sie nicht.', fuer: 'eltern' },
+      { text: 'Das Küchen-Display ordnet sich auf kleinen Tablets wie dem iPad mini neu, damit alles auf einen Bildschirm passt.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19e', datum: '19. November, spätabends', titel: 'Einkaufsliste: keine Doppelten mehr, Posten entfernen',
     punkte: [
       { text: 'Neu berechnete Listen hatten Posten aus Claudes Plan doppelt, wenn Claude ein Gericht abgekürzt hatte, etwa „Chili (Di)“. Jetzt erkennt die App das Abendessen am Wochentag. Einmal „Aus dem Plan neu erstellen“ räumt eine betroffene Liste auf.', fuer: 'eltern' },

@@ -22,7 +22,7 @@ if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
 }
-const FORM_SHEETS = ['neu-gericht', 'shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
+const FORM_SHEETS = ['kalender', 'neu-gericht', 'shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
 const EPOCH = '1970-01-01T00:00:00Z';
 // Küchen-Display: Mit ?anzeige=kueche merkt sich das Gerät, dass es als Anzeige an der Wand hängt (?anzeige=aus beendet).
 const DISPLAY_KEY = 'essensplan.anzeige';
@@ -98,8 +98,8 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
-const ADULT_FORMS = new Set(['neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
+const ADULT_ACTIONS = new Set(['kalender-abos', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_FORMS = new Set(['kalender', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
 // Brotbox: bewerten dürfen die Kinder. Gibt es keine Erwachsenen, alle.
@@ -586,6 +586,44 @@ function view() {
   }
 }
 
+/* ---------- Kalender fürs Küchen-Display ---------- */
+function sheetCalendars(sh) {
+  const feeds = calFeeds();
+  const people = state.data.persons;
+  const status = (id) => (state.kal && state.kal.feeds ? state.kal.feeds.find((f) => f.id === id) : null);
+  const line = (f) => {
+    const p = f.person_id ? personById(f.person_id) : null;
+    const st = status(f.id);
+    return `<li class="kal-zeile"><span class="p-text"><span class="p-name">${p ? avatar(p, true) : ''}${esc(f.name)}</span>
+      <span class="p-menge">${st ? (st.ok ? `Gelesen, heute und morgen ${st.anzahl === 1 ? '1 Termin' : `${st.anzahl} Termine`}` : `Fehler: ${esc(st.fehler)}`) : esc(String(f.url).replace(/^(webcals?|https):\/\//, '').slice(0, 42) + '…')}</span></span>
+      <button class="weg" data-action="kalender-weg" data-id="${esc(f.id)}" aria-label="${esc(f.name)} entfernen">${CROSS}</button></li>`;
+  };
+  return {
+    over: 'Küchen-Display',
+    title: 'Kalender fürs Display',
+    body: `<p class="meta" style="margin-bottom:10px">Das Display zeigt die Termine dieser Kalender von heute und morgen, neben den Terminen aus dem Familienplan. Auf den Handys erscheinen sie nicht. Die App liest nur, sie ändert nichts.</p>
+      <details class="kal-hilfe"><summary>So bekommt ihr den Link eines iPhone-Kalenders</summary><ol>
+        <li>In der Kalender-App unten auf „Kalender“ tippen.</li>
+        <li>Beim gewünschten iCloud-Kalender auf das (i) tippen und „Öffentlicher Kalender“ einschalten. Das geht nur auf dem Gerät der Person, der der Kalender gehört.</li>
+        <li>„Link teilen“, dann „Kopieren“, und hier einfügen.</li>
+        <li>Ist ein Kalender selbst ein Abo, etwa ein Dienstplan, lässt er sich nicht veröffentlichen. Dann die ursprüngliche Abo-Adresse nehmen.</li></ol>
+        <p>Wer den Link kennt, kann den Kalender lesen. Den Link deshalb wie ein Passwort behandeln. Ausschalten von „Öffentlicher Kalender“ macht ihn ungültig.</p></details>
+      ${feeds.length ? `<ul class="posten kal-liste">${feeds.map(line).join('')}</ul>
+        <div class="knopfreihe"><button class="knopf zweit klein" data-action="kalender-pruefen"${state.kalBusy ? ' disabled' : ''}>${state.kalBusy ? 'Wird geprüft …' : 'Kalender prüfen'}</button></div>
+        ${state.kal && state.kal.error ? `<p class="fehler-text" role="alert">${esc(state.kal.error)}</p>` : ''}` : ''}
+      <h3 class="abteilung">Kalender hinzufügen</h3>
+      <form class="form" data-form="kalender">
+        <label>Name <small>wie er auf dem Display stehen soll, etwa „Dienst“ oder „Familie“</small><input class="feld" name="name" maxlength="30" required autocomplete="off"></label>
+        <label>Link<input class="feld" name="url" inputmode="url" autocomplete="off" placeholder="webcal://p…-caldav.icloud.com/published/…" required></label>
+        <label>Gehört zu<select class="feld" name="person"><option value="">allen (gemeinsam)</option>${people.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label>
+        <button class="knopf breit">Hinzufügen</button></form>`,
+  };
+}
+function saveCalFeeds(feeds) {
+  const row = { key: 'kalender', value: { feeds }, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'kalender'), row]; }, () => store.saveSettings([row]));
+}
+
 /* ---------- Küchen-Display ---------- */
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
@@ -597,6 +635,7 @@ function viewDisplay() {
   const night = now.getHours() >= 22 || now.getHours() < 6;
   const away = holidayOf(today);
 
+  if (calFeeds().length) setTimeout(() => loadCalendars(false), 0);
   // Abendessen
   const p = planOf(today);
   const dish = p && !p.skipped ? dishById(p.dish_id) : null;
@@ -622,13 +661,8 @@ function viewDisplay() {
   if (stOn()) { const v = stNow(); lamps.push({ name: 'Stall', stufe: v.stufe, text: v.pending ? 'gemeldet' : v.stufe === 'gruen' ? `wieder am ${L.WD_SHORT[L.wdIndex(v.due)]}` : v.left < 0 ? `${stLate(v)} dran` : ST_WORT[v.stufe] }); }
   const ampeln = lamps.length ? `<section class="anz-feld anz-ampeln"><h2>Ampeln</h2><ul>${lamps.map((x) => `<li class="s-${x.stufe}"><span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'rot' ? 'Rot' : x.stufe === 'gelb' ? 'Gelb' : 'Grün'}">${kmLamps(x.stufe)}</span><span class="anz-a-name">${esc(x.name)}</span><span class="anz-a-text">${esc(x.text)}</span></li>`).join('')}</ul></section>` : '';
 
-  // Termine und Tonne
-  const evs = T.eventsOn(state.data.events, today).slice().sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
-  const who = (e) => (e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', ');
-  const bin = A.trashTomorrow(today);
-  const termine = `<section class="anz-feld anz-heute"><h2>Heute</h2>
-    ${evs.length || bin ? `<ul class="anz-termine">${evs.map((e) => `<li><span class="anz-zeit">${esc(String(e.start_time || '').slice(0, 5))}</span><span>${esc(e.title)}${who(e) ? `<small>${esc(who(e))}</small>` : ''}</span></li>`).join('')}
-      ${bin ? `<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>` : ''}</ul>` : '<p class="anz-leer">Keine Termine.</p>'}</section>`;
+  // Termine heute und morgen: aus dem Familienplan und aus den abonnierten Kalendern, dazu die Tonne.
+  const termine = `<section class="anz-feld anz-heute">${[today, L.addDays(today, 1)].map((d, n) => displayDay(d, n === 0)).join('')}</section>`;
 
   // Kinder
   const kids = kidsList();
@@ -655,11 +689,46 @@ function viewDisplay() {
       ${kinder}
     </div>
     <footer class="anz-fuss"><span>${open ? `${open} ${open === 1 ? 'Sache' : 'Sachen'} auf der Einkaufsliste` : 'Einkaufsliste leer'}</span>
-      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}</span>
+      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span>
       <button class="anz-aus" data-action="anzeige-aus">Anzeige beenden</button></footer>
   </div>`;
 }
-setInterval(() => { if (state.phase === 'anzeige' && document.visibilityState === 'visible' && !state.sheet) render(); }, 30000);
+// Ein Tag in der Terminspalte des Displays.
+function displayDay(d, isToday) {
+  const who = (e) => (e.who || []).map((id) => personById(id)).filter(Boolean);
+  const own = T.eventsOn(state.data.events, d).map((e) => ({ von: String(e.start_time || '').slice(0, 5) || null, bis: String(e.end_time || '').slice(0, 5) || null, ganztags: !e.start_time, titel: e.title, people: who(e), quelle: '' }));
+  const feeds = calFeeds();
+  const ext = ((state.kal && state.kal.tage && state.kal.tage[d]) || []).map((x) => {
+    const f = feeds.find((y) => y.id === x.kalender) || {};
+    const p = f.person_id ? personById(f.person_id) : null;
+    return { ...x, people: p ? [p] : [], quelle: f.name || '' };
+  });
+  const all = [...own, ...ext].sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
+  const bin = isToday ? A.trashTomorrow(d) : '';
+  const dot = (list) => list.map((p) => `<i class="anz-punkt" style="background:${esc(p.color || '#4F6972')}" title="${esc(p.name)}"></i>`).join('');
+  const time = (x) => (x.ganztags ? 'ganztags' : x.von ? x.von : x.bis ? `bis ${x.bis}` : '');
+  const rows = all.map((x) => `<li><span class="anz-zeit${x.ganztags ? ' ganz' : ''}">${esc(time(x))}</span><span>${dot(x.people)}${esc(x.titel)}${x.people.length || x.quelle ? `<small>${esc([x.people.map((p) => p.name).join(', '), x.quelle && !x.people.some((p) => p.name === x.quelle) ? x.quelle : ''].filter(Boolean).join(', '))}</small>` : ''}</span></li>`);
+  if (bin) rows.push(`<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>`);
+  const head = isToday ? 'Heute' : `Morgen, ${L.fmtLong(d).split(',')[0]}`;
+  return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : '<p class="anz-leer">Keine Termine.</p>'}`;
+}
+// Abonnierte Kalender: Einstellung "kalender" ({ feeds }) und die Termine von heute und morgen aus der Funktion push.
+const calFeeds = () => { const v = KI.settingOf(state.data.settings, 'kalender'); return v && Array.isArray(v.feeds) ? v.feeds : []; };
+async function loadCalendars(force) {
+  if (state.kalBusy || !calFeeds().length || store.offline) return;
+  const today = L.todayISO();
+  const fresh = state.kal && state.kal.tage && state.kal.tage[today] && Date.now() - state.kal.at < 15 * 60000;
+  if (!force && (fresh || (state.kal && Date.now() - state.kal.at < 60000))) return;
+  state.kalBusy = true;
+  try {
+    const r = await store.calendars();
+    state.kal = { at: Date.now(), tage: r.tage || {}, feeds: r.feeds || [], error: '' };
+  } catch (e) {
+    state.kal = { ...(state.kal || { tage: {} }), at: Date.now(), error: e.message };
+  } finally { state.kalBusy = false; }
+  if (state.phase === 'anzeige' || (state.sheet && state.sheet.type === 'kalender')) { if (state.sheet) renderSheet(); else render(); }
+}
+setInterval(() => { if (state.phase === 'anzeige' && document.visibilityState === 'visible' && !state.sheet) { loadCalendars(false); render(); } }, 30000);
 setInterval(() => {
   if (state.phase !== 'anzeige' || store.offline || document.visibilityState !== 'visible') return;
   store.loadAll().then((d) => { state.data = normalize(d); state.loadedAt = Date.now(); refresh(); }).catch(() => {});
@@ -3253,7 +3322,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3609,8 +3678,8 @@ function sheetFamily() {
       ${fold(backupBlock(), state.backups !== undefined || !!state.backupBusy)}
       ${edit ? fold(aiCostBlock()) : ''}
       ${fold(abfuhrBox(true), abfuhrLow())}
-      ${edit ? fold(`<div class="kasten-text"><strong>Küchen-Display</strong>Ein altes Tablet in der Küche zeigt dann groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Nur zum Anschauen, ohne Personenwahl, der Bildschirm bleibt an. Zurück geht es unten über „Anzeige beenden“.
-      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="anzeige-an">Dieses Gerät wird Küchen-Display</button></div></div>`) : ''}
+      ${edit ? fold(`<div class="kasten-text"><strong>Küchen-Display</strong>Ein altes Tablet in der Küche zeigt dann groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Nur zum Anschauen, ohne Personenwahl. Zurück geht es unten über „Anzeige beenden“. Neuere Tablets hält die App wach. Auf älteren (vor iPadOS 16.4, etwa ein iPad mini 4) unter Einstellungen, Anzeige & Helligkeit die automatische Sperre auf „Nie“ stellen. Ein iPad mini 2 oder 3 ist zu alt für die App.
+      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="anzeige-an">Dieses Gerät wird Küchen-Display</button><button class="knopf zweit klein" data-action="kalender-abos">Kalender fürs Display${calFeeds().length ? ` (${calFeeds().length})` : ''}</button></div></div>`) : ''}
       ${edit ? fold(`<div class="kasten-text"><strong>Von Hand mit Claude im Chat</strong>Für den Weg ohne automatischen Wochenplan: die Auswertung in den Chat mit Claude kopieren und den fertigen Plan hier wieder einfügen.
       <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="export">Auswertung erstellen</button><button class="knopf zweit klein" data-action="import">Plan einfügen</button></div></div>`) : ''}
       <div class="kasten-text">${store.mode === 'local'
@@ -3883,7 +3952,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“. Unter „Kalender fürs Display“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen, auf den Handys erscheinen sie nicht.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -5556,6 +5625,15 @@ const actions = {
     toast(`Gekauft: ${item.name}. Mama oder Papa lösen es ein.`);
   },
   'shop-verwalten': () => openSheet({ type: 'shop-admin' }),
+  'kalender-abos': () => openSheet({ type: 'kalender' }),
+  'kalender-weg': async ({ id }) => {
+    const f = calFeeds().find((x) => x.id === id);
+    if (!f || !(await ask(`„${f.name}“ wird vom Display genommen. Der Kalender auf dem iPhone bleibt, wie er ist.`, 'Entfernen'))) return;
+    saveCalFeeds(calFeeds().filter((x) => x.id !== id));
+    state.kal = null;
+    openSheet({ type: 'kalender' });
+  },
+  'kalender-pruefen': async () => { await loadCalendars(true); renderSheet(); },
   'anzeige-an': () => {
     try { localStorage.setItem(DISPLAY_KEY, 'kueche'); } catch (e) { /* ohne Speicher gilt es bis zum Neuladen */ }
     display = 'kueche'; closeSheet(); state.phase = 'anzeige'; state.loadedAt = Date.now(); render();
@@ -6319,6 +6397,18 @@ const forms = {
     commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'aufgaben'), row]; }, () => store.saveSettings([row]));
     toast('Erinnerungen gespeichert.');
     renderSheet();
+  },
+  kalender: async (fd) => {
+    const name = String(fd.get('name') || '').trim().slice(0, 30);
+    const url = String(fd.get('url') || '').trim();
+    if (!name || !/^(webcals?|https):\/\/[^\s]+$/i.test(url)) { toast('Bitte einen Namen und den Link des Kalenders eintragen (beginnt mit webcal:// oder https://).'); return; }
+    if (calFeeds().some((x) => x.url === url)) { toast('Diesen Kalender gibt es schon.'); return; }
+    const feed = { id: `k${Date.now().toString(36)}`, name, url, person_id: String(fd.get('person') || '') || null };
+    saveCalFeeds([...calFeeds(), feed]);
+    state.kal = null;
+    openSheet({ type: 'kalender' });
+    toast(`„${name}“ ist dabei. Die App prüft den Kalender jetzt.`);
+    await loadCalendars(true);
   },
   stall: (fd) => {
     const tage = Math.max(1, Math.min(60, parseInt(fd.get('tage'), 10) || 7));

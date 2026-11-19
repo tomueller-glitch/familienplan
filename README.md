@@ -412,6 +412,7 @@ Im Tagesbogen und oben bei „Gericht wählen“: „Neues Gericht von Claude“
 - Stall-Ampel: `ep_settings` unter `stall` (`on`, `tage`, `last`). Fällig ist `last + tage`, Gelb einen Tag vorher. Meldungen tragen die Kennung `st-…`, die Bestätigung setzt `last`. Aufgabe: `meerschwein-kaefig` oder eine Aufgabe mit Käfig oder Stall im Namen. Prüfung: `node --experimental-strip-types tests/funktion-stall-shop.mts` und `node tests/stall-shop.mjs`.
 - Minuten-Shop: `ep_settings` unter `shop` (`aus`, `items`). Ein Kauf ist ein Eintrag `shop-…` mit negativen Minuten und Status „offen“, er hält die Minuten im Konto fest. „Erledigt“ setzt „bestaetigt“, „Zurückbuchen“ „abgelehnt“.
 - Küchen-Display: `?anzeige=kueche` (oder im Familie-Fenster) merkt sich das Gerät in `localStorage` unter `essensplan.anzeige`, `?anzeige=aus` oder „Anzeige beenden“ beendet es. Das Gerät muss einmal mit dem Familienzugang angemeldet sein.
+- Kalender fürs Display: `ep_settings` unter `kalender` (`feeds`: `id`, `name`, `url`, `person_id`). Die Funktion `push` (Aktion `kalender`, `loadCalendars`) holt die .ics-Dateien nur von diesen Adressen, liest Serien, Ausnahmen, verschobene und abgesagte Termine, Zeitzonen und Termine über Mitternacht und gibt heute und morgen zurück. Das Display fragt alle 15 Minuten. Prüfung: `node --experimental-strip-types tests/funktion-kalender.mts`, `node tests/kalender-display.mjs`.
 
 ## Foto als Nachweis und Wochenrückblick
 

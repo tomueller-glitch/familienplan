@@ -283,6 +283,13 @@ class SupabaseStore {
     try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
     throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
   }
+  async calendars() {
+    const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'kalender' } });
+    if (!error) return data;
+    let msg = '';
+    try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
+    throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
+  }
   async newDish(neu) {
     const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'neues-gericht', neu } });
     if (!error) return data.neu;
@@ -475,6 +482,22 @@ class LocalStore {
     await new Promise((ok) => setTimeout(ok, 1200));
     const { demoFeast } = await import('./planer.js');
     return demoFeast(fest);
+  }
+  async calendars() {
+    await new Promise((ok) => setTimeout(ok, 500));
+    const v = ((this.get() || {}).settings || []).find((x) => x.key === 'kalender');
+    const feeds = v && v.value && Array.isArray(v.value.feeds) ? v.value.feeds : [];
+    const d = new Date();
+    const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const t = iso(d);
+    d.setDate(d.getDate() + 1);
+    const m = iso(d);
+    const f = (i) => (feeds[i] || feeds[0] || { id: 'demo' }).id;
+    return {
+      stand: new Date().toISOString(),
+      tage: feeds.length ? { [t]: [{ titel: 'Frühdienst (Beispiel)', von: '07:00', bis: '15:30', ganztags: false, kalender: f(0) }, { titel: 'Elternabend', von: '19:30', bis: '21:00', ganztags: false, kalender: f(1) }], [m]: [{ titel: 'Geburtstag Oma', von: null, bis: null, ganztags: true, kalender: f(2) }] } : { [t]: [], [m]: [] },
+      feeds: feeds.map((x) => ({ id: x.id, ok: true, anzahl: 1 })),
+    };
   }
   async newDish(neu) {
     await new Promise((ok) => setTimeout(ok, 900));

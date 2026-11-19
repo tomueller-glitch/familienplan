@@ -925,7 +925,7 @@ html.anzeige-modus body::before { display: none; }
 .anz-blatt b { font: 700 3.4em/0.95 var(--anzeige); padding-top: 4px; font-variant-numeric: tabular-nums; }
 .anz-mon { font: 600 .9em/1 var(--text); padding: 0 10px 8px; color: #4F6972; }
 .anz-uhr { font: 600 clamp(64px, 9vw, 132px)/0.9 var(--anzeige); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
-.anz-raster { display: grid; grid-template-columns: 1.25fr 1fr; grid-template-areas: "essen ampeln" "essen heute" "kinder kinder"; gap: clamp(12px, 1.6vw, 20px); align-content: start; }
+.anz-raster { display: grid; grid-template-columns: 1.2fr 1fr; grid-template-rows: auto auto 1fr; grid-template-areas: "essen heute" "ampeln heute" "kinder heute"; gap: clamp(12px, 1.6vw, 20px); align-content: start; }
 .anz-essen { grid-area: essen; }
 .anz-ampeln { grid-area: ampeln; }
 .anz-heute { grid-area: heute; }
@@ -947,7 +947,11 @@ html.anzeige-modus body::before { display: none; }
 .anz-tonne .anz-zeit { color: #FFC531; }
 .anz-leer { margin: 0; color: var(--a-leise); }
 .anz-kinder { grid-area: kinder; }
-.anz-kinder li { display: grid; grid-template-columns: minmax(7em, auto) 1fr auto; gap: .8em; align-items: center; padding: .35em 0; border-top: 1px solid var(--a-linie); }
+.anz-kinder { align-self: start; }
+.anz-kinder li { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "name min" "text text"; gap: .15em .8em; align-items: center; padding: .4em 0; border-top: 1px solid var(--a-linie); }
+.anz-k-name { grid-area: name; }
+.anz-k-text { grid-area: text; }
+.anz-k-min { grid-area: min; justify-self: end; }
 .anz-kinder li:first-child { border-top: 0; }
 .anz-k-name { display: inline-flex; align-items: center; gap: .5em; font-weight: 700; }
 .anz-k-min { color: var(--a-leise); font-variant-numeric: tabular-nums; }
@@ -958,7 +962,7 @@ html.anzeige-modus body::before { display: none; }
   .anz-raster { grid-template-columns: 1fr; grid-template-areas: "essen" "ampeln" "heute" "kinder"; }
 }
 @media (prefers-reduced-motion: no-preference) { .anzeige { transition: filter 1s ease; } }
-.anz-raster.ohne-ampeln { grid-template-areas: "essen heute" "kinder kinder"; }
+.anz-raster.ohne-ampeln { grid-template-rows: auto 1fr; grid-template-areas: "essen heute" "kinder heute"; }
 @media (orientation: portrait), (max-width: 760px) { .anz-raster.ohne-ampeln { grid-template-areas: "essen" "heute" "kinder"; } }
 
 /* Aus dem Vorrat: wirklich da? */
@@ -973,3 +977,43 @@ html.anzeige-modus body::before { display: none; }
 #toast.mit-knopf { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
 .toast-knopf { font: inherit; font-weight: 600; color: #fff; background: none; border: 1px solid rgba(255,255,255,.6); border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
 .toast-knopf:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* Kalender auf dem Display */
+.anz-punkt { display: inline-block; width: .62em; height: .62em; border-radius: 50%; margin-right: .4em; vertical-align: .08em; }
+.anz-punkt + .anz-punkt { margin-left: -.25em; }
+.anz-morgen-kopf { margin-top: 1em !important; padding-top: .8em; border-top: 1px solid var(--a-linie); }
+.anz-zeit.ganz { font: 600 .78em/1.3 var(--text); }
+.kal-hilfe { margin: 0 0 12px; font-size: 15px; }
+.kal-hilfe summary { cursor: pointer; font-weight: 600; }
+.kal-hilfe ol { padding-left: 20px; margin: 8px 0; }
+.kal-liste .p-name { display: flex; align-items: center; gap: 8px; }
+.kal-zeile { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.kal-zeile .p-text { flex: 1; min-width: 0; }
+.kal-zeile .p-menge { overflow-wrap: anywhere; }
+/* Kleines Tablet quer (iPad mini): alles etwas enger, damit es auf einen Bildschirm passt */
+/* Kleines Tablet hoch: Kopf und Abstände kleiner */
+@media (orientation: portrait) and (max-height: 1100px) {
+  .anzeige { padding: 14px 16px; gap: 10px; font-size: 17px; }
+  .anz-uhr { font-size: 60px; }
+  .anz-blatt { min-width: 6.4em; }
+  .anz-blatt b { font-size: 2.3em; }
+  .anz-wt { padding: 4px 8px 3px; }
+  .anz-termine { gap: .38em; }
+  .anz-feld h2 { margin-bottom: .5em; }
+  .anz-gericht { font-size: 30px; }
+  .anz-meta { margin-top: .3em; }
+  .anz-morgen { margin-top: .5em; }
+  .anz-kinder li { padding: .3em 0; }
+  .anz-feld { padding: 12px 16px; }
+  .anz-raster { gap: 10px; }
+  .anz-ampeln .km-l { width: 18px; height: 18px; }
+  .anz-ampeln ul { gap: .35em; }
+}
+@media (max-height: 800px) and (orientation: landscape) {
+  .anzeige { padding: 14px 18px; gap: 12px; font-size: 16px; }
+  .anz-uhr { font-size: 64px; }
+  .anz-blatt b { font-size: 2.6em; }
+  .anz-feld { padding: 12px 14px; }
+  .anz-gericht { font-size: 34px; }
+  .anz-ampeln .km-l { width: 18px; height: 18px; }
+}

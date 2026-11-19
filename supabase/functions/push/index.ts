@@ -1558,6 +1558,243 @@ export async function planFeast(store: Store, f: Row) {
   };
 }
 
+/* ---------- Kalender-Abos fürs Küchen-Display ---------- */
+// Öffentliche iCloud-Kalender (oder andere Kalender-Abos) als .ics. Die Adressen stehen in ep_settings unter "kalender"
+// ({ feeds: [{ id, name, url, person_id }] }) und werden nur von hier abgerufen, nie von einer Adresse aus der Anfrage.
+// Ausgewertet werden heute und morgen nach deutscher Zeit: einmalige Termine, Serien (täglich, wöchentlich, monatlich,
+// jährlich mit Abständen, Wochentagen, Anzahl und Ende), Ausnahmen, verschobene und abgesagte Einzeltermine.
+type IcsProp = { name: string; params: Record<string, string>; value: string };
+type IcsWhen = { date: string; time: string | null; tz: string | null; utc: boolean };
+type IcsEvent = { uid: string; summary: string; start: IcsWhen; end: IcsWhen | null; dur: number | null; rrule: Record<string, string> | null; exdates: Set<string>; recurId: string | null; cancelled: boolean };
+export type CalItem = { titel: string; von: string | null; bis: string | null; ganztags: boolean; kalender: string };
+
+function icsProp(line: string): IcsProp | null {
+  let i = 0;
+  let quoted = false;
+  for (; i < line.length; i += 1) { const c = line[i]; if (c === '"') quoted = !quoted; else if (c === ':' && !quoted) break; }
+  if (i >= line.length) return null;
+  const head = line.slice(0, i).split(';');
+  const params: Record<string, string> = {};
+  for (const p of head.slice(1)) { const k = p.indexOf('='); if (k > 0) params[p.slice(0, k).toUpperCase()] = p.slice(k + 1).replace(/^"|"$/g, ''); }
+  return { name: head[0].toUpperCase(), params, value: line.slice(i + 1) };
+}
+const icsText = (v: string) => v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').replace(/\s+/g, ' ').trim();
+function icsWhen(value: string, params: Record<string, string>): IcsWhen | null {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(value.trim());
+  if (!m) return null;
+  const date = `${m[1]}-${m[2]}-${m[3]}`;
+  if (!m[4] || params.VALUE === 'DATE') return { date, time: null, tz: null, utc: false };
+  return { date, time: `${m[4]}:${m[5]}`, tz: m[7] ? null : params.TZID || null, utc: !!m[7] };
+}
+function icsDuration(v: string): number | null {
+  const m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(v.trim());
+  if (!m) return null;
+  const min = (Number(m[2] || 0) * 7 + Number(m[3] || 0)) * 1440 + Number(m[4] || 0) * 60 + Number(m[5] || 0);
+  return m[1] === '-' ? -min : min;
+}
+export function parseCalendar(text: string): IcsEvent[] {
+  const lines = String(text || '').replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '').split(/\r?\n/);
+  const out: IcsEvent[] = [];
+  let cur: IcsEvent | null = null;
+  let depth = 0;
+  for (const line of lines) {
+    if (/^BEGIN:VEVENT/i.test(line)) { cur = { uid: '', summary: '', start: null as unknown as IcsWhen, end: null, dur: null, rrule: null, exdates: new Set(), recurId: null, cancelled: false }; depth = 0; continue; }
+    if (!cur) continue;
+    if (/^BEGIN:/i.test(line)) { depth += 1; continue; }
+    if (/^END:VEVENT/i.test(line)) { if (cur.start) out.push(cur); cur = null; continue; }
+    if (/^END:/i.test(line)) { depth -= 1; continue; }
+    if (depth > 0) continue; // VALARM und Ähnliches
+    const p = icsProp(line);
+    if (!p) continue;
+    if (p.name === 'UID') cur.uid = p.value.trim();
+    else if (p.name === 'SUMMARY') cur.summary = icsText(p.value);
+    else if (p.name === 'DTSTART') cur.start = icsWhen(p.value, p.params) as IcsWhen;
+    else if (p.name === 'DTEND') cur.end = icsWhen(p.value, p.params);
+    else if (p.name === 'DURATION') cur.dur = icsDuration(p.value);
+    else if (p.name === 'STATUS') cur.cancelled = /CANCELLED/i.test(p.value);
+    else if (p.name === 'RRULE') cur.rrule = Object.fromEntries(p.value.split(';').map((x) => x.split('=')).filter((x) => x.length === 2).map(([k, v]) => [k.toUpperCase(), v]));
+    else if (p.name === 'EXDATE') for (const v of p.value.split(',')) { const w = icsWhen(v, p.params); if (w) cur.exdates.add(w.date); }
+    else if (p.name === 'RECURRENCE-ID') { const w = icsWhen(p.value, p.params); if (w) cur.recurId = w.date; }
+  }
+  return out;
+}
+// Wanduhrzeit einer Zeitzone in Minuten seit 1970 (UTC). Unbekannte Zonen (etwa aus Outlook) gelten als deutsche Zeit.
+const zoneOk = new Map<string, boolean>();
+function wallToUtcMin(date: string, time: string, tz: string): number {
+  const naive = Date.parse(`${date}T${time}:00Z`);
+  let zone = tz;
+  if (!zoneOk.has(zone)) { try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); zoneOk.set(zone, true); } catch { zoneOk.set(zone, false); } }
+  if (!zoneOk.get(zone)) zone = 'Europe/Berlin';
+  const offset = (ms: number) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+    return Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`) - ms;
+  };
+  let ms = naive - offset(naive);
+  ms = naive - offset(ms);
+  return Math.round(ms / 60000);
+}
+const DAYKEYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const wdOfIso = (iso: string) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY);
+const monthAdd = (iso: string, n: number) => { const d = new Date(`${iso.slice(0, 7)}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+const lastDay = (ym: string) => { const d = new Date(`${ym}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); return d.getUTCDate(); };
+// Tage eines Monats nach BYDAY (MO, 2MO, -1FR) und BYMONTHDAY (1, 15, -1).
+function monthDays(ym: string, byday: string[], bymonthday: number[], fallback: number): string[] {
+  const n = lastDay(ym);
+  const out = new Set<number>();
+  for (const m of bymonthday) { const d = m > 0 ? m : n + 1 + m; if (d >= 1 && d <= n) out.add(d); }
+  for (const b of byday) {
+    const m = /^([+-]?\d+)?(MO|TU|WE|TH|FR|SA|SU)$/.exec(b);
+    if (!m) continue;
+    const wd = DAYKEYS.indexOf(m[2]);
+    const all: number[] = [];
+    for (let d = 1; d <= n; d += 1) if (wdOfIso(`${ym}-${String(d).padStart(2, '0')}`) === wd) all.push(d);
+    const k = m[1] ? Number(m[1]) : 0;
+    if (!k) all.forEach((d) => out.add(d));
+    else { const d = k > 0 ? all[k - 1] : all[all.length + k]; if (d) out.add(d); }
+  }
+  if (!bymonthday.length && !byday.length && fallback <= n) out.add(fallback);
+  return [...out].sort((a, b) => a - b).map((d) => `${ym}-${String(d).padStart(2, '0')}`);
+}
+// Alle Starttage einer Serie bis limit (im Kalender des Termins).
+export function seriesDates(start: string, r: Record<string, string>, limit: string): string[] {
+  const freq = String(r.FREQ || '').toUpperCase();
+  const iv = Math.max(1, parseInt(r.INTERVAL, 10) || 1);
+  const count = parseInt(r.COUNT, 10) || 0;
+  const until = r.UNTIL ? (icsWhen(r.UNTIL, {}) || { date: '9999-12-31' }).date : '9999-12-31';
+  const byday = r.BYDAY ? r.BYDAY.split(',').map((x) => x.trim().toUpperCase()) : [];
+  const bymd = r.BYMONTHDAY ? r.BYMONTHDAY.split(',').map(Number).filter(Boolean) : [];
+  const bymonth = r.BYMONTH ? r.BYMONTH.split(',').map(Number).filter(Boolean) : [];
+  const end = until < limit ? until : limit;
+  const out: string[] = [];
+  let seen = 0;
+  const take = (d: string) => {
+    if (d < start) return true;
+    if (bymonth.length && !bymonth.includes(Number(d.slice(5, 7)))) return true;
+    if (count && seen >= count) return false;
+    if (d > end) return false;
+    seen += 1;
+    out.push(d);
+    return true;
+  };
+  let guard = 0;
+  if (freq === 'DAILY') {
+    for (let d = start; d <= end && guard < 20000; d = addDays(d, iv), guard += 1) {
+      if (byday.length && !byday.some((b) => b.endsWith(DAYKEYS[wdOfIso(d)]))) continue;
+      if (!take(d)) break;
+    }
+  } else if (freq === 'WEEKLY') {
+    const days = (byday.length ? byday.map((b) => DAYKEYS.indexOf(b.slice(-2))).filter((x) => x >= 0) : [wdOfIso(start)]).sort((a, b) => a - b);
+    for (let w = addDays(start, -wdOfIso(start)); w <= end && guard < 5000; w = addDays(w, 7 * iv), guard += 1) {
+      let stop = false;
+      for (const wd of days) { if (!take(addDays(w, wd))) { stop = true; break; } }
+      if (stop) break;
+    }
+  } else if (freq === 'MONTHLY') {
+    for (let m = start.slice(0, 7); `${m}-01` <= end && guard < 2000; m = monthAdd(`${m}-01`, iv).slice(0, 7), guard += 1) {
+      let stop = false;
+      for (const d of monthDays(m, byday, bymd, Number(start.slice(8, 10)))) { if (!take(d)) { stop = true; break; } }
+      if (stop) break;
+    }
+  } else if (freq === 'YEARLY') {
+    const months = bymonth.length ? bymonth : [Number(start.slice(5, 7))];
+    for (let y = Number(start.slice(0, 4)); `${y}-01-01` <= end && guard < 300; y += iv, guard += 1) {
+      let stop = false;
+      for (const mo of [...months].sort((a, b) => a - b)) {
+        const ym = `${y}-${String(mo).padStart(2, '0')}`;
+        for (const d of monthDays(ym, byday, bymd, Number(start.slice(8, 10)))) { if (!take(d)) { stop = true; break; } }
+        if (stop) break;
+      }
+      if (stop) break;
+    }
+  } else take(start);
+  return out;
+}
+// Termine eines Kalenders an den Tagen days (deutsche Zeit).
+export function calendarDays(events: IcsEvent[], days: string[], feed: string): Record<string, CalItem[]> {
+  const res: Record<string, CalItem[]> = Object.fromEntries(days.map((d) => [d, []]));
+  const first = days[0];
+  const last = days[days.length - 1];
+  const overrides = new Map<string, IcsEvent>();
+  for (const e of events) if (e.recurId && e.uid) overrides.set(`${e.uid}|${e.recurId}`, e);
+  // Berliner Tagesgrenzen in UTC-Minuten, einmal gerechnet.
+  const bounds = days.map((d) => [d, wallToUtcMin(d, '00:00', 'Europe/Berlin'), wallToUtcMin(addDays(d, 1), '00:00', 'Europe/Berlin')] as [string, number, number]);
+  const hm = (utcMin: number) => { const b = berlin(utcMin * 60000); return `${String(Math.floor(b.min / 60)).padStart(2, '0')}:${String(b.min % 60).padStart(2, '0')}`; };
+  const place = (e: IcsEvent, date: string) => {
+    if (e.cancelled || !e.summary) return;
+    if (!e.start.time) {
+      // Ganztägig: Ende ausschließlich, ohne Ende ein Tag.
+      const span = e.end && !e.end.time ? Math.max(1, daysBetween(e.start.date, e.end.date)) : e.dur ? Math.max(1, Math.round(e.dur / 1440)) : 1;
+      const stop = addDays(date, span);
+      for (const d of days) if (d >= date && d < stop) res[d].push({ titel: e.summary, von: null, bis: null, ganztags: true, kalender: feed });
+      return;
+    }
+    const tz = e.start.utc ? 'UTC' : e.start.tz || 'Europe/Berlin';
+    const s = wallToUtcMin(date, e.start.time, tz);
+    let f = s + Math.max(0, e.dur || 0);
+    if (e.end && e.end.time) f = Math.max(s, wallToUtcMin(addDays(date, daysBetween(e.start.date, e.end.date)), e.end.time, e.end.utc ? 'UTC' : e.end.tz || tz));
+    for (const [d, a, z] of bounds) {
+      if (!(s < z && (f > a || (f === s && s >= a)))) continue;
+      res[d].push({ titel: e.summary, von: s >= a ? hm(s) : null, bis: f > s && f < z ? hm(f) : null, ganztags: s <= a && f >= z, kalender: feed });
+    }
+  };
+  const old = addDays(first, -31);
+  for (const e of events) {
+    if (e.recurId) continue;
+    if (!e.rrule) { if (e.start.date <= last && e.start.date >= old) place(e, e.start.date); continue; }
+    for (const date of seriesDates(e.start.date, e.rrule, last)) {
+      if (date < old || e.exdates.has(date)) continue;
+      const o = overrides.get(`${e.uid}|${date}`);
+      if (o) { if (!o.cancelled) place(o, o.start.date); continue; }
+      place(e, date);
+    }
+  }
+  // Verschobene Einzeltermine, deren Serie hier fehlt.
+  for (const o of overrides.values()) if (!o.cancelled && o.start.date >= old && !events.some((e) => !e.recurId && e.uid === o.uid)) place(o, o.start.date);
+  for (const d of days) {
+    const seen = new Set<string>();
+    res[d] = res[d].filter((x) => { const k = `${x.titel}|${x.von}|${x.bis}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((x, y) => (x.ganztags === y.ganztags ? String(x.von || '00:00').localeCompare(String(y.von || '00:00')) : x.ganztags ? -1 : 1));
+  }
+  return res;
+}
+export function feedUrl(raw: string): string | null {
+  const u = String(raw || '').trim().replace(/^webcals?:\/\//i, 'https://');
+  try {
+    const x = new URL(u);
+    if (x.protocol !== 'https:' || /^(localhost|127\.|10\.|192\.168\.|\[)/i.test(x.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(x.hostname)) return null;
+    return x.toString();
+  } catch { return null; }
+}
+export async function loadCalendars(store: Store, nowMs = Date.now()) {
+  const rows = await store.get('ep_settings?select=key,value&key=eq.kalender');
+  const feeds: Row[] = Array.isArray(((rows[0] || {}).value || {}).feeds) ? rows[0].value.feeds.slice(0, 12) : [];
+  const today = berlin(nowMs).day;
+  const days = [today, addDays(today, 1)];
+  const tage: Record<string, CalItem[]> = Object.fromEntries(days.map((d) => [d, []]));
+  const status = await Promise.all(feeds.map(async (f) => {
+    const url = feedUrl(f.url);
+    if (!url) return { id: f.id, ok: false, fehler: 'Die Adresse ist kein Kalender-Link (webcal:// oder https://).' };
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 12000);
+      const res = await fetch(url, { signal: ctl.signal, headers: { Accept: 'text/calendar, */*' } }).finally(() => clearTimeout(timer));
+      if (!res.ok) return { id: f.id, ok: false, fehler: res.status === 404 ? 'Den Kalender gibt es unter dieser Adresse nicht (mehr). Ist er noch öffentlich?' : `Der Kalender antwortet mit Fehler ${res.status}.` };
+      const text = await res.text();
+      if (!/BEGIN:VCALENDAR/i.test(text)) return { id: f.id, ok: false, fehler: 'Unter der Adresse steht kein Kalender.' };
+      const got = calendarDays(parseCalendar(text), days, String(f.id));
+      let n = 0;
+      for (const d of days) { tage[d].push(...got[d]); n += got[d].length; }
+      return { id: f.id, ok: true, anzahl: n };
+    } catch (e) {
+      return { id: f.id, ok: false, fehler: (e as Error).name === 'AbortError' ? 'Der Kalender hat nicht rechtzeitig geantwortet.' : 'Der Kalender war nicht erreichbar.' };
+    }
+  }));
+  for (const d of days) tage[d].sort((x, y) => (x.ganztags === y.ganztags ? String(x.von || '00:00').localeCompare(String(y.von || '00:00')) : x.ganztags ? -1 : 1));
+  return { stand: new Date(nowMs).toISOString(), tage, feeds: status };
+}
+
 /* ---------- Ein Gericht im Wochenplan neu von Claude ---------- */
 // Die Familie schickt ein Abendessen zurück und bekommt ein neues Rezept, das noch nicht in der Sammlung steht.
 // Die App schickt den Tag, den Rest der Woche, die Namen der Sammlung, Esser und was schon gekauft ist.
@@ -2707,6 +2944,10 @@ async function runTest(req: Request) {
   if (body.action === 'fest') {
     if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'kalender') {
+    try { return { status: 200, body: await loadCalendars(db()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Ein Gericht im Wochenplan zurückgeben und ein neues Rezept bekommen.
   if (body.action === 'neues-gericht') {
