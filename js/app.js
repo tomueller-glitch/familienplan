@@ -475,6 +475,23 @@ async function commit(apply, persist) {
 
 /* ---------- Zeichnen ---------- */
 
+// Doppelte Posten in den Listen ab der Vorwoche zusammenfassen, auch in Listen, die vor dieser Regel entstanden sind.
+// Nur erzeugte, offene Posten. Das Ergebnis ist auf jedem Gerät gleich, deshalb stört es nicht, wenn zwei es zugleich tun.
+function dedupeShopping() {
+  if (state.dedupeBusy || !['app', 'anzeige'].includes(state.phase)) return;
+  const from = L.addDays(L.mondayOf(L.todayISO()), -7);
+  const { changed, removed } = L.mergeDuplicates(state.data.shopping.filter((i) => i.week_start >= from), (i) => !i.manual && !i.checked && !i.missing);
+  if (!removed.length) return;
+  state.dedupeBusy = true;
+  const gone = new Set(removed);
+  commit(() => {
+    state.data.shopping = state.data.shopping.filter((i) => !gone.has(i.id)).map((i) => changed.find((c) => c.id === i.id) || i);
+  }, async () => {
+    await store.saveItems(changed);
+    await store.deleteItems(removed);
+  }).finally(() => { state.dedupeBusy = false; });
+}
+
 function refresh() {
   state.loadedAt = Date.now();
   grantBonus();
@@ -538,6 +555,7 @@ function render() {
   const focusDraft = document.activeElement && document.activeElement.id === 'neu-posten';
   const viewKey = `${state.phase}|${state.tab}|${state.week}`;
   const scrollY = window.scrollY;
+  dedupeShopping();
   app.innerHTML = view();
   document.documentElement.classList.toggle('anzeige-modus', state.phase === 'anzeige');
   if (state.phase === 'anzeige') keepAwake(true);
@@ -4284,13 +4302,14 @@ function runImport(text) {
   }
   if (!saved.length && !rows.length) throw new Error('In dem Text stehen weder Gerichte noch Tage.');
   const week = /^\d{4}-\d{2}-\d{2}$/.test(obj.week_start || '') ? L.mondayOf(obj.week_start) : (rows[0] ? L.mondayOf(rows[0].day) : state.week);
-  const items = (obj.shopping || []).filter((s) => s && s.label).map((s, n) => ({
+  // Gleiche Posten (Zwiebel und Zwiebeln, Stk. und Stück) auf derselben Tour stehen nur einmal auf der Liste.
+  const items = L.mergeList((obj.shopping || []).filter((s) => s && s.label).map((s, n) => ({
     id: L.uid(), week_start: week, trip: s.trip ? String(s.trip) : 'Einkauf',
     due: /^\d{4}-\d{2}-\d{2}$/.test(String(s.due || '')) ? String(s.due) : null,
     category: L.SHOP_CATS[s.category] ? s.category : 'sonst', label: String(s.label), qty: s.qty ? String(s.qty) : '',
     purpose: s.purpose ? String(s.purpose) : '', missing: false, shop: s.shop === 'lidl' ? 'lidl' : null,
     sort: n, checked: false, checked_by: null, checked_at: null, manual: false,
-  }));
+  })));
   return { dishes, saved, rows, week, items, dropped };
 }
 

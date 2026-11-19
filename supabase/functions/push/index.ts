@@ -904,6 +904,7 @@ export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; w
     '',
     'Einkaufsliste:',
     `- Alle Zutaten der Woche zusammengefasst, in üblichen Packungsgrößen. Ohne Grundzutaten und ohne das, was laut Vorrat da ist.`,
+    '- Jede Zutat steht pro Tour nur einmal: Gleiche Zutaten aus mehreren Gerichten werden ein Posten mit der Gesamtmenge, in "wofuer" stehen alle Gerichte. Keine doppelten Posten durch Einzahl und Mehrzahl (Zwiebel und Zwiebeln) oder andere Einheiten (Stk. und Stück).',
     `- Tour "gross": Großeinkauf am ${sd.gross.wd}, ${fmtDay(sat)}${sd.gross.why ? ` (vorgezogen, weil ${sd.gross.why})` : ''}`,
     `- Tour "frisch": kleiner Einkauf am ${sd.frisch.wd}, ${fmtDay(wed)}${sd.frisch.why ? ` (vorgezogen, weil ${sd.frisch.why})` : ''}, für Frisches, das sonst nicht bis zum Ende der Woche hält`,
     ...(sd.gross.day > addDays(week, -7) && wdOf(sd.gross.day) < 5 ? ['- Der Großeinkauf liegt früher als sonst. Plane Frisches für die ersten Tage der Woche so, dass es bis dahin hält, oder lege es auf die Tour "frisch".'] : []),

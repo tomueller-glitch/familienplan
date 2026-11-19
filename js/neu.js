@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19b', datum: '19. November, nachmittags', titel: 'Einkaufsliste ohne doppelte Posten',
+    punkte: [
+      { text: 'Gleiche Zutaten stehen auf der Einkaufsliste nur noch einmal, mit der Gesamtmenge und allen Gerichten. Das gilt auch für „Zwiebel“ und „Zwiebeln“ oder „Stk.“ und „Stück“.' },
+      { text: 'Bestehende Listen ab dieser Woche werden beim Öffnen aufgeräumt. Abgehakte und selbst eingetragene Posten bleiben, wie sie sind.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19a', datum: '19. November', titel: 'Stall-Ampel, Minuten-Shop und Küchen-Display',
     punkte: [
       { text: 'Stall-Ampel: Bist du mit dem Stall dran, zeigt eine Ampel unter „Aufgaben“, wann er wieder sauber gemacht werden muss. Gelb heißt morgen, Rot heißt heute. Danach auf „Sauber gemacht“ tippen.', fuer: 'kinder' },

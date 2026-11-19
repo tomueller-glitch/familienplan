@@ -510,15 +510,22 @@ export function buildShopping(weekStart, plan, dishes, factors = {}, pantry = []
     if (!dish || (dish.tags || []).includes('Festtag')) continue;
     for (const ing of dish.ingredients || []) {
       if (ing.c === 'basis' || ing.q == null) continue;
-      const key = `${ing.n}|${ing.u || ''}`;
-      const cur = sums.get(key) || { n: ing.n, u: ing.u || '', c: ing.c || 'sonst', q: 0, uses: [] };
+      const f = factors[p.day] != null ? factors[p.day] : 1;
+      // Gleiche Zutat, auch bei Einzahl und Mehrzahl oder Stk. und Stück, kg und g: ein Posten.
+      let name = String(ing.n);
+      let { q, u } = baseQty(f === 1 ? ing.q : scaleQty(ing.q, ing.u, f), ing.u);
+      if (u === 'Zehe' && itemKey(name) === 'knoblauch') { name = 'Knoblauchzehe'; u = ''; }
+      const key = `${itemKey(name)}|${u}`;
+      const cur = sums.get(key) || { names: [], u, c: ing.c || 'sonst', q: 0, uses: [] };
+      if (!cur.names.includes(name)) cur.names.push(name);
+      if (cur.c === 'sonst' && ing.c) cur.c = ing.c;
       const use = `${shortDish(dish.name)} (${WEEKDAYS_SHORT[wdIndex(p.day)]})`;
       if (!cur.uses.includes(use)) cur.uses.push(use);
-      const f = factors[p.day] != null ? factors[p.day] : 1;
-      cur.q += f === 1 ? ing.q : scaleQty(ing.q, ing.u, f);
+      cur.q += q;
       sums.set(key, cur);
     }
   }
+  for (const it of sums.values()) it.n = baseName(it.names, it.q, it.u);
   const list = [...sums.values()].sort((a, b) =>
     SHOP_CAT_ORDER.indexOf(a.c) - SHOP_CAT_ORDER.indexOf(b.c) || a.n.localeCompare(b.n, 'de'));
   // Was laut Vorrat im Haus ist, steht am Ende schon abgehakt auf der Liste.
@@ -535,6 +542,99 @@ export function buildShopping(weekStart, plan, dishes, factors = {}, pantry = []
       checked: have, checked_by: null, checked_at: null, manual: false,
     };
   });
+}
+
+/* ---------- Gleiche Posten zusammenfassen ---------- */
+// Schlüssel eines Postens: klein, ohne Umlaute, Bindestrich wie Leerzeichen, das letzte Wort in einer Grundform.
+// So landen „Zwiebel“ und „Zwiebeln“, „Knoblauchzehe“ und „Knoblauchzehen“, „Pilz“ und „Pilze“ zusammen.
+// „Bio“ und Zusätze in Klammern bleiben Teil des Namens, das sind oft andere Produkte.
+const foldKey = (s) => s.replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss');
+const WORD_SINGULAR = { eier: 'ei' };
+function singularWord(w) {
+  if (WORD_SINGULAR[w]) return WORD_SINGULAR[w];
+  let x = w;
+  if (x.length >= 4 && /[elr]n$/.test(x)) x = x.slice(0, -1);
+  else if (x.length >= 4 && (/[aiouy]s$/.test(x) || /ons$/.test(x))) x = x.slice(0, -1);
+  if (x.length >= 5 && /e$/.test(x)) x = x.slice(0, -1);
+  return x;
+}
+export function itemKey(name) {
+  const words = foldKey(String(name || '').toLowerCase()).replace(/[-–]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return '';
+  const last = words.pop();
+  return [...words, singularWord(last)].join(' ');
+}
+// Menge in Grundeinheit: kg in g, l und cl in ml, Stück, Stk. und ohne Einheit gleich.
+export function baseQty(q, u) {
+  const raw = String(u || '').trim();
+  const c = raw ? (UNIT_WORDS[raw.toLowerCase()] ?? raw) : '';
+  if (c === 'kg') return { q: q * 1000, u: 'g' };
+  if (c === 'l') return { q: q * 1000, u: 'ml' };
+  if (c === 'cl') return { q: q * 10, u: 'ml' };
+  return { q, u: c };
+}
+// „2 Stück“, „1,5 kg“, „2 Dosen“, „ca. 300 g“ als Menge. Alles mit weiterem Text („2 Packungen à 400 g“) gibt null.
+export function parseQtyText(text) {
+  const t = String(text || '').trim().toLowerCase().replace(/^(ca\.?|etwa)\s*/, '');
+  const m = t.match(/^(\d+(?:[.,]\d+)?|[½¼¾⅓⅔])\s*([a-zäöüß]+\.?)?$/);
+  if (!m) return null;
+  const q = FRAC[m[1]] ?? Number(m[1].replace(',', '.'));
+  if (!(q > 0)) return null;
+  if (m[2] && !(m[2] in UNIT_WORDS)) return null;
+  return baseQty(q, m[2] ? UNIT_WORDS[m[2]] : '');
+}
+// Anzeigename für zusammengefasste Schreibweisen: bekannte Einzahl, sonst bei Stückzahlen über 1 die längere Form.
+const SINGULAR_OF = Object.fromEntries(Object.entries(NAME_PLURAL).map(([one, many]) => [many.toLowerCase(), one]));
+function baseName(names, q, u) {
+  for (const n of names) {
+    if (NAME_PLURAL[n]) return n;
+    if (SINGULAR_OF[n.toLowerCase()]) return SINGULAR_OF[n.toLowerCase()];
+  }
+  if (names.length < 2 || u) return names[0];
+  return [...names].sort((a, b) => (q > 1 ? b.length - a.length : a.length - b.length))[0];
+}
+// Fasst gleiche Posten einer Liste zusammen (gleiche Woche, Tour, Einkaufstag, Markt). Behalten wird der erste Posten
+// in der Reihenfolge der Liste, damit zwei Geräte unabhängig voneinander zum selben Ergebnis kommen.
+// Mengen werden addiert, wenn sie sich lesen lassen und die Einheit passt, sonst stehen sie mit „+“ hintereinander.
+export function mergeDuplicates(items, canMerge = () => true) {
+  const groups = new Map();
+  const order = [...items].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.id).localeCompare(String(b.id)));
+  for (const it of order) {
+    if (!it || !canMerge(it)) continue;
+    const k = [it.week_start, it.trip || 'Einkauf', it.due || '', it.shop || '', itemKey(it.label)].join('|');
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(it);
+  }
+  const changed = [];
+  const removed = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const qtys = g.map((x) => String(x.qty || '').trim()).filter(Boolean);
+    const parsed = qtys.map(parseQtyText);
+    const same = parsed.length && parsed.every((x) => x && x.u === parsed[0].u);
+    const sum = same ? Math.round(parsed.reduce((a, x) => a + x.q, 0) * 100) / 100 : null;
+    const names = [];
+    for (const x of g) if (!names.includes(String(x.label))) names.push(String(x.label));
+    const name = baseName(names, sum ?? 1, same ? parsed[0].u : 'x');
+    const uses = [];
+    for (const x of g) for (const w of String(x.purpose || '').split(/,\s*/)) if (w && !uses.includes(w)) uses.push(w);
+    const qty = same ? fmtQty(sum, parsed[0].u) : [...new Set(qtys)].join(' + ');
+    changed.push({
+      ...g[0],
+      label: same ? nameLabel(name, sum, parsed[0].u) : name,
+      qty,
+      purpose: uses.join(', '),
+      category: (g.find((x) => x.category && x.category !== 'sonst') || g[0]).category,
+    });
+    removed.push(...g.slice(1).map((x) => x.id));
+  }
+  return { changed, removed };
+}
+export function mergeList(items, canMerge) {
+  const { changed, removed } = mergeDuplicates(items, canMerge);
+  if (!removed.length) return items;
+  const gone = new Set(removed);
+  return items.filter((i) => !gone.has(i.id)).map((i) => changed.find((c) => c.id === i.id) || i);
 }
 
 // Zuordnung Zutat zu Abteilung aus allen bekannten Gerichten, fürs Bearbeiten-Formular.

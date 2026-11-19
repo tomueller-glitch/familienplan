@@ -393,6 +393,10 @@ lernendes Modell für Tempo, Tageskapazität und Vorbereitungszeit. Daten in der
 - Restzeit-Scheibe bei der laufenden Aufgabe (60-Minuten-Zifferblatt) und ein „Erster Schritt“ vor dem Start (einfache Regeln nach Titel und Fach).
 - Fokus am iPhone: Anleitung unter Eltern, Einstellungen, Lernmodus. Mit „Anpfiff schaltet den Lernfokus ein“ öffnet der Anpfiff `shortcuts://run-shortcut?name=Lernfokus an`, nach dem letzten Tor gibt es einen Knopf für „Lernfokus aus“. Bis zu zwei Minuten in den Kurzbefehlen zählen nicht als Ablenkung.
 
+## Doppelte Posten auf der Einkaufsliste
+
+Gleiche Posten derselben Tour stehen nur einmal auf der Liste (`itemKey`, `mergeDuplicates` in `js/logic.js`): klein geschrieben, ohne Umlaute, letztes Wort in einer Grundform, Mengen in Grundeinheit (kg in g, Stk. wie Stück). Das gilt beim Bauen aus den Rezepten, beim Übernehmen von Claudes Plan und beim Öffnen für bestehende Listen ab der Vorwoche (nur erzeugte, offene Posten). Prüfung: `node tests/einkauf-zusammenfassen.mjs`, `node tests/einkauf-doppelt.mjs`.
+
 ## Stall-Ampel, Minuten-Shop und Küchen-Display
 
 - Stall-Ampel: `ep_settings` unter `stall` (`on`, `tage`, `last`). Fällig ist `last + tage`, Gelb einen Tag vorher. Meldungen tragen die Kennung `st-…`, die Bestätigung setzt `last`. Aufgabe: `meerschwein-kaefig` oder eine Aufgabe mit Käfig oder Stall im Namen. Prüfung: `node --experimental-strip-types tests/funktion-stall-shop.mts` und `node tests/stall-shop.mjs`.
