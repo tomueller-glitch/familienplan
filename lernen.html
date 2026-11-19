@@ -1554,7 +1554,8 @@ function renderFocus(plan){
     const done=S.tasks.filter(t=>t.done&&t.doneAt===T);
     const f=done.length?`<details class="doned"><summary>Erledigt heute (${done.length})</summary>`+done.map(t=>`<div class="n-it"><span class="dot" style="background:${col(t.subject)}"></span><span class="grow">${esc(t.title)} <span class="n-min">${t.actual} Min.</span></span><button class="btn sm" data-act="undo" data-id="${t.id}">Rückgängig</button></div>`).join('')+`</details>`:'';
     if(lm)return sitesRow()+f+`<div class="foot"><button class="lnk" data-act="lmendask">Lernmodus beenden</button></div>`+(ui.lmEnd?`<form data-form="lmend" class="card"><h2>Lernmodus beenden</h2><div class="sub">Nur mit der Eltern-PIN.</div><div class="row" style="margin-top:8px"><input name="pin" type="password" inputmode="numeric" autocomplete="off" required style="flex:1"><button class="btn primary">Beenden</button></div></form>`:'');
-    return f+(jokerUsed()||S.wins[T]||!q.length?'':'<div class="foot"><button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button></div>')+addButtons(true);
+    // Vor dem Anpfiff steht „Spiel verlegen“ schon in der Anpfiff-Karte.
+    return f+(jokerUsed()||S.wins[T]||!q.length||!S.kick[T]?'':'<div class="foot"><button class="lnk" data-act="jokerask">Heute geht gar nichts? Spiel verlegen</button></div>')+addButtons(true);
   };
   // 0. Spiel verlegen: Nachfrage oder verlegter Tag
   if(ui.joker&&!verlegt(T))return h+`<div class="card kickk"><div class="k-lab">Spiel verlegen</div><div class="k-big">Heute geht gar nichts?</div>
