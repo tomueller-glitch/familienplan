@@ -283,8 +283,8 @@ class SupabaseStore {
     try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
     throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
   }
-  async calendars() {
-    const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'kalender' } });
+  async calendars(tage = 2) {
+    const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'kalender', tage } });
     if (!error) return data;
     let msg = '';
     try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }

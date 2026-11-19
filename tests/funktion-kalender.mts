@@ -1,5 +1,5 @@
 // Kalender-Abos fürs Küchen-Display: iCloud-Kalender lesen, Serien, Ausnahmen, Zeitzonen, Nachtdienste.
-import { parseCalendar, calendarDays, seriesDates, feedUrl } from '../supabase/functions/push/index.ts';
+import { parseCalendar, calendarDays, seriesDates, feedUrl, loadCalendars } from '../supabase/functions/push/index.ts';
 const ICS = [
   'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Apple Inc.//iPhone OS 18//EN', 'X-WR-CALNAME:Papa',
   'BEGIN:VTIMEZONE', 'TZID:Europe/Berlin', 'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'DTSTART:19810329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT', 'END:VTIMEZONE',
@@ -31,3 +31,18 @@ console.log('Monatlich 2. Do:', seriesDates('2026-01-08', { FREQ: 'MONTHLY', BYD
 console.log('Letzter Freitag:', seriesDates('2026-01-30', { FREQ: 'MONTHLY', BYDAY: '-1FR' }, '2026-04-30').join(' '));
 console.log('Sommerzeit (Mo 30.3. 7 Uhr):', JSON.stringify(calendarDays(parseCalendar(['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:x', 'DTSTART;TZID=Europe/Berlin:20260302T070000', 'DTEND;TZID=Europe/Berlin:20260302T080000', 'RRULE:FREQ=WEEKLY', 'SUMMARY:Frühdienst', 'END:VEVENT', 'END:VCALENDAR'].join('\n')), ['2026-03-30'], 'x')));
 console.log('Adressen:', feedUrl('webcal://p52-caldav.icloud.com/published/2/abc'), feedUrl('http://x.de/a.ics'), feedUrl('https://192.168.1.2/a.ics'), feedUrl('kein link'));
+// Drei Wochen für die Essensplanung: ein Abruf, alle Tage ab heute.
+{
+  const real = globalThis.fetch;
+  let hits = 0;
+  globalThis.fetch = (async () => { hits += 1; return new Response(ICS, { status: 200 }); }) as typeof fetch;
+  const store = { get: async () => [{ key: 'kalender', value: { feeds: [{ id: 'k1', url: 'webcal://p52-caldav.icloud.com/published/2/abc', person_id: 'p1' }] } }] } as never;
+  const now = Date.parse('2026-11-19T10:00:00Z');
+  const r22 = await loadCalendars(store, now, 22);
+  const r2 = await loadCalendars(store, now);
+  const r99 = await loadCalendars(store, now, 99);
+  globalThis.fetch = real;
+  const days = Object.keys(r22.tage);
+  console.log('Tage:', days.length, days[0], days[days.length - 1], '| Standard:', Object.keys(r2.tage).length, '| höchstens:', Object.keys(r99.tage).length, '| Abrufe:', hits);
+  console.log('Di 24.11. (Ausnahme):', JSON.stringify(r22.tage['2026-11-24'].map((x) => x.titel)), '| Do 26.11.:', JSON.stringify(r22.tage['2026-11-26'].map((x) => `${x.von}-${x.bis} ${x.titel}`)), '| Anzahl:', r22.feeds[0].anzahl);
+}

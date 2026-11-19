@@ -98,7 +98,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['kalender-abos', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['kalender-abos', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['kalender', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -523,8 +523,10 @@ function scheduleContextSync() {
 }
 function syncContext() {
   if (!state.fresh) { scheduleContextSync(); return; }
+  // Ohne die Kalender fehlen Claude Dienste und Termine. Erst laden, danach kommt der Aufruf wieder.
+  if (!kalReady()) { loadCalendars(false); return; }
   try {
-    const ctx = KI.buildContext(state.data, stats, exportNutrition);
+    const ctx = KI.buildContext({ ...state.data, events: allEvents() }, stats, exportNutrition);
     const old = KI.settingOf(state.data.settings, 'ki_kontext');
     const strip = (c) => JSON.stringify({ ...c, stand: '', auswertung: { ...(c && c.auswertung), erstellt: '' } });
     if (old && old.stand === ctx.stand && strip(old) === strip(ctx)) return;
@@ -538,12 +540,14 @@ function syncContext() {
 function syncDinnerTimes() {
   // Nie mit dem gespeicherten Stand vom letzten Mal schreiben, er kann veraltet sein.
   if (!state.fresh) { scheduleDinnerSync(); return; }
+  // Nicht ohne die Kalender schreiben, sonst schreiben Geräte mit und ohne Kalender abwechselnd.
+  if (!kalReady()) { loadCalendars(false); return; }
   const today = L.todayISO();
   const end = L.addDays(today, 13);
   const changed = [];
   for (const p of state.data.plan) {
     if (p.day < today || p.day > end || !p.dish_id || p.skipped) continue;
-    const info = T.dinnerInfo(state.data.persons, state.data.events, state.data.attendance, p.day);
+    const info = T.dinnerInfo(state.data.persons, allEvents(), state.data.attendance, p.day);
     const away = info.away.map((x) => x.person.id).sort();
     if (p.dinner_time === info.time && JSON.stringify([...(p.dinner_away || [])].sort()) === JSON.stringify(away)) continue;
     changed.push({ ...p, dinner_time: info.time, dinner_away: away });
@@ -595,13 +599,16 @@ function sheetCalendars(sh) {
     const p = f.person_id ? personById(f.person_id) : null;
     const st = status(f.id);
     return `<li class="kal-zeile"><span class="p-text"><span class="p-name">${p ? avatar(p, true) : ''}${esc(f.name)}</span>
-      <span class="p-menge">${st ? (st.ok ? `Gelesen, heute und morgen ${st.anzahl === 1 ? '1 Termin' : `${st.anzahl} Termine`}` : `Fehler: ${esc(st.fehler)}`) : esc(String(f.url).replace(/^(webcals?|https):\/\//, '').slice(0, 42) + '…')}</span></span>
+      <span class="p-menge">${st ? (st.ok ? `Gelesen, ${st.anzahl === 1 ? '1 Termin' : `${st.anzahl} Termine`} in den nächsten drei Wochen` : `Fehler: ${esc(st.fehler)}`) : esc(String(f.url).replace(/^(webcals?|https):\/\//, '').slice(0, 42) + '…')}</span>
+      ${p ? `<span class="p-menge">${f.essen === false ? 'Nur fürs Display' : `Zählt fürs Abendessen von ${esc(p.name)}`}</span>` : ''}</span>
+      ${p ? `<button class="knopf zweit klein" data-action="kalender-essen" data-id="${esc(f.id)}">${f.essen === false ? 'Fürs Essen zählen' : 'Nur Display'}</button>` : ''}
       <button class="weg" data-action="kalender-weg" data-id="${esc(f.id)}" aria-label="${esc(f.name)} entfernen">${CROSS}</button></li>`;
   };
   return {
-    over: 'Küchen-Display',
-    title: 'Kalender fürs Display',
-    body: `<p class="meta" style="margin-bottom:10px">Das Display zeigt die Termine dieser Kalender von heute und morgen, neben den Terminen aus dem Familienplan. Auf den Handys erscheinen sie nicht. Die App liest nur, sie ändert nichts.</p>
+    over: 'Familie',
+    title: 'iPhone-Kalender',
+    body: `<p class="meta" style="margin-bottom:10px">Das Küchen-Display zeigt die Termine dieser Kalender von heute und morgen. Steht ein Termin auch im Familienplan, erscheint er nur einmal. Die App liest nur, sie ändert nichts.</p>
+      <p class="meta" style="margin-bottom:10px">Gehört ein Kalender zu einer Person, zählen seine Termine mit Uhrzeit auch fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später. Läuft ein Termin über Mitternacht, etwa ein Nachtdienst, isst die Person an dem Abend nicht mit. Ganztägige Einträge wie Geburtstage zählen nicht. Im Tag lässt sich das wie immer von Hand ändern.</p>
       <details class="kal-hilfe"><summary>So bekommt ihr den Link eines iPhone-Kalenders</summary><ol>
         <li>In der Kalender-App unten auf „Kalender“ tippen.</li>
         <li>Beim gewünschten iCloud-Kalender auf das (i) tippen und „Öffentlicher Kalender“ einschalten. Das geht nur auf dem Gerät der Person, der der Kalender gehört.</li>
@@ -696,12 +703,23 @@ function viewDisplay() {
 // Ein Tag in der Terminspalte des Displays.
 function displayDay(d, isToday) {
   const who = (e) => (e.who || []).map((id) => personById(id)).filter(Boolean);
-  const own = T.eventsOn(state.data.events, d).map((e) => ({ von: String(e.start_time || '').slice(0, 5) || null, bis: String(e.end_time || '').slice(0, 5) || null, ganztags: !e.start_time, titel: e.title, people: who(e), quelle: '' }));
   const feeds = calFeeds();
-  const ext = ((state.kal && state.kal.tage && state.kal.tage[d]) || []).map((x) => {
-    const f = feeds.find((y) => y.id === x.kalender) || {};
+  const raw = (state.kal && state.kal.tage && state.kal.tage[d]) || [];
+  const feedOf = (x) => feeds.find((y) => y.id === x.kalender) || {};
+  // Steht ein Termin im Familienplan und im Kalender, zeigt das Display ihn einmal, mit den Personen aus beiden.
+  const twins = new Map();
+  const ownEvents = T.eventsOn(state.data.events, d).filter((e) => {
+    const x = raw.find((c) => T.sameEvent(e, c, feedOf(c).person_id));
+    if (x) twins.set(x, e);
+    return !x;
+  });
+  const own = ownEvents.map((e) => ({ von: String(e.start_time || '').slice(0, 5) || null, bis: String(e.end_time || '').slice(0, 5) || null, ganztags: !e.start_time, titel: e.title, people: who(e), quelle: '' }));
+  const ext = raw.map((x) => {
+    const f = feedOf(x);
     const p = f.person_id ? personById(f.person_id) : null;
-    return { ...x, people: p ? [p] : [], quelle: f.name || '' };
+    const twin = twins.get(x);
+    const people = [...(p ? [p] : []), ...(twin ? who(twin) : [])].filter((q, i, a) => a.findIndex((y) => y.id === q.id) === i);
+    return { ...x, people, quelle: f.name || '' };
   });
   const all = [...own, ...ext].sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
   const bin = isToday ? A.trashTomorrow(d) : '';
@@ -714,21 +732,63 @@ function displayDay(d, isToday) {
 }
 // Abonnierte Kalender: Einstellung "kalender" ({ feeds }) und die Termine von heute und morgen aus der Funktion push.
 const calFeeds = () => { const v = KI.settingOf(state.data.settings, 'kalender'); return v && Array.isArray(v.feeds) ? v.feeds : []; };
+// Termine aus den Kalendern für heute und drei Wochen: fürs Display und für Essenszeit, Esser und Claudes Wochenplan.
+// Das Gerät merkt sich den letzten Stand, damit die Rechnung nach dem Neuladen gleich stimmt.
+const KAL_DAYS = 22;
+const KAL_KEY = 'essensplan.kalender';
+function kalState() {
+  if (state.kal === undefined) {
+    state.kal = null;
+    try {
+      const c = JSON.parse(localStorage.getItem(KAL_KEY) || 'null');
+      if (c && c.tage && Date.now() - c.at < 24 * 3600000) state.kal = { ...c, error: '' };
+    } catch (e) { /* ohne Speicher wird neu geladen */ }
+  }
+  return state.kal;
+}
+// Fertig, wenn es keine Kalender gibt, die drei Wochen geladen sind oder das Laden gerade nicht klappt.
+function kalReady() {
+  if (!calFeeds().some((f) => f.person_id && f.essen !== false)) return true;
+  const k = kalState();
+  return !!k && (k.error || (k.voll && Date.now() - k.at < 12 * 3600000));
+}
+let kalMemo = { key: null, list: [] };
+function allEvents() {
+  const k = kalState();
+  const feeds = calFeeds();
+  if (!feeds.length || !k) return state.data.events;
+  const today = L.todayISO();
+  if (kalMemo.k !== k || kalMemo.feeds !== feeds || kalMemo.events !== state.data.events || kalMemo.today !== today) {
+    const tage = Object.fromEntries(Object.entries(k.tage || {}).filter(([d]) => d >= today));
+    kalMemo = { k, feeds, events: state.data.events, today, list: [...state.data.events, ...T.calendarEvents(tage, feeds)] };
+  }
+  return kalMemo.list;
+}
 async function loadCalendars(force) {
+  kalState();
   if (state.kalBusy || !calFeeds().length || store.offline) return;
   const today = L.todayISO();
-  const fresh = state.kal && state.kal.tage && state.kal.tage[today] && Date.now() - state.kal.at < 15 * 60000;
-  if (!force && (fresh || (state.kal && Date.now() - state.kal.at < 60000))) return;
+  const fresh = state.kal && state.kal.voll && state.kal.tage && state.kal.tage[today] && Date.now() - state.kal.at < 15 * 60000;
+  if (!force && (fresh || (state.kal && state.kal.error && Date.now() - state.kal.at < 60000))) return;
   state.kalBusy = true;
   try {
-    const r = await store.calendars();
-    state.kal = { at: Date.now(), tage: r.tage || {}, feeds: r.feeds || [], error: '' };
+    const r = await store.calendars(KAL_DAYS);
+    state.kal = { at: Date.now(), tage: r.tage || {}, feeds: r.feeds || [], voll: true, error: '' };
+    try { localStorage.setItem(KAL_KEY, JSON.stringify({ at: state.kal.at, tage: state.kal.tage, feeds: state.kal.feeds, voll: true })); } catch (e) { /* Speicher voll oder gesperrt */ }
   } catch (e) {
     state.kal = { ...(state.kal || { tage: {} }), at: Date.now(), error: e.message };
   } finally { state.kalBusy = false; }
   if (state.phase === 'anzeige' || (state.sheet && state.sheet.type === 'kalender')) { if (state.sheet) renderSheet(); else render(); }
+  else if (state.phase === 'app') {
+    if (!state.sheet) render();
+    scheduleDinnerSync();
+    scheduleContextSync();
+  }
 }
-setInterval(() => { if (state.phase === 'anzeige' && document.visibilityState === 'visible' && !state.sheet) { loadCalendars(false); render(); } }, 30000);
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  if (state.phase === 'anzeige' && !state.sheet) { loadCalendars(false); render(); } else if (state.phase === 'app') loadCalendars(false);
+}, 30000);
 setInterval(() => {
   if (state.phase !== 'anzeige' || store.offline || document.visibilityState !== 'visible') return;
   store.loadAll().then((d) => { state.data = normalize(d); state.loadedAt = Date.now(); refresh(); }).catch(() => {});
@@ -974,7 +1034,7 @@ function planTiles() {
 
 // Geschätzte Kosten der geplanten Abendessen, nach Zahl der Esser und Gäste, dazu der Rest vom Monatsbudget.
 function weekCost(days) {
-  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, days, state.data.plan);
+  const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, days, state.data.plan);
   let sum = 0; let known = 0; let missing = 0;
   for (const d of days) {
     const p = planOf(d);
@@ -1172,7 +1232,7 @@ function removedRow(week, key, add) {
 const pantryChecks = () => { const v = KI.settingOf(state.data.settings, 'vorrat_check'); return v && typeof v === 'object' ? v : {}; };
 function pantryAsk(week) {
   if (week < L.addDays(L.mondayOf(L.todayISO()), -7)) return [];
-  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, L.weekDays(week), state.data.plan);
   const ok = pantryChecks()[week] || {};
   // Was schon richtig auf der Liste steht (offen oder gekauft), muss niemand im Vorrat suchen.
   const listed = new Set(state.data.shopping.filter((i) => i.week_start === week && i.category !== 'vorhanden').map((i) => L.itemKey(i.label)));
@@ -1625,7 +1685,7 @@ function lunchTop() {
 
 /* ---------- Termine und Abendessen ---------- */
 
-const dinnerOf = (day) => T.dinnerInfo(state.data.persons, state.data.events, state.data.attendance, day);
+const dinnerOf = (day) => T.dinnerInfo(state.data.persons, allEvents(), state.data.attendance, day);
 const hm = (min) => T.toHM(min);
 
 const guestsOf = (day) => Math.max(0, Number((planOf(day) || {}).guests) || 0);
@@ -1668,7 +1728,7 @@ function dinnerBlock(day) {
         <option value="weg"${val === 'weg' ? ' selected' : ''}>isst nicht mit</option></select>
       <input class="feld klein zeit" type="time" name="t-${esc(p.id)}" aria-label="Uhrzeit für ${esc(p.name)}" value="${esc(own && own.time ? own.time : x.home != null ? hm(x.home) : '19:30')}"${dis}></div>`;
   }).join('');
-  const evs = info.events.map((e) => `<li>${esc((e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', '))}: ${esc(e.title)}, ${esc(e.start_time || '')}${e.end_time ? ` bis ${esc(e.end_time)}` : ''}${e.home_time ? `, zu Hause ${esc(e.home_time)}` : ''}</li>`).join('');
+  const evs = info.events.map((e) => `<li>${esc((e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', '))}: ${esc(e.title)}${e.kal ? ` (Kalender ${esc((calFeeds().find((f) => f.id === e.kal) || {}).name || '')})` : ''}, ${esc(e.start_time || (e.nacht ? 'ganzer Abend' : ''))}${e.end_time ? ` bis ${esc(e.end_time)}` : ''}${e.home_time ? `, zu Hause ${esc(e.home_time)}` : ''}</li>`).join('');
   return `<div class="kasten-text abend">
     <strong>Abendessen um ${info.time}</strong>${notes.length ? `${esc(notes.join('. '))}.` : 'Alle sind dabei.'}
     ${evs ? `<ul class="termine-tag">${evs}</ul>` : ''}
@@ -1679,17 +1739,31 @@ function dinnerBlock(day) {
     <button class="knopf">Speichern</button></form></details></div>`;
 }
 
+// Steht ein Termin aus dem Familienplan in den nächsten drei Wochen auch in einem iPhone-Kalender? Dann dessen Name.
+function eventInCalendar(e) {
+  const k = kalState();
+  if (!k || !k.tage) return '';
+  const feeds = calFeeds();
+  for (const [d, items] of Object.entries(k.tage)) {
+    if (d < L.todayISO() || !T.eventsOn([e], d).length) continue;
+    const x = (items || []).find((c) => T.sameEvent(e, c, (feeds.find((f) => f.id === c.kalender) || {}).person_id));
+    if (x) return (feeds.find((f) => f.id === x.kalender) || {}).name || 'Kalender';
+  }
+  return '';
+}
 function sheetEvents() {
   const wdNames = (e) => (e.weekdays || []).slice().sort().map((w) => L.WD_SHORT[w]).join(', ');
   const rows = [...state.data.events].sort((a, b) => (a.sort || 0) - (b.sort || 0) || a.title.localeCompare(b.title, 'de')).map((e) => `<li${e.active === false ? ' class="raus"' : ''}>
     <button class="g-zeile" data-action="${canPlan() ? 'termin-bearbeiten' : 'termine'}" data-id="${esc(e.id)}">
       <span class="mal"><span class="n klein">${esc(wdNames(e))}</span></span>
       <span class="tz-text"><span class="tz-name">${esc(e.title)}</span>
-      <span class="tz-meta">${esc([(e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', '), `${e.start_time || ''}${e.end_time ? ` bis ${e.end_time}` : ''}`, e.home_time ? `zu Hause ${e.home_time}` : '', e.pause_ferien ? 'Pause in den Ferien' : ''].filter(Boolean).join(', '))}</span></span></button></li>`).join('');
+      <span class="tz-meta">${esc([(e.who || []).map((id) => (personById(id) || {}).name).filter(Boolean).join(', '), `${e.start_time || ''}${e.end_time ? ` bis ${e.end_time}` : ''}`, e.home_time ? `zu Hause ${e.home_time}` : '', e.pause_ferien ? 'Pause in den Ferien' : ''].filter(Boolean).join(', '))}</span>
+      ${eventInCalendar(e) ? `<span class="tz-meta">Steht auch im iPhone-Kalender „${esc(eventInCalendar(e))}“${e.home_time ? '' : ', kann hier weg'}</span>` : ''}</span></button></li>`).join('');
   return {
     over: 'Familie',
     title: 'Termine',
     body: `<p class="meta" style="margin-bottom:12px">Wiederkehrende Termine wie Training, Ballett oder Dienste. Daraus ergibt sich, wann gegessen wird: um 18:30 Uhr, oder sobald alle zu Hause sind. Termine, die erst zur Essenszeit beginnen, verschieben nichts. An vollen Tagen schlägt die App nur Rezepte bis ${T.BUSY_MAX_MIN} Minuten vor.</p>
+      ${calFeeds().some((f) => f.person_id && f.essen !== false) ? '<p class="meta" style="margin-bottom:12px">Die Termine aus den iPhone-Kalendern zählen schon mit. Hier braucht es nur, was dort fehlt, oder einen Termin mit „zu Hause um“, wenn der Heimweg länger dauert.</p>' : ''}
       ${rows ? `<ul class="gerichte">${rows}</ul>` : '<p class="meta">Noch keine Termine eingetragen.</p>'}
       ${canPlan() ? '<div class="knopfreihe"><button class="knopf" data-action="termin-neu">Termin eintragen</button></div>' : ''}`,
   };
@@ -3519,7 +3593,7 @@ function tradeWarnings(a, b) {
     }
   }
   // Wenig Zeit am neuen Tag.
-  const limits = T.durationLimits(state.data.persons, state.data.events, state.data.attendance, [a, b]);
+  const limits = T.durationLimits(state.data.persons, allEvents(), state.data.attendance, [a, b]);
   for (const [dish, to] of moves) {
     if (dish.duration_min && dish.duration_min > limits[to]) out.push(`„${L.shortDish(dish.name)}“ braucht ${durationText(dish.duration_min)}, am ${L.WD_SHORT[L.wdIndex(to)]} ist es knapp.`);
   }
@@ -3698,7 +3772,7 @@ function sheetFamily() {
       ${edit ? fold(aiCostBlock()) : ''}
       ${fold(abfuhrBox(true), abfuhrLow())}
       ${edit ? fold(`<div class="kasten-text"><strong>Küchen-Display</strong>Ein altes Tablet in der Küche zeigt dann groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Nur zum Anschauen, ohne Personenwahl. Zurück geht es unten über „Anzeige beenden“. Neuere Tablets hält die App wach. Auf älteren (vor iPadOS 16.4, etwa ein iPad mini 4) unter Einstellungen, Anzeige & Helligkeit die automatische Sperre auf „Nie“ stellen. Ein iPad mini 2 oder 3 ist zu alt für die App.
-      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="anzeige-an">Dieses Gerät wird Küchen-Display</button><button class="knopf zweit klein" data-action="kalender-abos">Kalender fürs Display${calFeeds().length ? ` (${calFeeds().length})` : ''}</button></div></div>`) : ''}
+      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="anzeige-an">Dieses Gerät wird Küchen-Display</button><button class="knopf zweit klein" data-action="kalender-abos">iPhone-Kalender${calFeeds().length ? ` (${calFeeds().length})` : ''}</button></div></div>`) : ''}
       ${edit ? fold(`<div class="kasten-text"><strong>Von Hand mit Claude im Chat</strong>Für den Weg ohne automatischen Wochenplan: die Auswertung in den Chat mit Claude kopieren und den fertigen Plan hier wieder einfügen.
       <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit klein" data-action="export">Auswertung erstellen</button><button class="knopf zweit klein" data-action="import">Plan einfügen</button></div></div>`) : ''}
       <div class="kasten-text">${store.mode === 'local'
@@ -3971,7 +4045,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“. Unter „Kalender fürs Display“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen, auf den Handys erscheinen sie nicht.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen, doppelte nur einmal. Gehört ein Kalender zu einer Person, zählen seine Termine auch fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -4353,7 +4427,7 @@ function swapShopping(day, oldDish, newDish) {
   // Zweck des alten Gerichts: das Abendessen an diesem Tag, auch wenn Claude den Namen gekürzt hat.
   const isOld = (u) => !!oldDish && L.isDinnerUse(u) && L.useDay(u, week) === day;
   const newUse = newDish ? `${L.shortDish(newDish.name)} (${wd})` : '';
-  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, L.weekDays(week), state.data.plan);
   const dishes = newDish && !state.data.dishes.some((d) => d.id === newDish.id) ? [...state.data.dishes, newDish] : state.data.dishes;
   const need = (dish) => (dish ? L.buildShopping(week, [{ day, dish_id: dish.id, skipped: false }], dishes, factors, state.data.pantry, packsAll()) : []);
   // Wie viel das alte Gericht von einem Posten gebraucht hat, damit ein gemeinsamer Posten kleiner wird.
@@ -4443,7 +4517,7 @@ function newDishContext(day, wish, rejected) {
   const old = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
   const week = L.mondayOf(day);
   const info = dinnerOf(day);
-  const limits = T.durationLimits(state.data.persons, state.data.events, state.data.attendance, [day]);
+  const limits = T.durationLimits(state.data.persons, allEvents(), state.data.attendance, [day]);
   const lim = limits[day];
   const main = (d) => (d.ingredients || []).filter((g) => g.c !== 'basis' && g.q != null).slice(0, 6).map((g) => g.n);
   const isOld = (u) => !!old && L.isDinnerUse(u) && L.useDay(u, week) === day;
@@ -4539,7 +4613,7 @@ function acceptNewDish() {
 }
 
 function fillWeek() {
-  const limits = T.durationLimits(state.data.persons, state.data.events, state.data.attendance, L.weekDays(state.week));
+  const limits = T.durationLimits(state.data.persons, allEvents(), state.data.attendance, L.weekDays(state.week));
   const skip = L.weekDays(state.week).filter((d) => holidayOf(d));
   const sug = L.planWeek(state.data.dishes, stats, state.data.plan, state.week, limits, skip);
   if (!sug.length) { toast(skip.length === 7 ? 'In dieser Woche ist Urlaub, es gibt nichts zu planen.' : 'Es gibt keine weiteren Gerichte im Umlauf.'); return; }
@@ -4560,7 +4634,7 @@ async function rebuildShopping(silent) {
   const week = state.week;
   const old = state.data.shopping.filter((i) => i.week_start === week && !i.manual);
   if (!silent && old.length && !(await ask('Die Liste wird aus dem Wochenplan neu berechnet. Häkchen gehen dabei verloren. Eigene Einträge und Posten für die Brotboxen bleiben, von Hand entfernte Posten kommen nicht wieder.', 'Neu erstellen'))) return;
-  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, L.weekDays(week), state.data.plan);
   const built = L.buildShopping(week, state.data.plan, state.data.dishes, factors, state.data.pantry, packsAll());
   if (!built.length) { toast('Im Wochenplan steht noch kein Gericht.'); return; }
   const kept = keepNonDinner(old, week);
@@ -4892,7 +4966,7 @@ function draftShopping(d, plan, week) {
     return dish ? { day: p.day, dish_id: dish.id, skipped: false } : null;
   }).filter(Boolean);
   if (!rows.length) return list;
-  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, L.weekDays(week), state.data.plan);
   const own = L.tripsOf(list);
   const trips = own.length > 1 ? own : KI.shopTrips(week);
   for (const it of L.buildShopping(week, rows, dishes, factors, state.data.pantry, packsAll())) {
@@ -5653,6 +5727,13 @@ const actions = {
     openSheet({ type: 'kalender' });
   },
   'kalender-pruefen': async () => { await loadCalendars(true); renderSheet(); },
+  'kalender-essen': ({ id }) => {
+    saveCalFeeds(calFeeds().map((x) => (x.id === id ? { ...x, essen: x.essen === false } : x)));
+    kalMemo = { key: null, list: [] };
+    renderSheet();
+    scheduleDinnerSync();
+    scheduleContextSync();
+  },
   'anzeige-an': () => {
     try { localStorage.setItem(DISPLAY_KEY, 'kueche'); } catch (e) { /* ohne Speicher gilt es bis zum Neuladen */ }
     display = 'kueche'; closeSheet(); state.phase = 'anzeige'; state.loadedAt = Date.now(); render();

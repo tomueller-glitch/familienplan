@@ -16,10 +16,11 @@ const INIT = (db) => {
     delete() { const d = { eq() { return Object.assign(Promise.resolve({ error: null }), d); }, in(c, v) { window.calls.push(['delete', table, v.length]); return Promise.resolve({ error: null }); } }; return d; } }; return api; };
   window.supabase = { createClient: () => ({ auth: { getSession: async () => ({ data: { session: { user: {} } }, error: null }), signOut: async () => {} }, from: q,
     channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-    storage: { from: () => ({ list: async () => ({ data: [{ name: 'familienplan-2026-11-15-0300.json', metadata: { size: 48213 } }, { name: 'familienplan-2026-11-08-0300.json', metadata: { size: 47001 } }], error: null }), download: async (n) => ({ data: new Blob(['{}'], { type: 'application/json' }), error: null }) }) }, functions: { invoke: async (n, o) => { window.calls.push(['invoke', n, { action: o.body.action, n: (o.body.photos || []).length, len: (o.body.photos || []).map(p => p.data.length) }]); await new Promise(r => setTimeout(r, 400)); if (o.body.action === 'kalender') { window.kalCalls = (window.kalCalls || 0) + 1; return { data: window.KAL || { stand: '', tage: {}, feeds: [] }, error: null }; } if (o.body.action === 'mittag') { window.lastMittag = o.body.mittag; return { data: { mittag: [{ name: 'Rührei mit Spinat', minuten: 10, warum: 'Eiweiß und Gemüse.', zutaten: [{ menge: '4 Stück', name: 'Eier', da: true }, { menge: '100 g', name: 'Feta', da: false }], schritte: ['Eier verquirlen.', 'Braten.'], reste: [] }] }, error: null }; } if (o.body.action === 'kosten') { const ds = window.__db.ep_dishes; return { data: { kosten: { stand: '2026-11-18', kassenzettel: 2, gerichte: Object.fromEntries(ds.map((x, i) => [x.id, 6 + (i * 1.7) % 14])) } }, error: null }; } if (o.body.action === 'fest') { const m = await import('/js/planer.js'); return { data: { fest: m.demoFeast(o.body.fest) }, error: null }; } if (o.body.action === 'ersatz') return { data: { ersatz: { vorschlaege: [{ name: 'Kabeljaufilet TK', menge: '600 g', warum: 'Mild und fest.' }, { name: 'Alaska-Seelachs TK', menge: '600 g', warum: 'Sehr ähnlich.' }], rezept_hinweis: 'Am Vorabend im Kühlschrank auftauen und trocken tupfen.' } }, error: null }; if (o.body.action === 'sicherung') return { data: { name: 'x', anzahl: { ep_dishes: 16, ep_plan: 20 } }, error: null }; if (o.body.action === 'kassenzettel') return { data: { beleg: { markt: 'Aldi Süd', datum: '2026-11-18', summe: 14.10, hinweis: 'Eine Zeile war schwer lesbar.', posten: [ { text: 'BIO HAEHN.BR.FIL', name: 'Bio-Hähnchenbrustfilet', preis: 7.99, kategorie: 'Fleisch und Fisch' }, { text: 'SALATGURKE', name: 'Salatgurke', preis: 0.69, kategorie: 'Obst und Gemüse' }, { text: 'SPUELMASCH.TABS', name: 'Spülmaschinentabs', preis: 3.95, kategorie: 'Sonstiges' }, { text: 'PFAND', name: 'Pfand', preis: 0.25, kategorie: 'Pfand und Rabatt' } ] } }, error: null }; return { data: {}, error: null }; } } }) };
+    storage: { from: () => ({ list: async () => ({ data: [{ name: 'familienplan-2026-11-15-0300.json', metadata: { size: 48213 } }, { name: 'familienplan-2026-11-08-0300.json', metadata: { size: 47001 } }], error: null }), download: async (n) => ({ data: new Blob(['{}'], { type: 'application/json' }), error: null }) }) }, functions: { invoke: async (n, o) => { window.calls.push(['invoke', n, { action: o.body.action, n: (o.body.photos || []).length, len: (o.body.photos || []).map(p => p.data.length) }]); await new Promise(r => setTimeout(r, 400)); if (o.body.action === 'kalender') { window.kalCalls = (window.kalCalls || 0) + 1; window.kalTage = o.body.tage; return { data: window.KAL || { stand: '', tage: {}, feeds: [] }, error: null }; } if (o.body.action === 'mittag') { window.lastMittag = o.body.mittag; return { data: { mittag: [{ name: 'Rührei mit Spinat', minuten: 10, warum: 'Eiweiß und Gemüse.', zutaten: [{ menge: '4 Stück', name: 'Eier', da: true }, { menge: '100 g', name: 'Feta', da: false }], schritte: ['Eier verquirlen.', 'Braten.'], reste: [] }] }, error: null }; } if (o.body.action === 'kosten') { const ds = window.__db.ep_dishes; return { data: { kosten: { stand: '2026-11-18', kassenzettel: 2, gerichte: Object.fromEntries(ds.map((x, i) => [x.id, 6 + (i * 1.7) % 14])) } }, error: null }; } if (o.body.action === 'fest') { const m = await import('/js/planer.js'); return { data: { fest: m.demoFeast(o.body.fest) }, error: null }; } if (o.body.action === 'ersatz') return { data: { ersatz: { vorschlaege: [{ name: 'Kabeljaufilet TK', menge: '600 g', warum: 'Mild und fest.' }, { name: 'Alaska-Seelachs TK', menge: '600 g', warum: 'Sehr ähnlich.' }], rezept_hinweis: 'Am Vorabend im Kühlschrank auftauen und trocken tupfen.' } }, error: null }; if (o.body.action === 'sicherung') return { data: { name: 'x', anzahl: { ep_dishes: 16, ep_plan: 20 } }, error: null }; if (o.body.action === 'kassenzettel') return { data: { beleg: { markt: 'Aldi Süd', datum: '2026-11-18', summe: 14.10, hinweis: 'Eine Zeile war schwer lesbar.', posten: [ { text: 'BIO HAEHN.BR.FIL', name: 'Bio-Hähnchenbrustfilet', preis: 7.99, kategorie: 'Fleisch und Fisch' }, { text: 'SALATGURKE', name: 'Salatgurke', preis: 0.69, kategorie: 'Obst und Gemüse' }, { text: 'SPUELMASCH.TABS', name: 'Spülmaschinentabs', preis: 3.95, kategorie: 'Sonstiges' }, { text: 'PFAND', name: 'Pfand', preis: 0.25, kategorie: 'Pfand und Rabatt' } ] } }, error: null }; return { data: {}, error: null }; } } }) };
 };
-async function open(db, who) {
+async function open(db, who, kal) {
   const ctx = await b.newContext({ viewport: { width: 400, height: 860 }, serviceWorkers: 'block' });
+  if (kal) await ctx.addInitScript((k) => { window.KAL = k; }, kal);
   await ctx.route('**/js/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.ESSENSPLAN_CONFIG={supabaseUrl:'https://abcdefghijkl.supabase.co',supabaseKey:'sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxx',vapidPublicKey:''};` }));
   await ctx.addInitScript(INIT, db);
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -88,5 +89,33 @@ async function openDisplay(db, w, h) {
   const st2 = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'kalender').pop();
   console.log('B nach Entfernen:', JSON.stringify(st2 && st2.value));
   console.log('B Fehler:', errs); await ctx.close();
+}
+// C: Termin im Familienplan und im Kalender steht auf dem Display nur einmal
+const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_time: '12:00', end_time: '20:30', home_time: null, pause_ferien: false, active: true, sort: 1 };
+{
+  const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }]; db.ep_events = [DIENST, { id: 'e2', title: 'Ballett', who: ['p4'], weekdays: [2], start_time: '16:00', end_time: '17:00', home_time: '17:15', pause_ferien: false, active: true, sort: 2 }];
+  const { page, ctx, errs } = await openDisplay(db, 1024, 768);
+  console.log('C Termine:', (await page.locator('.anz-heute').innerText()).replace(/\n+/g, ' | '));
+  console.log('C Fehler:', errs); await ctx.close();
+}
+// D: Kalender zählen fürs Abendessen, auch für Claude und die gespeicherten Essenszeiten
+{
+  const KAL2 = { ...KAL, tage: { ...KAL.tage, '2026-11-20': [{ titel: 'Nachtdienst', von: '15:30', bis: null, ganztags: false, zeit: true, kalender: 'k1' }], '2026-11-21': [{ titel: 'Nachtdienst', von: null, bis: '08:00', ganztags: false, zeit: true, kalender: 'k1' }] } };
+  KAL2.tage['2026-11-18'] = KAL2.tage['2026-11-18'].map((x) => ({ ...x, zeit: true }));
+  const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }]; db.ep_events = [DIENST];
+  const { page, ctx, errs } = await open(db, 0, KAL2);
+  await page.evaluate(() => { location.hash = '#woche'; }); await page.waitForTimeout(2500);
+  console.log('D Abrufe:', await page.evaluate(() => [window.kalCalls, window.kalTage]));
+  const days = await page.evaluate(() => [...document.querySelectorAll('.tag, .tag-karte, [data-day]')].map((x) => x.innerText.replace(/\n+/g, ' / ')).filter((t) => /Mi|Do|Fr/.test(t)).slice(0, 4));
+  console.log('D Woche:', JSON.stringify(days).slice(0, 900));
+  await page.waitForTimeout(3000);
+  const plan = (await calls(page, 'ep_plan')).flat().filter((r) => r.day >= '2026-11-18' && r.day <= '2026-11-21').map((r) => `${r.day}:${r.dinner_time}:${(r.dinner_away || []).join('+')}`);
+  console.log('D Essenszeiten gespeichert:', plan.join(' '));
+  const ctxRow = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'ki_kontext').pop();
+  console.log('D Claude:', ctxRow ? ctxRow.value.tage.slice(0, 3).map((t) => `${t.tag}: ${t.essen}, ${t.esser} Esser, weg ${t.weg.join('+') || '-'}, kurz ${t.kurz}`).join(' | ') : 'nicht geschrieben');
+  await page.evaluate(() => { location.hash = '#familie'; }); await page.waitForTimeout(300);
+  await page.locator('[data-action="termine"]').first().click(); await page.waitForTimeout(400);
+  console.log('D Termine:', (await page.locator('#sheet-root .gerichte').innerText()).replace(/\n+/g, ' | '));
+  console.log('D Fehler:', errs); await ctx.close();
 }
 await b.close(); srv.close();

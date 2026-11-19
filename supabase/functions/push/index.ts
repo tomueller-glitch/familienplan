@@ -1568,7 +1568,7 @@ export async function planFeast(store: Store, f: Row) {
 type IcsProp = { name: string; params: Record<string, string>; value: string };
 type IcsWhen = { date: string; time: string | null; tz: string | null; utc: boolean };
 type IcsEvent = { uid: string; summary: string; start: IcsWhen; end: IcsWhen | null; dur: number | null; rrule: Record<string, string> | null; exdates: Set<string>; recurId: string | null; cancelled: boolean };
-export type CalItem = { titel: string; von: string | null; bis: string | null; ganztags: boolean; kalender: string };
+export type CalItem = { titel: string; von: string | null; bis: string | null; ganztags: boolean; zeit?: boolean; kalender: string };
 
 function icsProp(line: string): IcsProp | null {
   let i = 0;
@@ -1738,7 +1738,7 @@ export function calendarDays(events: IcsEvent[], days: string[], feed: string): 
     if (e.end && e.end.time) f = Math.max(s, wallToUtcMin(addDays(date, daysBetween(e.start.date, e.end.date)), e.end.time, e.end.utc ? 'UTC' : e.end.tz || tz));
     for (const [d, a, z] of bounds) {
       if (!(s < z && (f > a || (f === s && s >= a)))) continue;
-      res[d].push({ titel: e.summary, von: s >= a ? hm(s) : null, bis: f > s && f < z ? hm(f) : null, ganztags: s <= a && f >= z, kalender: feed });
+      res[d].push({ titel: e.summary, von: s >= a ? hm(s) : null, bis: f > s && f < z ? hm(f) : null, ganztags: s <= a && f >= z, zeit: true, kalender: feed });
     }
   };
   const old = addDays(first, -31);
@@ -1769,11 +1769,13 @@ export function feedUrl(raw: string): string | null {
     return x.toString();
   } catch { return null; }
 }
-export async function loadCalendars(store: Store, nowMs = Date.now()) {
+// tage: wie viele Tage ab heute (das Display braucht zwei, die Essensplanung drei Wochen).
+export async function loadCalendars(store: Store, nowMs = Date.now(), tageAnzahl = 2) {
   const rows = await store.get('ep_settings?select=key,value&key=eq.kalender');
   const feeds: Row[] = Array.isArray(((rows[0] || {}).value || {}).feeds) ? rows[0].value.feeds.slice(0, 12) : [];
   const today = berlin(nowMs).day;
-  const days = [today, addDays(today, 1)];
+  const n = Math.max(1, Math.min(22, Math.round(Number(tageAnzahl) || 2)));
+  const days = Array.from({ length: n }, (_, i) => addDays(today, i));
   const tage: Record<string, CalItem[]> = Object.fromEntries(days.map((d) => [d, []]));
   const status = await Promise.all(feeds.map(async (f) => {
     const url = feedUrl(f.url);
@@ -2949,7 +2951,7 @@ async function runTest(req: Request) {
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
   if (body.action === 'kalender') {
-    try { return { status: 200, body: await loadCalendars(db()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+    try { return { status: 200, body: await loadCalendars(db(), Date.now(), Number(body.tage) || 2) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Ein Gericht im Wochenplan zurückgeben und ein neues Rezept bekommen.
   if (body.action === 'neues-gericht') {

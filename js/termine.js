@@ -26,13 +26,49 @@ export const isBreak = (day) => {
 };
 
 // Termine, die an diesem Tag stattfinden.
+// Einzeltermine aus den iPhone-Kalendern haben ein Datum statt Wochentagen.
 export function eventsOn(events, day) {
   const wd = wdIndex(day);
-  return events.filter((e) => e.active !== false
+  return events.filter((e) => (e.date ? e.date === day : e.active !== false
     && (e.weekdays || []).includes(wd)
     && (!e.valid_from || day >= e.valid_from)
     && (!e.valid_to || day <= e.valid_to)
-    && !(e.pause_ferien && isBreak(day)));
+    && !(e.pause_ferien && isBreak(day))));
+}
+
+// Termine aus den abonnierten Kalendern (heute und die nächsten drei Wochen) als Einzeltermine.
+// Es zählen nur Kalender, die zu einer Person gehören und nicht auf „nur Anzeige“ stehen,
+// und nur Termine mit Uhrzeit. Ganztägige Einträge wie Geburtstage verschieben das Essen nicht.
+// Ein Termin, der über Mitternacht hinaus läuft (ohne Ende an dem Tag), heißt: an dem Abend weg.
+export function calendarEvents(tage, feeds) {
+  const out = [];
+  for (const [day, items] of Object.entries(tage || {})) {
+    (items || []).forEach((x, i) => {
+      const f = (feeds || []).find((y) => y.id === x.kalender);
+      if (!f || !f.person_id || f.essen === false || !x.titel) return;
+      const timed = x.zeit === true || x.von || x.bis;
+      if (!timed) return;
+      out.push({ id: `kal-${f.id}-${day}-${i}`, kal: f.id, date: day, title: x.titel, who: [f.person_id], start_time: x.von || null, end_time: x.bis || null, nacht: !x.bis });
+    });
+  }
+  return out;
+}
+
+const words = (t) => String(t || '').toLowerCase().replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss')
+  .split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+// Ist ein Termin aus dem Familienplan derselbe wie einer aus dem Kalender? Gleicher Tag vorausgesetzt.
+// Passt die Person, reicht eine ähnliche Uhrzeit (höchstens 30 Minuten) oder ein gemeinsames Wort im Titel.
+// Sonst braucht es beides.
+export function sameEvent(own, cal, personId) {
+  const a = toMin(own.start_time);
+  const b = toMin(cal.von);
+  const near = a != null && b != null && Math.abs(a - b) <= 30;
+  const wa = words(own.title);
+  const wb = words(cal.titel);
+  const like = wa.some((w) => wb.some((v) => v.startsWith(w) || w.startsWith(v)));
+  const person = !!personId && (own.who || []).includes(personId);
+  if (!own.start_time && cal.von) return false;
+  return person ? near || like : near && like;
 }
 
 export const homeOf = (e) => e.home_time || e.end_time || null;
@@ -49,6 +85,7 @@ export function dinnerInfo(persons, events, attendance, day) {
     let home = null;
     let reason = null;
     let leaves = null;
+    let gone = null;
     for (const e of own) {
       const st = toMin(e.start_time);
       // Termine, die erst zur Essenszeit oder danach beginnen, verschieben das Essen nicht.
@@ -56,10 +93,13 @@ export function dinnerInfo(persons, events, attendance, day) {
         if (st < base + 120 && (leaves == null || st < leaves.at)) leaves = { at: st, title: e.title };
         continue;
       }
+      // Kalendertermin, der vor dem Essen beginnt und über Mitternacht läuft: an dem Abend weg.
+      if (e.nacht) { gone = e.title; continue; }
       const h = toMin(homeOf(e));
       if (h != null && h > base && (home == null || h > home)) { home = h; reason = e.title; }
     }
     if (home != null) status = 'spaet';
+    if (gone) { status = 'weg'; home = null; reason = gone; }
     let manual = false;
     if (override) {
       manual = true;
@@ -98,8 +138,8 @@ export function isBusy(persons, events, attendance, day) {
   return info.events.some((e) => (e.who || []).some((id) => {
     const p = persons.find((x) => x.id === id);
     if (!p || !p.adult) return false;
-    const s = toMin(e.start_time);
-    const h = toMin(homeOf(e));
+    const s = toMin(e.start_time) ?? (e.date ? 0 : null);
+    const h = e.nacht ? 24 * 60 : toMin(homeOf(e));
     return s != null && h != null && s < to && h > from;
   }));
 }

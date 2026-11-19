@@ -3,6 +3,15 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19h', datum: '19. November, spätabends', titel: 'iPhone-Kalender zählen fürs Abendessen',
+    punkte: [
+      { text: 'Termine aus dem iPhone-Kalender einer Person zählen jetzt fürs Abendessen mit: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, etwa im Nachtdienst, isst nicht mit. Von Hand lässt sich das im Tag wie immer ändern.' },
+      { text: 'Steht ein Termin im Familienplan und im iPhone-Kalender, zeigt das Küchen-Display ihn nur einmal.' },
+      { text: 'Unter Familie, „iPhone-Kalender“ lässt sich pro Kalender umschalten, ob er fürs Essen zählt oder nur aufs Display kommt. Bei den Terminen im Familienplan steht, welche auch im iPhone-Kalender stehen und wegkönnen.', fuer: 'eltern' },
+      { text: 'Claude sieht die Kalendertermine beim Wochenplan auch und plant an vollen Tagen schnelle Gerichte.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19g', datum: '19. November, nachts', titel: 'Einkaufsliste ohne „Bio“, dafür mit Bio-Angeboten',
     punkte: [
       { text: 'Auf der Einkaufsliste steht kein „Bio“ mehr vor den Sachen. Gekauft wird Bio, wenn es das gibt.' },
