@@ -399,6 +399,8 @@ Gleiche Posten derselben Tour stehen nur einmal auf der Liste (`itemKey`, `merge
 
 Aus dem Vorrat: `fromPantry` in `js/logic.js` sammelt die Zutaten der Gerichte ab heute, die laut Vorrat da sind. Die Liste fragt sie oben ab. „Ist da“ steht in `ep_settings` unter `vorrat_check` (pro Woche), „Fehlt“ setzt den Vorrat auf leer und stellt die Zutat auf die nächste Tour (sonst „Nachkauf“). Prüfung: `node tests/vorrat-frage.mjs`.
 
+Brotbox und Touren: Posten, deren Zweck kein Abendessen ist (`isDinnerUse`), etwa „Brotbox (Di)“, lassen sich nicht aus Rezepten berechnen. „Aus dem Plan neu erstellen“ behält sie samt Touren (`keepNonDinner`, `tripFor`). Werden im Entwurf Tage getauscht, passt `draftShopping` Claudes Liste an, statt sie zu ersetzen. Fehlen Brotbox-Posten aus dem freigegebenen Entwurf, bietet die Liste sie oben zum Nachtragen an. Prüfung: `node tests/brotbox-liste.mjs`.
+
 ## Stall-Ampel, Minuten-Shop und Küchen-Display
 
 - Stall-Ampel: `ep_settings` unter `stall` (`on`, `tage`, `last`). Fällig ist `last + tage`, Gelb einen Tag vorher. Meldungen tragen die Kennung `st-…`, die Bestätigung setzt `last`. Aufgabe: `meerschwein-kaefig` oder eine Aufgabe mit Käfig oder Stall im Namen. Prüfung: `node --experimental-strip-types tests/funktion-stall-shop.mts` und `node tests/stall-shop.mjs`.

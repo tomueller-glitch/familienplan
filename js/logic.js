@@ -638,6 +638,38 @@ export function mergeList(items, canMerge) {
   return items.filter((i) => !gone.has(i.id)).map((i) => changed.find((c) => c.id === i.id) || i);
 }
 
+/* ---------- Wofür ein Posten ist, und auf welche Tour er gehört ---------- */
+// „Hackbällchen (Mo), Brotbox (Do)“ als Liste.
+export const usesOf = (purpose) => String(purpose || '').split(/,\s*/).map((x) => x.trim()).filter(Boolean);
+const USE_RE = /^(.*\S)\s*\((Mo|Di|Mi|Do|Fr|Sa|So)\)$/;
+const useDay = (use, weekStart) => { const m = USE_RE.exec(use); return m ? addDays(weekStart, WEEKDAYS_SHORT.indexOf(m[2])) : null; };
+// Steht ein Zweck für ein Abendessen? dinnerNames: Kurznamen der Abendessen, klein geschrieben.
+// Alles andere (Brotbox, Frühstück, Snack) lässt sich nicht aus Rezepten neu berechnen.
+export function isDinnerUse(use, dinnerNames) {
+  const m = USE_RE.exec(use);
+  return !!m && dinnerNames.has(shortDish(m[1]).toLowerCase());
+}
+export const dinnerNamesOf = (dishes, more = []) => new Set([...dishes.filter(isDinner).map((d) => d.name), ...more].filter(Boolean).map((n) => shortDish(String(n)).toLowerCase()));
+// Touren einer Liste nach Datum: [{ trip, due }].
+export function tripsOf(items) {
+  const seen = new Map();
+  for (const i of items) if (i && !i.manual && !seen.has(i.trip || 'Einkauf')) seen.set(i.trip || 'Einkauf', i.due || null);
+  return [...seen.entries()].map(([trip, due]) => ({ trip, due })).sort((a, b) => String(a.due || '9').localeCompare(String(b.due || '9')));
+}
+// Tour für einen Posten, wie Claude sie verteilt: Frisches (Fleisch und Fisch, Salat, Gemüse und Obst, Brot) auf die letzte
+// Tour bis zum ersten Gebrauch, also Feldsalat für Freitag auf den Frischeeinkauf am Mittwoch. Alles, was hält
+// (Vorrat, Tiefkühl, Kühlregal, Kartoffeln, Zwiebeln, Äpfel), auf den ersten Einkauf.
+const FRESH = new Set(['fleisch', 'obst', 'brot']);
+const KEEPS = /kartoffel|zwiebel|knoblauch|schalotte|möhre|karotte|kürbis|rotkohl|weißkohl|kohlrabi|sellerie|rote bete|ingwer|apfel|äpfel|zitrone|limette|orange|mandarine|clementine|tiefgekühlt|\btk\b/i;
+export const isFresh = (item) => FRESH.has(item.category) && !KEEPS.test(String(item.label || item.n || ''));
+export function tripFor(item, trips, weekStart) {
+  if (!trips.length) return { trip: 'Einkauf', due: null };
+  const first = usesOf(item.purpose).map((u) => useDay(u, weekStart)).filter(Boolean).sort()[0];
+  const before = trips.filter((t) => t.due && first && t.due <= first);
+  const t = isFresh(item) && before.length ? before[before.length - 1] : trips[0];
+  return { trip: t.trip, due: t.due };
+}
+
 // Was der Wochenplan aus dem Vorrat nimmt: Zutaten der geplanten Gerichte, die laut Vorrat da sind und deshalb
 // nicht (oder nur abgehakt) auf der Einkaufsliste stehen. Pro Zutat einmal, mit Menge, Gerichten und Vorrat-Eintrag.
 // minDay: Tage davor zählen nicht mehr, da ist schon gekocht.

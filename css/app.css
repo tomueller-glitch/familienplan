@@ -965,3 +965,4 @@ html.anzeige-modus body::before { display: none; }
 .vorrat-frage { margin: 0 0 14px; border-left: 4px solid var(--gelb, #E9B10E); }
 .vorrat-frage .posten { margin-top: 8px; }
 .vorrat-frage .knopfreihe { margin-top: 8px; }
+.kasten-zeile { margin: 6px 0 0; }

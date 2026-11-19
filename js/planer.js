@@ -196,3 +196,15 @@ export function shopDayBack(day, avoidShort = false) {
   for (let n = 0; n < 7 && (shopClosed(d) || (avoidShort && shortDay(d))); n += 1) d = L.addDays(d, -1);
   return d;
 }
+// Die zwei Touren einer Woche, mit denselben Namen wie in Claudes Plan (Funktion push, toImport): Großeinkauf am Samstag
+// davor, Frischeeinkauf am Mittwoch. Ist der Markt zu, rückt die Tour auf den letzten offenen Tag davor.
+const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const dm = (iso) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}.`;
+export function shopTrips(week) {
+  const tour = (label, regular, avoidShort) => {
+    const day = shopDayBack(regular, avoidShort);
+    const why = day !== regular ? `${WD[L.wdIndex(regular)]} ${dm(regular)} ist ${shopHoliday(regular) || (shortDay(regular) ? 'nur bis mittags offen' : 'Sonntag')}` : '';
+    return { trip: `${label} am ${WD[L.wdIndex(day)]} ${dm(day)}${why ? `, vorgezogen (${why})` : ''}${shortDay(day) ? ', Markt schließt mittags' : ''}`, due: day };
+  };
+  return [tour('Großeinkauf', L.addDays(week, -2), true), tour('Frischeeinkauf', L.addDays(week, 2), false)];
+}

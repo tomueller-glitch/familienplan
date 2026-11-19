@@ -3,6 +3,15 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19c', datum: '19. November, abends', titel: 'Groß- und Frischeeinkauf, Brotbox-Sachen bleiben',
+    punkte: [
+      { text: 'Wer im Entwurf von Claude ein Gericht getauscht hat, bekam bisher eine Liste nur aus den Rezepten: Brotbox-Sachen wie Vollkornbrot, Angebote und die Aufteilung in Groß- und Frischeeinkauf fehlten. Jetzt bleibt Claudes Liste, nur die Zutaten des getauschten Gerichts werden ersetzt.', fuer: 'eltern' },
+      { text: '„Aus dem Plan neu erstellen“ behält Posten für die Brotboxen und die Touren der Liste.', fuer: 'eltern' },
+      { text: 'Auch eine Liste aus den Rezepten hat jetzt einen Großeinkauf am Samstag und einen Frischeeinkauf am Mittwoch. Salat, Pilze, frisches Fleisch und Brot für die zweite Wochenhälfte kommen auf den Frischeeinkauf.', fuer: 'eltern' },
+      { text: 'Steht eine Liste noch auf einem einzigen Einkauf oder fehlen Brotbox-Sachen aus Claudes Plan, schlägt die Einkaufsliste oben die Reparatur vor: „Aufteilen und ergänzen“.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19b', datum: '19. November, nachmittags', titel: 'Einkaufsliste ohne doppelte Posten, Vorrat prüfen',
     punkte: [
       { text: 'Gleiche Zutaten stehen auf der Einkaufsliste nur noch einmal, mit der Gesamtmenge und allen Gerichten. Das gilt auch für „Zwiebel“ und „Zwiebeln“ oder „Stk.“ und „Stück“.' },
