@@ -45,11 +45,22 @@ const feeds = [{ id: 'k1', name: 'Dienst', url: 'webcal://p52-caldav.icloud.com/
 const KAL = { stand: '2026-11-18T10:00:00Z', feeds: [{ id: 'k1', ok: true, anzahl: 2 }, { id: 'k2', ok: true, anzahl: 2 }, { id: 'k3', ok: false, fehler: 'Den Kalender gibt es unter dieser Adresse nicht (mehr). Ist er noch öffentlich?' }],
   tage: { '2026-11-18': [{ titel: 'Spätdienst', von: '12:00', bis: '20:30', ganztags: false, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3' }, { titel: 'Werkstatt', von: '10:30', bis: '10:30', ganztags: false, zeit: true, kalender: 'k1' }, { titel: 'Elternabend 7b', von: '19:30', bis: '21:00', ganztags: false, kalender: 'k2' }],
     '2026-11-19': [{ titel: 'Geburtstag Oma', von: null, bis: null, ganztags: true, kalender: 'k2' }, { titel: 'Nachtdienst', von: '19:30', bis: null, ganztags: false, zeit: true, weiter: true, kalender: 'k1' }] } };
-async function openDisplay(db, w, h, kal = KAL) {
+// Das Display hängt von der Uhrzeit ab (morgens, abends, nach dem Essen). Standard: 17:30 Uhr am Testtag.
+const WETTER = (() => {
+  const time = []; const t = []; const pr = []; const code = [];
+  for (const d of ['2026-11-18', '2026-11-19', '2026-11-20']) for (let h = 0; h < 24; h += 1) {
+    time.push(`${d}T${String(h).padStart(2, '0')}:00`); t.push(1 + Math.round(7 * Math.sin(Math.PI * Math.max(0, h - 6) / 16) * 10) / 10);
+    pr.push(h >= 14 && h <= 19 ? 70 : 10); code.push(h >= 14 && h <= 19 ? 61 : 3);
+  }
+  return { hourly: { time, temperature_2m: t, precipitation_probability: pr, weather_code: code }, daily: {} };
+})();
+async function openDisplay(db, w, h, kal = KAL, opts = {}) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, serviceWorkers: 'block' });
+  await ctx.route('**/api.open-meteo.com/**', (r) => { ctx.wetterUrl = r.request().url(); return r.fulfill({ contentType: 'application/json', body: JSON.stringify(WETTER) }); });
+  await ctx.addInitScript(([hh, mm, day]) => { globalThis.ESSENSPLAN_STUNDE = hh; globalThis.ESSENSPLAN_MINUTE = mm; if (day) globalThis.ESSENSPLAN_HEUTE_X = day; }, [opts.stunde ?? 17, opts.minute ?? 30, opts.tag || null]);
   await ctx.route('**/js/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.ESSENSPLAN_CONFIG={supabaseUrl:'https://abcdefghijkl.supabase.co',supabaseKey:'sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxx',vapidPublicKey:''};` }));
   await ctx.addInitScript(INIT, db);
-  await ctx.addInitScript((k) => { window.KAL = k; }, kal);
+  await ctx.addInitScript((k) => { window.KAL = k; if (globalThis.ESSENSPLAN_HEUTE_X) globalThis.ESSENSPLAN_HEUTE = globalThis.ESSENSPLAN_HEUTE_X; }, kal);
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto('http://localhost:8858/?anzeige=kueche'); await page.waitForTimeout(2200);
   return { page, ctx, errs };
@@ -194,5 +205,57 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   await page.fill('#sheet-root [name=pin1]', '2468'); await page.locator('#sheet-root form[data-form=pin] button').click(); await page.waitForTimeout(500);
   console.log('F Eltern-PIN beendet:', await page.locator('.anzeige').count() === 0);
   console.log('F Fehler:', errs); await ctx.close();
+}
+// G: Vorschau morgens, nachmittags und nach dem Essen, „Ist alle“ und „Wie war's?“
+{
+  const NAMES = { p1: 'Papa', p2: 'Mama', p3: 'Philip', p4: 'Julia' };
+  const KAL4 = { ...KAL, feeds: [{ id: 'k1', ok: true, anzahl: 3 }, { id: 'k2', ok: true, anzahl: 1 }, { id: 'k3', ok: true, anzahl: 3 }, { id: 'k5', ok: true, anzahl: 2 }, { id: 'k6', ok: true, anzahl: 2 }], tage: {
+    '2026-11-19': [
+      { titel: 'Englisch Ex', von: null, bis: null, ganztags: true, kalender: 'k3' },
+      { titel: 'Werkstatt-Termin: CO-JP 1417', von: '10:30', bis: '10:30', ganztags: false, zeit: true, kalender: 'k1' },
+      { titel: 'Turnen', von: '15:30', bis: '17:00', ganztags: false, zeit: true, kalender: 'k6' },
+      { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k1', weg: 12 },
+      { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3', weg: 12 },
+      { titel: 'GP Märchen', von: '18:00', bis: '21:30', ganztags: false, zeit: true, kalender: 'k5' }],
+    '2026-11-20': [{ titel: 'Musik Schulaufgabe', von: null, bis: null, ganztags: true, kalender: 'k3' }, { titel: 'Schwimmen', von: '15:30', bis: '16:30', ganztags: false, zeit: true, kalender: 'k6' }] } };
+  const feeds4 = [{ id: 'k1', name: 'Papa', url: 'webcal://x/1', person_id: 'p1' }, { id: 'k2', name: 'Familie', url: 'webcal://x/2', person_id: null }, { id: 'k3', name: 'Philip', url: 'webcal://x/3', person_id: 'p3' }, { id: 'k5', name: 'Mama', url: 'webcal://x/5', person_id: 'p2' }, { id: 'k6', name: 'Julia', url: 'webcal://x/6', person_id: 'p4' }];
+  const mk = () => {
+    const db = base();
+    db.ep_persons = db.ep_persons.map((p) => ({ ...p, name: NAMES[p.id] || p.name })); db.ep_staples = JSON.parse(JSON.stringify(SEED.staples)); db.ep_shopping = db.ep_shopping.filter((i) => !/milch|joghurt|butter|käse/i.test(i.label));
+    db.ep_settings = [{ key: 'kalender', value: { feeds: feeds4 } }, { key: 'stall', value: { on: true, tage: 5, last: '2026-11-15', by: 'p1' } }];
+    db.ep_plan = db.ep_plan.map((p) => (p.day === '2026-11-19' ? { ...p, lunchbox: 'Vollkornbrot mit Käse, Paprikastreifen, Apfel' } : p.day === '2026-11-20' ? { ...p, lunchbox: 'Wrap mit Hähnchen und Gurke', prep: 'Hähnchen aus dem Gefrierfach nehmen.' } : p));
+    return db;
+  };
+  const shots = [['morgen', 7, 10], ['abend', 16, 45], ['nachdemessen', 19, 40]];
+  for (const [name, hh, mm] of shots) {
+    for (const [w, h, lage] of [[1133, 744, 'quer'], [744, 1133, 'hoch']]) {
+      const { page, ctx, errs } = await openDisplay(mk(), w, h, KAL4, { stunde: hh, minute: mm, tag: '2026-11-19' });
+      const r = await page.evaluate(() => [document.documentElement.scrollHeight, innerHeight]);
+      if (lage === 'quer') console.log(`G ${name}:`, (await page.locator('.anz-essen').innerText()).replace(/\n+/g, ' | '), '| Fuß:', (await page.locator('.anz-fuss').innerText()).replace(/\n+/g, ' '));
+      console.log(`G ${name} ${lage}: Höhe ${r[0]} von ${r[1]}${r[0] > r[1] ? ' ZU HOCH' : ''}`, errs.length ? errs : '');
+      await page.screenshot({ path: `/tmp/vorschau_${name}_${lage}.png` });
+      await ctx.close();
+    }
+  }
+  // Ist alle und Wie war's
+  const { page, ctx, errs } = await openDisplay(mk(), 1133, 744, KAL4, { stunde: 19, minute: 40, tag: '2026-11-19' });
+  console.log('G Wetter-Abruf:', (ctx.wetterUrl || '-').replace(/&.*/, ''));
+  await page.locator('.anz-ia', { hasText: 'Milch' }).click(); await page.waitForTimeout(300);
+  const added = (await calls(page, 'ep_shopping')).flat().pop();
+  console.log('G Ist alle:', added && `${added.label} ${added.trip} ${added.week_start} manual=${added.manual}`, '|', await toastText(page), '| Knopf:', await page.locator('.anz-ia', { hasText: 'Milch' }).innerText());
+  await page.locator('.anz-ia', { hasText: 'Milch' }).click(); await page.waitForTimeout(200);
+  console.log('G zweimal:', await toastText(page));
+  await page.locator('[data-action="anz-ist-alle-mehr"]').click(); await page.waitForTimeout(300);
+  await page.screenshot({ path: '/tmp/vorschau_istalle.png' });
+  await page.fill('#sheet-root [name=was]', 'Backpapier'); await page.locator('#sheet-root form[data-form="anz-ist-alle"] button').click(); await page.waitForTimeout(300);
+  console.log('G anderes:', (await calls(page, 'ep_shopping')).flat().pop().label, '|', await toastText(page));
+  await page.locator('#sheet-root [data-action="zu"]').click(); await page.waitForTimeout(200);
+  await page.locator('[data-action="anz-wie"][data-id="p4"]').click(); await page.waitForTimeout(300);
+  await page.screenshot({ path: '/tmp/vorschau_sterne.png' });
+  await page.locator('#sheet-root [data-action="anz-stern"][data-n="4"]').click(); await page.waitForTimeout(300);
+  const rt = (await calls(page, 'ep_ratings')).flat().pop();
+  console.log('G Bewertung:', rt && `${rt.person_id} ${rt.stars} ${rt.day} ${rt.dish_id}`, '|', await toastText(page), '|', (await page.locator('.anz-wie').innerText()).replace(/\n+/g, ' '));
+  await page.screenshot({ path: '/tmp/vorschau_bewertet.png' });
+  console.log('G Fehler:', errs); await ctx.close();
 }
 await b.close(); srv.close();

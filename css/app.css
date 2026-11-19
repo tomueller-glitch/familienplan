@@ -992,7 +992,7 @@ html.anzeige-modus body::before { display: none; }
 .kal-zeile .p-menge { overflow-wrap: anywhere; }
 /* Kleines Tablet quer (iPad mini): alles etwas enger, damit es auf einen Bildschirm passt */
 /* Kleines Tablet hoch: Kopf und Abstände kleiner */
-@media (orientation: portrait) and (max-height: 1100px) {
+@media (orientation: portrait) and (max-height: 1200px) {
   .anzeige { padding: 14px 16px; gap: 10px; font-size: 17px; }
   .anz-uhr { font-size: 60px; }
   .anz-blatt { min-width: 6.4em; }
@@ -1062,3 +1062,58 @@ html.anzeige-modus body::before { display: none; }
 .anz-aufgaben li .p-text { flex: 1; min-width: 0; }
 .anz-aufgaben li.fertig .p-name { opacity: .7; }
 .hinweis-ausgang { display: block; margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--akzent, #D4312A); background: rgba(0,0,0,.04); border-radius: 6px; }
+/* Küchen-Display morgens: Kleidungstipp groß, darunter Zeilen mit Wetter, Brotbox, Glückwünschen */
+.anz-essen.morgens .anz-tipp { font-size: clamp(30px, 3.6vw, 52px); }
+.anz-zeilen { margin: .55em 0 0; display: grid; gap: .3em; }
+.anz-zeilen div { display: grid; grid-template-columns: 7.2em 1fr; gap: .6em; align-items: baseline; }
+.anz-zeilen dt { color: var(--a-leise); font-size: .85em; font-weight: 600; }
+.anz-zeilen dd { margin: 0; overflow-wrap: anywhere; }
+/* „Wie war's?“ nach dem Essen */
+.anz-wie { margin-top: .5em; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.anz-wie-frage { color: #FFC531; font-weight: 600; }
+.anz-wie-leute { display: flex; flex-wrap: wrap; gap: 10px; }
+.anz-wie-person { display: inline-flex; align-items: center; gap: .5em; font: inherit; color: inherit; background: rgba(255,255,255,.06); border: 1px solid var(--a-linie); border-radius: 999px; padding: 6px 14px 6px 6px; cursor: pointer; }
+.anz-wie-person.hat span { color: #FFC531; letter-spacing: .05em; }
+.anz-wie-person:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.anz-sterne { display: flex; justify-content: center; gap: 10px; margin: 18px 0 8px; }
+.anz-stern { font-size: 48px; line-height: 1; width: 64px; height: 64px; border: 0; background: none; color: #C9D5D9; cursor: pointer; }
+.anz-stern.an { color: #E8A300; }
+.anz-sterne-text { text-align: center; }
+/* „Ist alle?“ unten */
+.anz-istalle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.anz-ia-frage { color: var(--a-tinte); font-weight: 600; margin-right: 2px; }
+.anz-ia { font: inherit; color: var(--a-tinte); background: rgba(255,255,255,.06); border: 1px solid var(--a-linie); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.anz-ia.drauf { color: #7FD4A0; border-color: #2F6B4A; }
+.anz-ia.mehr { color: var(--a-leise); }
+.anz-ia:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.anz-istalle { flex: 1 1 auto; }
+.anz-stand { margin-left: auto; white-space: nowrap; }
+.anz-ia-kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
+.anz-ia-kachel { font: 600 17px/1.2 var(--text, inherit); min-height: 64px; padding: 10px; border-radius: 14px; border: 1px solid var(--linie, #d5dfe2); background: var(--blatt, #fff); color: inherit; cursor: pointer; display: grid; place-content: center; text-align: center; }
+.anz-ia-kachel.drauf { background: #E4F4EA; border-color: #9CCFB0; }
+.anz-ia-kachel small { display: block; font-weight: 400; font-size: 13px; color: #3B6E52; }
+@media (max-height: 800px) and (orientation: landscape) {
+  .anz-fuss { font-size: .8em; gap: 6px 16px; }
+  .anz-ia { padding: 3px 10px; }
+  .anz-essen.morgens .anz-tipp { font-size: 26px; }
+  .anz-zeilen { gap: .12em; margin-top: .4em; }
+  .anz-zeilen div { grid-template-columns: 6.4em 1fr; }
+  .anz-wie-person { padding: 2px 10px 2px 2px; }
+}
+/* Hoch: die Zeilen unter dem Gericht zweispaltig, das Feld ist breit genug */
+@media (orientation: portrait) and (min-width: 700px) and (max-height: 1200px) {
+  .anz-zeilen { grid-template-columns: 1fr 1fr; gap: .25em 1.2em; }
+  .anz-zeilen div { grid-template-columns: 1fr; gap: 0; }
+  .anz-essen.morgens .anz-tipp { font-size: 30px; }
+}
+.anz-zeilen div { align-content: start; }
+.anz-zeilen dd { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.anz-kinder h2 small { display: block; margin: .35em 0 0; }
+@media (orientation: portrait) and (max-height: 1050px) {
+  .anz-uhr { font-size: 50px; }
+  .anz-blatt b { font-size: 2em; }
+  .anz-gericht { font-size: 27px; }
+  .anz-termine { gap: .3em; }
+}
+.anz-ia-kachel { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
+@media (max-height: 800px) and (orientation: landscape) { .anz-zeilen div { grid-template-columns: 7.8em 1fr; } }

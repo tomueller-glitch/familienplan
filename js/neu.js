@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20a', datum: '20. November', titel: 'Küchen-Display: morgens anders als abends',
+    punkte: [
+      { text: 'Morgens zeigt das Küchen-Display, was ihr anziehen sollt, das Wetter, die Brotbox, wem man Glück wünscht und was mitmuss. Nachmittags kommen Abendessen, Vorbereitung für morgen und die Brotbox für morgen.' },
+      { text: 'Nach dem Essen fragt das Display „Wie war’s?“. Tipp auf dich und vergib Sterne, auch ohne Handy.' },
+      { text: '„Ist alle?“: Unten am Display Milch, Butter und Co. antippen, dann stehen sie auf der Einkaufsliste. Unter „Mehr“ gibt es alles aus „Immer wieder“ und ein Feld für anderes.' },
+    ],
+  },
+  {
     id: '2026-11-19j', datum: '19. November, spätabends', titel: 'Abhaken am Küchen-Display',
     punkte: [
       { text: 'Am Küchen-Display auf deinen Namen tippen, deine PIN eingeben und die Aufgaben von heute abhaken, wenn dein Handy gerade nicht da ist. Die PIN legst du am Handy unter „Aufgaben“ ganz unten fest.', fuer: 'kinder' },

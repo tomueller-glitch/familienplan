@@ -28,3 +28,8 @@ console.log('Heimweg:', mitWeg.map((e) => `${e.title} zu Hause ${e.home_time}`).
 // Termin ohne Dauer am Vormittag: kein Grund, beim Essen zu fehlen
 const ohne = T.calendarEvents({ '2026-11-19': [{ titel: 'Werkstatt', von: '10:30', bis: '10:30', zeit: true, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', zeit: true, kalender: 'k1' }] }, feeds);
 console.log('Ohne Dauer:', T.dinnerInfo(persons, ohne, [], '2026-11-19').people[0].status, T.dinnerInfo(persons, ohne, [], '2026-11-19').time);
+// Morgens am Display: Kleidungstipp und was mitmuss
+const W = await import('../js/wetter.js');
+for (const s of [{ min: -2, max: 3, regen: 10, schnee: true }, { min: 4, max: 9, regen: 70, ab: 14 }, { min: 14, max: 22, regen: 0 }, { min: 19, max: 27, regen: 40 }]) console.log('Tipp:', JSON.stringify(s), '->', W.clothesTip(s), '|', W.weatherLine({ wort: '', ...s }));
+const mn = W.morningNotes([{ titel: 'Musik Schulaufgabe', people: [{ name: 'Philip' }] }, { titel: 'Leseprobe', people: [{ name: 'Julia' }] }, { titel: 'Training D1', people: [{ name: 'Philip' }] }, { titel: 'Schwimmen', people: [{ name: 'Julia' }] }, { titel: 'Turnen', people: [{ name: 'Julia' }] }]);
+console.log('Morgens:', JSON.stringify(mn));

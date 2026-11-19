@@ -13,6 +13,7 @@ import * as HB from './haushalt.js';
 import * as P from './packungen.js';
 import * as NEU from './neu.js';
 import * as RB from './rueckblick.js';
+import * as W from './wetter.js';
 
 const store = createStore(window.ESSENSPLAN_CONFIG);
 const ME_KEY = 'essensplan.ich';
@@ -709,6 +710,94 @@ function sheetDispTasks({ id }) {
   };
 }
 
+/* ---------- Küchen-Display: Wetter, „Ist alle“ und „Wie war's?“ ---------- */
+// Testhilfe: ESSENSPLAN_STUNDE und ESSENSPLAN_MINUTE stellen die Uhrzeit des Displays.
+const dispHour = () => (Number.isInteger(globalThis.ESSENSPLAN_STUNDE) ? globalThis.ESSENSPLAN_STUNDE : new Date().getHours());
+const dispMinute = () => (Number.isInteger(globalThis.ESSENSPLAN_MINUTE) ? globalThis.ESSENSPLAN_MINUTE : new Date().getMinutes());
+// Wetter von Open-Meteo für die Adresse aus dem Heimweg (sonst Coburg), alle 30 Minuten, gemerkt im Gerät.
+const WETTER_KEY = 'essensplan.wetter';
+function homeGeo() {
+  const w = KI.settingOf(state.data.settings, 'wege');
+  return w && w.heim && Array.isArray(w.heim.geo) ? w.heim.geo : W.HOME_DEFAULT;
+}
+async function loadWeather() {
+  if (state.wetterBusy || store.offline) return;
+  if (state.wetter === undefined) {
+    try { state.wetter = JSON.parse(localStorage.getItem(WETTER_KEY) || 'null'); } catch (e) { state.wetter = null; }
+  }
+  if (state.wetter && Date.now() - state.wetter.at < 30 * 60000) return;
+  state.wetterBusy = true;
+  try {
+    const res = await fetch(W.weatherUrl(homeGeo()));
+    if (!res.ok) throw new Error(String(res.status));
+    state.wetter = { at: Date.now(), data: await res.json() };
+    try { localStorage.setItem(WETTER_KEY, JSON.stringify(state.wetter)); } catch (e) { /* Speicher voll */ }
+    if (state.phase === 'anzeige' && !state.sheet) render();
+  } catch (e) {
+    // In fünf Minuten noch einmal, den alten Stand behalten.
+    state.wetter = { ...(state.wetter || {}), at: Date.now() - 25 * 60000 };
+  } finally { state.wetterBusy = false; }
+}
+// „Ist alle“: die ersten Sachen aus „Immer wieder“ als Knöpfe unten, alle weiteren im Bogen.
+const istAlleOn = (label, week) => state.data.shopping.find((i) => i.week_start === week && !i.checked && L.itemKey(i.label) === L.itemKey(label));
+function istAlleBar() {
+  const week = L.mondayOf(L.todayISO());
+  const list = [...state.data.staples].sort((a, b) => (a.sort || 0) - (b.sort || 0)).slice(0, 5);
+  return `<div class="anz-istalle"><span class="anz-ia-frage">Ist alle?</span>${list.map((x) => {
+    const on = istAlleOn(x.label, week);
+    return `<button class="anz-ia${on ? ' drauf' : ''}" data-action="anz-ist-alle" data-id="${esc(x.id)}">${on ? '✓ ' : ''}${esc(L.plainName(x.label))}</button>`;
+  }).join('')}<button class="anz-ia mehr" data-action="anz-ist-alle-mehr">Mehr …</button></div>`;
+}
+function addToCurrentList({ label, qty = '', category, staple_id = null }) {
+  const week = L.mondayOf(L.todayISO());
+  const t = targetTrip(week);
+  const maxSort = state.data.shopping.filter((i) => i.week_start === week).reduce((m, i) => Math.max(m, i.sort || 0), 0);
+  const item = {
+    id: L.uid(), week_start: week, trip: t.trip, due: t.due, buyer: t.buyer, category: category || L.guessCat(label), label, qty,
+    sort: maxSort + 1, checked: false, checked_by: null, checked_at: null, manual: true, added_by: null, created_at: nowStamp(), staple_id, purpose: 'ist alle', missing: false,
+  };
+  commit(() => { state.data.shopping = [...state.data.shopping, item]; }, () => store.saveItems([item]));
+  return item;
+}
+function istAlle(label, opts = {}) {
+  const week = L.mondayOf(L.todayISO());
+  const name = L.plainName(label);
+  if (istAlleOn(label, week)) { toast(`${name} steht schon auf der Liste.`); return; }
+  const item = addToCurrentList({ label, ...opts });
+  toast(`${name} steht auf der Liste.`, () => {
+    commit(() => { state.data.shopping = state.data.shopping.filter((i) => i.id !== item.id); }, () => store.deleteItems([item.id]));
+    if (state.sheet) renderSheet(); else render();
+  });
+  if (state.sheet) renderSheet(); else render();
+}
+function sheetIstAlle() {
+  const week = L.mondayOf(L.todayISO());
+  const list = [...state.data.staples].sort((a, b) => (a.sort || 0) - (b.sort || 0));
+  return {
+    over: 'Küchen-Display',
+    title: 'Was ist alle?',
+    body: `<p class="meta">Antippen, dann steht es auf der Einkaufsliste. Die Knöpfe kommen aus „Immer wieder“.</p>
+      <div class="anz-ia-kacheln">${list.map((x) => {
+        const on = istAlleOn(x.label, week);
+        return `<button class="anz-ia-kachel${on ? ' drauf' : ''}" data-action="anz-ist-alle" data-id="${esc(x.id)}">${on ? '✓ ' : ''}${esc(L.plainName(x.label))}${on ? '<small>steht drauf</small>' : ''}</button>`;
+      }).join('')}</div>
+      <form class="form" data-form="anz-ist-alle" style="margin-top:14px"><label>Etwas anderes<input class="feld" name="was" maxlength="40" autocomplete="off" placeholder="zum Beispiel Haferflocken"></label>
+      <button class="knopf breit">Auf die Liste</button></form>`,
+  };
+}
+function sheetRateDisplay({ id }) {
+  const x = personById(id);
+  const p = planOf(L.todayISO());
+  const dish = p && dishById(p.dish_id);
+  const r = state.data.ratings.find((y) => y.day === L.todayISO() && y.person_id === id);
+  return {
+    over: dish ? dish.name : 'Abendessen',
+    title: `Wie war's, ${x ? x.name : ''}?`,
+    body: `<div class="anz-sterne">${[1, 2, 3, 4, 5].map((n) => `<button class="anz-stern${r && r.stars >= n ? ' an' : ''}" data-action="anz-stern" data-n="${n}" aria-label="${n} ${n === 1 ? 'Stern' : 'Sterne'}">★</button>`).join('')}</div>
+      <p class="meta anz-sterne-text">1 Stern: lieber nicht wieder. 5 Sterne: bitte bald wieder.</p>`,
+  };
+}
+
 /* ---------- Küchen-Display ---------- */
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
@@ -717,10 +806,13 @@ function viewDisplay() {
   const now = new Date();
   const today = L.todayISO();
   const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  const night = now.getHours() >= 22 || now.getHours() < 6;
+  const hour = dispHour();
+  const night = hour >= 22 || hour < 6;
+  const morning = hour >= 4 && hour < 12;
   const away = holidayOf(today);
 
   if (calFeeds().length) setTimeout(() => loadCalendars(false), 0);
+  setTimeout(loadWeather, 0);
   // Abendessen
   const p = planOf(today);
   const dish = p && !p.skipped ? dishById(p.dish_id) : null;
@@ -733,11 +825,49 @@ function viewDisplay() {
   ].filter(Boolean);
   const pm = planOf(L.addDays(today, 1));
   const tomorrow = pm && !pm.skipped ? dishById(pm.dish_id) : null;
-  const dinner = away && away.weg !== false
-    ? `<p class="anz-gericht">${esc(away.name || 'Urlaub')}</p><p class="anz-meta">Bis ${esc(L.fmtLong(away.bis))}</p>`
-    : `<p class="anz-gericht">${dish ? esc(dish.name) : p && p.skipped ? 'Heute kein Abendessen geplant' : 'Noch nichts geplant'}</p>
-      ${dinnerMeta.length && dish ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : ''}
+  const awayNow = away && away.weg !== false;
+  // Nach dem Essen (eine halbe Stunde nach der Essenszeit bis 22 Uhr): „Wie war's?“ statt der Essenszeit.
+  const minNow = hour * 60 + dispMinute();
+  const askRating = !morning && dish && !awayNow && minNow >= T.toMin(info.time) + 30 && hour < 22;
+  const eaters = info.people.filter((x) => x.status !== 'weg').map((x) => x.person);
+  const ratingRow = askRating ? `<div class="anz-wie"><span class="anz-wie-frage">Wie war's?</span><div class="anz-wie-leute">${eaters.map((x) => {
+    const r = state.data.ratings.find((y) => y.day === today && y.person_id === x.id);
+    return `<button class="anz-wie-person${r ? ' hat' : ''}" data-action="anz-wie" data-id="${esc(x.id)}" aria-label="${esc(x.name)}${r ? `: ${r.stars} Sterne` : ': noch nicht bewertet'}">${avatar(x, true)}<span>${r ? '★'.repeat(r.stars) : esc(x.name)}</span></button>`;
+  }).join('')}</div></div>` : '';
+  const tomorrowDay = L.addDays(today, 1);
+  const prepTomorrow = prepFor(tomorrowDay);
+  const lunchTomorrow = L.isSchoolDay(tomorrowDay) ? lunchOf(tomorrowDay) : '';
+  let dinner;
+  let dinnerHead = 'Heute Abend';
+  if (awayNow) {
+    dinner = `<p class="anz-gericht">${esc(away.name || 'Urlaub')}</p><p class="anz-meta">Bis ${esc(L.fmtLong(away.bis))}</p>`;
+  } else if (morning) {
+    // Morgens: Wetter mit Kleidungstipp, Brotbox, was mitmuss, wem man Glück wünscht. Das Abendessen nur kurz.
+    dinnerHead = 'Heute Morgen';
+    const sum = state.wetter && state.wetter.data ? W.daySummary(state.wetter.data, today, 7, 18) : null;
+    // Mitnehmen und Glückwünsche nur für die Kinder.
+    const notes = W.morningNotes(dayItems(today).map((x) => ({ ...x, people: x.people.filter((q) => !isAdult(q)) })).filter((x) => x.people.length));
+    const lunch = L.isSchoolDay(today) ? lunchOf(today) : '';
+    const who = (list) => (list.length ? `${list.join(' und ')}: ` : '');
+    const rows = [
+      sum ? ['Wetter', W.weatherLine(sum)] : null,
+      lunch ? ['Brotbox', lunch] : null,
+      ...notes.exams.map((e) => ['Viel Glück', `${who(e.who)}${e.titel}`]),
+      ...notes.bring.map((b) => ['Mitnehmen', `${b.what}${b.who.length ? ` (${b.who.join(', ')})` : ''}`]),
+      dish ? ['Abends', `${dish.name}, ${info.time} Uhr`] : p && p.skipped ? ['Abends', 'kein Abendessen geplant'] : null,
+    ].filter(Boolean);
+    dinner = `<p class="anz-gericht anz-tipp">${esc(sum ? W.clothesTip(sum) : 'Guten Morgen')}</p>
+      <dl class="anz-zeilen">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+  } else {
+    const extra = [
+      prepTomorrow.length ? ['Für morgen', prepTomorrow.join(' ')] : null,
+      lunchTomorrow ? ['Brotbox morgen', lunchTomorrow] : null,
+    ].filter(Boolean);
+    dinner = `<p class="anz-gericht">${dish ? esc(dish.name) : p && p.skipped ? 'Heute kein Abendessen geplant' : 'Noch nichts geplant'}</p>
+      ${ratingRow || (dinnerMeta.length && dish ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : '')}
+      ${extra.length ? `<dl class="anz-zeilen">${extra.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
       ${tomorrow ? `<p class="anz-morgen">Morgen: ${esc(tomorrow.name)}</p>` : ''}`;
+  }
 
   // Ampeln
   const lamps = [];
@@ -751,7 +881,7 @@ function viewDisplay() {
 
   // Kinder
   const kids = kidsList();
-  const kinder = kids.length && !(away && away.weg !== false) ? `<section class="anz-feld anz-kinder"><h2>Aufgaben <small>zum Abhaken auf deinen Namen tippen</small></h2><ul>${kids.map((k) => {
+  const kinder = kids.length && !(away && away.weg !== false) ? `<section class="anz-feld anz-kinder"><h2>Aufgaben <small>Namen antippen zum Abhaken</small></h2><ul>${kids.map((k) => {
     const fixed = A.tasksFor(state.data.tasks, state.data.taskLog, k.id, today).fixed.filter((f) => !stHides(f.task));
     const must = A.mustToday(fixed, today);
     const open = must.filter((f) => !f.done);
@@ -766,15 +896,15 @@ function viewDisplay() {
 
   return `<div class="anzeige${night ? ' nacht' : ''}">
     <header class="anz-kopf"><div class="anz-blatt" data-action="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
-      <span class="anz-uhr">${hm(now)}</span></header>
+      <span class="anz-uhr">${Number.isInteger(globalThis.ESSENSPLAN_STUNDE) ? `${String(hour).padStart(2, '0')}:${String(dispMinute()).padStart(2, '0')}` : hm(now)}</span></header>
     <div class="anz-raster${lamps.length ? '' : ' ohne-ampeln'}">
-      <section class="anz-feld anz-essen"><h2>Heute Abend</h2>${dinner}</section>
+      <section class="anz-feld anz-essen${morning && !awayNow ? ' morgens' : ''}"><h2>${dinnerHead}</h2>${dinner}</section>
       ${ampeln}
       ${termine}
       ${kinder}
     </div>
-    <footer class="anz-fuss"><span>${open ? `${open} ${open === 1 ? 'Sache' : 'Sachen'} auf der Einkaufsliste` : 'Einkaufsliste leer'}</span>
-      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span></footer>
+    <footer class="anz-fuss">${istAlleBar()}
+      <span class="anz-stand">${open ? `${open} auf der Einkaufsliste` : 'Einkaufsliste leer'}, ${store.offline ? 'keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span></footer>
   </div>`;
 }
 // Heimkehr eines Kalendertermins mit Heimweg, gerechnet wie fürs Abendessen.
@@ -783,8 +913,8 @@ function homeOfItem(x) {
   if (!f || !f.person_id || f.essen === false || !(x.weg > 0) || !x.bis) return '';
   return (T.calendarEvents({ x: [x] }, [f])[0] || {}).home_time || '';
 }
-// Ein Tag in der Terminspalte des Displays.
-function displayDay(d, isToday) {
+// Kalendertermine eines Tages, gleiche Termine aus mehreren Kalendern zusammengefasst, sortiert.
+function dayItems(d) {
   const feeds = calFeeds();
   const raw = (state.kal && state.kal.tage && state.kal.tage[d]) || [];
   const feedOf = (x) => feeds.find((y) => y.id === x.kalender) || {};
@@ -800,7 +930,11 @@ function displayDay(d, isToday) {
     if (!p && f.name && !m.namen.includes(f.name)) m.namen.push(f.name);
     if (x.weg > (m.weg || 0)) m.weg = x.weg;
   }
-  const all = [...merged.values()].map((x) => ({ ...x, quelle: x.people.length > 1 ? '' : x.quelle })).sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
+  return [...merged.values()].map((x) => ({ ...x, quelle: x.people.length > 1 ? '' : x.quelle })).sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
+}
+// Ein Tag in der Terminspalte des Displays.
+function displayDay(d, isToday) {
+  const all = dayItems(d);
   const bin = isToday ? A.trashTomorrow(d) : '';
   const dot = (list) => list.map((p) => `<i class="anz-punkt" style="background:${esc(p.color || '#4F6972')}" title="${esc(p.name)}"></i>`).join('');
   const time = (x) => (x.ganztags ? 'ganztags' : x.von ? x.von : x.bis ? `bis ${x.bis}` : '');
@@ -3447,7 +3581,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -4078,7 +4212,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an, nachts wird es dunkler. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an, nachts wird es dunkler. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Morgens (bis 12 Uhr) steht oben, was die Kinder anziehen sollen, das Wetter, die Brotbox, wer heute eine Probe schreibt und was mitmuss. Nachmittags und abends steht dort das Abendessen, was für morgen vorzubereiten ist und die Brotbox für morgen. Eine halbe Stunde nach dem Essen fragt das Display „Wie war’s?“: Jeder tippt auf sich und vergibt Sterne. Unten stehen „Ist alle?“-Knöpfe aus „Immer wieder“ (die ersten fünf in der dort eingestellten Reihenfolge, die übrigen unter „Mehr“). Antippen setzt die Sache auf die Einkaufsliste. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -4417,17 +4551,19 @@ async function loadBackups() {
 
 /* ---------- Aktionen ---------- */
 
-function rate(day, n) {
+// who: wer bewertet (am Küchen-Display jemand anderes als der Mensch am Gerät). toggle: gleiche Sterne nehmen die Bewertung zurück.
+function rate(day, n, who = state.me, toggle = true) {
   const p = planOf(day);
-  if (!p || !p.dish_id || p.skipped || day > L.todayISO() || !state.me) return;
+  if (!p || !p.dish_id || p.skipped || day > L.todayISO() || !who) return;
   const dish = dishById(p.dish_id);
+  if (!dish) return;
   const was = stats[dish.id].archived;
-  const cur = myRating(day);
+  const cur = state.data.ratings.find((r) => r.day === day && r.person_id === who);
   const rest = state.data.ratings.filter((r) => r !== cur);
-  if (cur && cur.stars === n) {
-    commit(() => { state.data.ratings = rest; }, () => store.deleteRating(day, state.me));
+  if (cur && cur.stars === n && toggle) {
+    commit(() => { state.data.ratings = rest; }, () => store.deleteRating(day, who));
   } else {
-    const row = { day, person_id: state.me, dish_id: dish.id, stars: n, updated_at: new Date().toISOString() };
+    const row = { day, person_id: who, dish_id: dish.id, stars: n, updated_at: new Date().toISOString() };
     commit(() => { state.data.ratings = [...rest, row]; }, () => store.saveRating(row));
   }
   const now = stats[dish.id];
@@ -5828,6 +5964,22 @@ const actions = {
     renderSheet();
   },
   'anz-fertig': () => dispKidEnd(),
+  'anz-ist-alle': ({ id }) => {
+    const x = state.data.staples.find((v) => v.id === id);
+    if (x) istAlle(x.label, { qty: x.qty || '', category: x.category, staple_id: x.id });
+  },
+  'anz-ist-alle-mehr': () => openSheet({ type: 'anz-ist-alle' }),
+  'anz-wie': ({ id }) => { if (personById(id)) openSheet({ type: 'anz-sterne', id }); },
+  'anz-stern': ({ n }) => {
+    const sh = state.sheet;
+    if (!sh || sh.type !== 'anz-sterne') return;
+    const x = personById(sh.id);
+    rate(L.todayISO(), Number(n), sh.id, false);
+    state.sheet = null;
+    renderSheet();
+    render();
+    toast(`Danke, ${x ? x.name : ''}!`);
+  },
   // Versteckter Ausgang für die Eltern: fünfmal schnell aufs Kalenderblatt tippen, dann die PIN eines Erwachsenen.
   'anz-blatt': () => {
     if (state.phase !== 'anzeige') return;
@@ -6576,6 +6728,13 @@ const forms = {
     commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'aufgaben'), row]; }, () => store.saveSettings([row]));
     toast('Erinnerungen gespeichert.');
     renderSheet();
+  },
+  'anz-ist-alle': (fd, form) => {
+    const was = String(fd.get('was') || '').trim().slice(0, 40);
+    if (!was) return;
+    istAlle(was);
+    const f = $('[name=was]', form);
+    if (f) f.value = '';
   },
   heimweg: async (fd) => {
     const adresse = String(fd.get('adresse') || '').trim().slice(0, 120);
