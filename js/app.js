@@ -627,9 +627,10 @@ function sheetCalendars(sh) {
       <p class="meta">Steht bei einem Termin ein Ort, rechnet die App die Fahrzeit nach Hause dazu: Wer um 18 Uhr in Rödental fertig ist, ist etwa 18:20 zu Hause. Dafür gehen die Orte der Termine an OpenRouteService (Universität Heidelberg), ohne Namen und Uhrzeiten. Jede Strecke wird nur einmal gefragt. Pro Kalender lässt sich Auto, Rad, zu Fuß oder kein Heimweg wählen.</p>
       ${state.kal && state.kal.wege && state.kal.wege.fehler ? `<p class="fehler-text" role="alert">${esc(state.kal.wege.fehler)}</p>` : ''}
       <details class="kal-hilfe"><summary>So bekommt ihr den Schlüssel für OpenRouteService</summary><ol>
-        <li>Auf openrouteservice.org oben rechts „Sign up“ wählen und ein kostenloses Konto anlegen.</li>
-        <li>Nach der Anmeldung im „Dashboard“ bei „Request a token“ den Typ „Standard“ wählen, einen Namen wie „Familienplan“ eintragen und „Create Token“ tippen.</li>
-        <li>Den langen Schlüssel kopieren und hier einfügen. Der kostenlose Zugang reicht für euch locker.</li></ol></details>
+        <li>account.heigit.org öffnen. Dort läuft seit 2025 die Anmeldung für OpenRouteService (HeiGIT ist das Institut in Heidelberg dahinter).</li>
+        <li>Ein kostenloses Konto anlegen („Sign up“) und die E-Mail bestätigen, auch im Spam-Ordner nachsehen.</li>
+        <li>Anmelden und den Reiter „API Key“ öffnen. Neben „Basic Key“ steht der Schlüssel, daneben „Copy“. Einen eigenen Schlüssel anlegen ist nicht mehr nötig.</li>
+        <li>Hier einfügen. Der Schlüssel ist lang und beginnt meist mit „eyJ“, das ist richtig so.</li></ol></details>
       <form class="form" data-form="heimweg">
         <label>Adresse zu Hause<input class="feld" name="adresse" maxlength="120" autocomplete="street-address" placeholder="Straße Hausnummer, PLZ Ort" value="${esc(heimweg().adresse || '')}"></label>
         <label>Schlüssel von OpenRouteService<input class="feld" name="schluessel" maxlength="200" autocomplete="off" spellcheck="false" placeholder="${heimweg().schluessel ? 'gespeichert, zum Ändern neu einfügen' : 'eyJvcmciOi…'}"></label>

@@ -1779,7 +1779,9 @@ export function feedUrl(raw: string): string | null {
 // Aus dem Ort eines Termins und der Adresse der Familie die Fahrzeit nach Hause. Orte und Fahrzeiten
 // werden in ep_settings unter "wege" gemerkt, damit jede Strecke nur einmal gefragt wird.
 // Schlüssel und Adresse stehen unter "heimweg" ({ adresse, schluessel }). Pro Kalender "weg": auto, rad, fuss oder aus.
-const ORS = 'https://api.openrouteservice.org';
+// Seit November 2026 nur noch unter api.heigit.org (api.openrouteservice.org ist abgeschaltet).
+const ORS_ROUTE = 'https://api.heigit.org/openrouteservice/v2';
+const ORS_GEO = 'https://api.heigit.org/pelias/v1';
 export const WEG_PROFIL: Record<string, string> = { auto: 'driving-car', rad: 'cycling-regular', fuss: 'foot-walking' };
 type Geo = [number, number];
 type WegeCache = { heim?: { adresse: string; geo: Geo | null }; orte: Record<string, Geo | null>; zeiten: Record<string, number | null> };
@@ -1806,12 +1808,12 @@ async function orsCall(url: string, init: RequestInit = {}) {
 async function orsGeocode(key: string, text: string, focus: Geo | null): Promise<Geo | null> {
   const q = new URLSearchParams({ api_key: key, text, size: '1', 'boundary.country': 'DE' });
   if (focus) { q.set('focus.point.lat', String(focus[0])); q.set('focus.point.lon', String(focus[1])); }
-  const r = await orsCall(`${ORS}/geocode/search?${q}`);
+  const r = await orsCall(`${ORS_GEO}/search?${q}`);
   const c = r && r.features && r.features[0] && r.features[0].geometry && r.features[0].geometry.coordinates;
   return Array.isArray(c) && c.length >= 2 ? [Number(c[1]), Number(c[0])] : null;
 }
 async function orsMatrix(key: string, profil: string, heim: Geo, ziele: Geo[]): Promise<(number | null)[]> {
-  const r = await orsCall(`${ORS}/v2/matrix/${profil}`, {
+  const r = await orsCall(`${ORS_ROUTE}/matrix/${profil}?${new URLSearchParams({ api_key: key })}`, {
     method: 'POST', headers: { Authorization: key, 'Content-Type': 'application/json' },
     body: JSON.stringify({ locations: [[heim[1], heim[0]], ...ziele.map((g) => [g[1], g[0]])], sources: ziele.map((_, i) => i + 1), destinations: [0], metrics: ['duration'] }),
   });

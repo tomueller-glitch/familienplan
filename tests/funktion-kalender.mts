@@ -53,12 +53,12 @@ console.log('Adressen:', feedUrl('webcal://p52-caldav.icloud.com/published/2/abc
   const GEO: Record<string, [number, number]> = { 'Am Hang 3, 96450 Coburg': [50.26, 10.96], 'HUK-Arena Coburg': [50.25, 10.98], 'Sporthalle Rödental': [50.29, 11.04] };
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const u = new URL(url);
-    if (u.pathname.includes('geocode')) {
-      const t = u.searchParams.get('text') || ''; log.push(`suche ${t}`);
+    if (u.pathname.includes('pelias')) {
+      const t = u.searchParams.get('text') || ''; log.push(`${u.host}${u.pathname} ${t}`);
       if (u.searchParams.get('api_key') === 'falsch') return new Response('{}', { status: 403 });
       const g = GEO[t]; return new Response(JSON.stringify({ features: g ? [{ geometry: { coordinates: [g[1], g[0]] } }] : [] }), { status: 200 });
     }
-    const b = JSON.parse(String(init && init.body)); log.push(`matrix ${u.pathname.split('/').pop()} ${b.locations.length - 1} Ziele, Schlüssel ${(init && (init.headers as Record<string, string>).Authorization) || '-'}`);
+    const b = JSON.parse(String(init && init.body)); log.push(`${u.host}${u.pathname} key=${u.searchParams.get('api_key')} ${b.locations.length - 1} Ziele, Schlüssel ${(init && (init.headers as Record<string, string>).Authorization) || '-'}`);
     return new Response(JSON.stringify({ durations: b.sources.map((i: number) => [b.locations[i][0] > 11 ? 840 : 500]) }), { status: 200 });
   }) as typeof fetch;
   const saved: unknown[] = [];
