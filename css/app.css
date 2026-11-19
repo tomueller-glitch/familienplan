@@ -1017,3 +1017,4 @@ html.anzeige-modus body::before { display: none; }
   .anz-gericht { font-size: 34px; }
   .anz-ampeln .km-l { width: 18px; height: 18px; }
 }
+.marke.angebot { background: #FFE9A8; color: #6B4A00; }

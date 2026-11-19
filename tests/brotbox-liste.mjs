@@ -191,4 +191,16 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   await page.locator('[data-action="einkaufen"], [data-action="einkaufsmodus"]').first().click().catch(() => {}); await page.waitForTimeout(300);
   console.log('G Fehler:', errs); await ctx.close();
 }
+// H: Bio steht nicht im Namen, markiert wird nur ein Bio-Angebot.
+{
+  const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)];
+  db.ep_ai_runs = [{ ...run('r1', 'freigegeben'), offers: ['Aldi | Bio-Möhren | 1 kg | 1,29 € | Bio | 20.11. | 25.11. | Sortiment', 'Lidl | Hähnchenbrustfilet | 1 kg | 7,99 € | nicht Bio | 19.11. | | Sortiment'].join('\n') }];
+  const mk = (id, label, qty, extra = {}) => ({ id, week_start: W, trip: G, due: '2026-11-21', category: 'obst', label, qty, purpose: 'Chili con Carne (Di)', sort: Number(id.slice(1)), missing: false, checked: false, manual: false, ...extra });
+  db.ep_shopping = [mk('h1', 'Bio-Möhren', '1 kg'), mk('h2', 'Bio-Hähnchenbrustfilet', '600 g, Angebot ab 19.11., nicht Bio', { category: 'fleisch' }), mk('h3', 'Feldsalat', '150 g, Angebot ab 20.11., Bio'), mk('h4', 'Bio passierte Tomaten', '2 Packungen', { category: 'vorrat' })];
+  const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.posten li:has([data-action="haken"])')].map((li) => li.innerText.replace(/\n+/g, ' / ')));
+  console.log('H Zeilen:', JSON.stringify(rows));
+  await page.locator('.posten li:has([data-action="haken"])').first().locator('xpath=ancestor::ul[1]').screenshot({ path: '/tmp/bio_angebot.png' });
+  console.log('H Fehler:', errs); await ctx.close();
+}
 await b.close(); srv.close();

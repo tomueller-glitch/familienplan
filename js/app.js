@@ -1183,7 +1183,7 @@ function pantryBox(week) {
   if (!ask.length) return '';
   return `<div class="kasten-text vorrat-frage"><strong>Aus dem Vorrat: wirklich da?</strong>
     Diese Sachen nimmt der Plan aus dem Vorrat und kauft sie deshalb nicht ein. Kurz nachschauen:
-    <ul class="posten">${ask.map((x) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(x.label)}</span><span class="p-menge">${esc(x.qty)} für ${esc(x.purpose)}</span></span>
+    <ul class="posten">${ask.map((x) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(L.plainName(x.label))}</span><span class="p-menge">${esc(x.qty)} für ${esc(x.purpose)}</span></span>
       <span class="ja-nein"><button class="knopf zweit klein" data-action="vorrat-da" data-id="${esc(x.key)}" aria-label="${esc(x.label)} ist da">Ist da</button><button class="knopf klein" data-action="vorrat-fehlt" data-id="${esc(x.key)}" aria-label="${esc(x.label)} fehlt, auf die Liste">Fehlt</button></span></div></li>`).join('')}</ul>
     ${ask.length > 1 ? '<div class="knopfreihe"><button class="knopf zweit klein" data-action="vorrat-alle-da">Alles da</button></div>' : ''}</div>`;
 }
@@ -1224,7 +1224,7 @@ function draftBox(week) {
   const frisch = split.filter((i) => i.trip === KI.shopTrips(week)[1].trip);
   const lines = [
     split.length ? `Alles steht auf einem Einkauf. ${frisch.length === 1 ? '1 frischer Posten' : `${frisch.length} frische Posten`} für die zweite Wochenhälfte ${frisch.length === 1 ? 'gehört' : 'gehören'} auf den ${esc(KI.shopTrips(week)[1].trip)}: ${esc(frisch.slice(0, 6).map((i) => i.label).join(', '))}${frisch.length > 6 ? ' und weitere' : ''}.` : '',
-    miss.length ? `Aus Claudes Plan ${miss.length === 1 ? 'fehlt ein Posten' : `fehlen ${miss.length} Posten`} für die Brotboxen: ${esc(miss.map((x) => `${x.label}${x.qty ? ` (${x.qty})` : ''}`).join(', '))}.` : '',
+    miss.length ? `Aus Claudes Plan ${miss.length === 1 ? 'fehlt ein Posten' : `fehlen ${miss.length} Posten`} für die Brotboxen: ${esc(miss.map((x) => `${L.plainName(x.label)}${L.cleanQty(x.qty).qty ? ` (${L.cleanQty(x.qty).qty})` : ''}`).join(', '))}.` : '',
   ].filter(Boolean);
   const label = split.length && miss.length ? 'Aufteilen und ergänzen' : split.length ? 'Aufteilen' : 'Auf die Liste';
   return `<div class="kasten-text vorrat-frage"><strong>Die Liste passt nicht ganz zur Woche</strong>
@@ -1248,7 +1248,7 @@ function draftAdd(week) {
     const t = trips.find((y) => y.trip === x.trip) || trips.find((y) => y.due && y.due === x.due) || trips[0] || { trip: x.trip || 'Einkauf', due: x.due || null };
     return {
       id: L.uid(), week_start: week, trip: t.trip, due: t.due || null, category: L.SHOP_CATS[x.category] ? x.category : 'sonst',
-      label: String(x.label), qty: String(x.qty || ''), purpose: String(x.purpose || ''), missing: false, shop: x.shop === 'lidl' ? 'lidl' : null,
+      label: L.plainName(String(x.label)), qty: String(x.qty || ''), purpose: String(x.purpose || ''), missing: false, shop: x.shop === 'lidl' ? 'lidl' : null,
       sort: ++sort, checked: false, checked_by: null, checked_at: null, manual: false,
     };
   });
@@ -1297,7 +1297,7 @@ function pantryMissing(key) {
     state.data.shopping = old ? state.data.shopping.map((i) => (i.id === old.id ? item : i)) : [...state.data.shopping, item];
     if (empty) state.data.pantry = state.data.pantry.map((y) => (y.id === empty.id ? empty : y));
   }, async () => { await store.saveItems([item]); if (empty) await store.savePantry([empty]); });
-  toast(`${x.label} steht jetzt auf der Liste${item.trip && item.trip !== 'Einkauf' ? ` (${item.trip})` : ''}.`);
+  toast(`${L.plainName(x.label)} steht jetzt auf der Liste${item.trip && item.trip !== 'Einkauf' ? ` (${item.trip})` : ''}.`);
 }
 
 function viewEinkauf() {
@@ -1459,7 +1459,7 @@ function sheetPacks() {
     over: 'Einkaufsliste',
     title: 'Packungsgrößen',
     body: `<p class="meta" style="margin-bottom:12px">Wie es die Sachen im Markt wirklich gibt. Claude plant damit ganze Packungen, und die Einkaufsliste rechnet in Packungen. Größen vom Kassenzettel kommen von selbst dazu.</p>
-      ${items.length ? `<details class="pack-auswahl"><summary>Aus der Einkaufsliste wählen</summary><ul class="posten">${items.map((i) => `<li><button class="g-zeile" data-action="packung" data-id="${esc(i.id)}"><span class="tz-text"><span class="tz-name">${esc(i.label)}</span><span class="tz-meta">${esc(i.qty)}</span></span></button></li>`).join('')}</ul></details>` : ''}
+      ${items.length ? `<details class="pack-auswahl"><summary>Aus der Einkaufsliste wählen</summary><ul class="posten">${items.map((i) => `<li><button class="g-zeile" data-action="packung" data-id="${esc(i.id)}"><span class="tz-text"><span class="tz-name">${esc(L.plainName(i.label))}</span><span class="tz-meta">${esc(L.cleanQty(i.qty).qty)}</span></span></button></li>`).join('')}</ul></details>` : ''}
       ${all.length ? `<h3 class="abteilung">Bekannt</h3><ul class="posten">${all.map(([key, p]) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(p.name)}</span><span class="p-menge">${esc(P.fmtSize(p.q, p.u))}${p.markt === 'lidl' ? ', Lidl' : ''}${p.quelle === 'kassenzettel' ? ', vom Kassenzettel' : ''}</span></span>
         <button class="weg" data-action="packung-weg" data-key="${esc(key)}" aria-label="${esc(p.name)} löschen">${CROSS}</button></div></li>`).join('')}</ul>` : '<p class="meta">Noch keine Packungsgröße eingetragen.</p>'}
       <h3 class="abteilung">Dazuschreiben</h3>
@@ -1473,7 +1473,7 @@ function missingBox(trip, inTrip, trips) {
   if (!miss.length) return '';
   const rows = miss.map((i) => {
     const p = L.purposeOf(i, state.data.plan, state.data.dishes);
-    return `<li><span class="fehlt-text">${esc(i.label)}${p ? `<span class="p-wofuer">betrifft ${esc(p)}</span>` : ''}</span><span class="w-knoepfe"><button class="knopf zweit klein" data-action="packung" data-id="${esc(i.id)}">Andere Größe</button>${canPlan() ? `<button class="knopf zweit klein" data-action="ersatz" data-id="${esc(i.id)}">Ersatz?</button>` : ''}</span></li>`;
+    return `<li><span class="fehlt-text">${esc(L.plainName(i.label))}${p ? `<span class="p-wofuer">betrifft ${esc(p)}</span>` : ''}</span><span class="w-knoepfe"><button class="knopf zweit klein" data-action="packung" data-id="${esc(i.id)}">Andere Größe</button>${canPlan() ? `<button class="knopf zweit klein" data-action="ersatz" data-id="${esc(i.id)}">Ersatz?</button>` : ''}</span></li>`;
   }).join('');
   return `<div class="kasten-text fehlt-kasten"><strong>${miss.length === 1 ? '1 Posten nicht bekommen' : `${miss.length} Posten nicht bekommen`}</strong>
     <ul>${rows}</ul>
@@ -1511,16 +1511,35 @@ function dueLine(trip, inTrip) {
     <p class="meta">Am Einkaufstag kommt um 7 Uhr eine Erinnerung an Mama und Papa, solange noch etwas offen ist.</p></details>`;
 }
 
+// Angebote aus Claudes Wochenlauf für eine Woche, einmal gelesen.
+let offerCache = { key: '', list: [] };
+function offersFor(week) {
+  const run = state.data.aiRuns.filter((r) => String(r.week_start).slice(0, 10) === week && r.offers)
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
+  const key = run ? `${run.id}|${String(run.offers).length}` : '';
+  if (offerCache.key !== key) offerCache = { key, list: run ? L.parseOffers(run.offers, week) : [] };
+  return offerCache.list;
+}
+// Bio steht nicht im Namen. Markiert wird nur ein Bio-Angebot, das am Einkaufstag gilt.
+const bioOffer = (item) => (item.checked || item.category === 'vorhanden' ? null : L.bioOfferFor(item, offersFor(item.week_start), L.todayISO()));
+function bioOfferLine(o) {
+  const ab = o.ab && o.ab > L.todayISO() ? `ab ${L.WD_SHORT[L.wdIndex(o.ab)]} ${L.fmtShort(o.ab)}` : '';
+  return [`${o.markt}${o.preis ? ` ${o.preis}` : ''}${o.menge ? ` für ${o.menge}` : ''}`, ab].filter(Boolean).join(', ');
+}
 function itemRow(item) {
   const who = item.checked && personById(item.checked_by);
-  const sub = [item.qty, !item.checked ? packSentence(item) : '', who ? `abgehakt von ${who.name}` : ''].filter(Boolean).join(', ');
+  const cq = L.cleanQty(item.qty);
+  const offer = bioOffer(item);
+  const claudeBio = !item.checked && !offer && cq.bioOffer;
+  const offerText = offer ? `Bio-Angebot: ${bioOfferLine(offer)}` : claudeBio && cq.bioOffer.ab ? `Bio-Angebot ab ${cq.bioOffer.ab}` : '';
+  const sub = [cq.qty, !item.checked ? packSentence(item) : '', offerText, who ? `abgehakt von ${who.name}` : ''].filter(Boolean).join(', ');
   const purpose = L.purposeOf(item, state.data.plan, state.data.dishes);
   return `<li class="${item.checked ? 'erledigt' : ''}${item.missing ? ' fehlt' : ''}${state.justChecked === item.id ? ' gerade-abgehakt' : ''}">
     <button class="haken-knopf" data-action="haken" data-id="${esc(item.id)}" aria-pressed="${!!item.checked}">
       <span class="kasten">${CHECK}</span>
-      <span class="p-text"><span class="p-name">${esc(item.label)}${item.missing ? ' <span class="marke warn">nicht bekommen</span>' : ''}${seasonMark(item)}</span>${sub ? `<span class="p-menge">${esc(sub)}</span>` : ''}${purpose ? `<span class="p-wofuer">für ${esc(purpose)}</span>` : ''}</span></button>
-    ${!item.checked && item.category !== 'vorhanden' && (state.shopMode || item.missing) ? `<button class="fehlt-knopf" data-action="fehlt" data-id="${esc(item.id)}" aria-pressed="${!!item.missing}" aria-label="${esc(item.label)} ${item.missing ? 'doch bekommen' : 'nicht bekommen'}">${item.missing ? 'doch da' : 'fehlt'}</button>` : ''}
-    ${item.manual || (!item.checked && !state.shopMode) ? `<button class="weg" data-action="posten-weg" data-id="${esc(item.id)}" aria-label="${esc(item.label)} von der Liste nehmen">${CROSS}</button>` : ''}</li>`;
+      <span class="p-text"><span class="p-name">${esc(L.plainName(item.label))}${item.missing ? ' <span class="marke warn">nicht bekommen</span>' : ''}${offer || claudeBio ? ' <span class="marke angebot">Bio im Angebot</span>' : ''}${seasonMark(item)}</span>${sub ? `<span class="p-menge">${esc(sub)}</span>` : ''}${purpose ? `<span class="p-wofuer">für ${esc(purpose)}</span>` : ''}</span></button>
+    ${!item.checked && item.category !== 'vorhanden' && (state.shopMode || item.missing) ? `<button class="fehlt-knopf" data-action="fehlt" data-id="${esc(item.id)}" aria-pressed="${!!item.missing}" aria-label="${esc(L.plainName(item.label))} ${item.missing ? 'doch bekommen' : 'nicht bekommen'}">${item.missing ? 'doch da' : 'fehlt'}</button>` : ''}
+    ${item.manual || (!item.checked && !state.shopMode) ? `<button class="weg" data-action="posten-weg" data-id="${esc(item.id)}" aria-label="${esc(L.plainName(item.label))} von der Liste nehmen">${CROSS}</button>` : ''}</li>`;
 }
 
 /* ---------- Gerichte ---------- */
@@ -2103,7 +2122,7 @@ function sheetReceipt() {
       <ul class="beleg-posten">${rows}</ul>
       <div class="knopfreihe"><button type="button" class="knopf zweit klein" data-action="beleg-posten-neu">Posten hinzufügen</button></div>
       <p class="meta">Ändert ihr eine Kategorie, merkt sich die App das für den nächsten Kassenzettel.</p>
-      ${shopping.length ? `<h3 class="abteilung">Auf der Einkaufsliste abhaken</h3><div class="haken-liste">${shopping.map((i) => `<label class="schalter"><input type="checkbox" name="abhaken" value="${esc(i.id)}"${checked.includes(i.id) ? ' checked' : ''}> ${esc(i.label)}</label>`).join('')}</div>` : ''}
+      ${shopping.length ? `<h3 class="abteilung">Auf der Einkaufsliste abhaken</h3><div class="haken-liste">${shopping.map((i) => `<label class="schalter"><input type="checkbox" name="abhaken" value="${esc(i.id)}"${checked.includes(i.id) ? ' checked' : ''}> ${esc(L.plainName(i.label))}</label>`).join('')}</div>` : ''}
       <div class="knopfreihe"><button class="knopf">${d.isNew ? 'Speichern' : 'Änderungen speichern'}</button>
       ${d.isNew ? '' : `<button type="button" class="knopf zweit" data-action="beleg-loeschen" data-id="${esc(d.id)}">Löschen</button>`}</div></form>`,
   };
@@ -3946,7 +3965,7 @@ const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Termine der Familie, Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
   ['Neues Gericht von Claude', 'Passt ein Abendessen nicht, im Tag auf „Neues Gericht von Claude“ tippen (auch oben bei „Gericht tauschen“). Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, passend zur Kochzeit, zu euren Regeln und zum Rest der Woche, mit Wunsch wie „schneller“ oder „mit Fisch“. „Anderer Vorschlag“ holt einen neuen. „Übernehmen“ speichert das Rezept in der Sammlung und passt die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, schon Gekauftes wird möglichst weiterverwendet, die neuen Zutaten kommen auf die nächste Tour.'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
-  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg.'],
+  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg. „Bio“ steht nicht in den Namen, gekauft wird Bio, wenn es das gibt. „Bio im Angebot“ heißt: Am Einkaufstag gibt es das als Bio-Angebot, Markt und Preis stehen darunter.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
@@ -4013,7 +4032,7 @@ function sheetSubst() {
   if (!d || !item) return { over: '', title: 'Nicht gefunden', body: '' };
   const days = d.days.map((x) => `${L.WD_SHORT[L.wdIndex(x.day)]} ${L.shortDish(x.dish.name)}`).join(', ');
   return {
-    over: `Statt ${item.label}`,
+    over: `Statt ${L.plainName(item.label)}`,
     title: 'Ersatz',
     body: `${days ? `<p class="meta">Gedacht für ${esc(days)}.</p>` : ''}
       <ul class="posten ersatz-liste">${d.res.vorschlaege.map((v, n) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(v.name)}</span>
@@ -4742,7 +4761,7 @@ function runImport(text) {
   if (!saved.length && !rows.length) throw new Error('In dem Text stehen weder Gerichte noch Tage.');
   const week = /^\d{4}-\d{2}-\d{2}$/.test(obj.week_start || '') ? L.mondayOf(obj.week_start) : (rows[0] ? L.mondayOf(rows[0].day) : state.week);
   // Gleiche Posten (Zwiebel und Zwiebeln, Stk. und Stück) auf derselben Tour stehen nur einmal auf der Liste.
-  const items = L.mergeList((obj.shopping || []).filter((s) => s && s.label).map((s, n) => ({
+  const items = L.mergeList((obj.shopping || []).filter((s) => s && s.label).map((s) => ({ ...s, label: L.plainName(s.label) })).map((s, n) => ({
     id: L.uid(), week_start: week, trip: s.trip ? String(s.trip) : 'Einkauf',
     due: /^\d{4}-\d{2}-\d{2}$/.test(String(s.due || '')) ? String(s.due) : null,
     category: L.SHOP_CATS[s.category] ? s.category : 'sonst', label: String(s.label), qty: s.qty ? String(s.qty) : '',
@@ -5269,7 +5288,7 @@ const actions = {
     if (!item || !v) return;
     const box = $('#ersatz-notiz');
     const withNote = Number(n) === 0 && box && box.checked && d.res.rezept_hinweis;
-    const next = { ...item, label: v.name, qty: [v.menge, `statt ${item.label}`].filter(Boolean).join(', '), missing: false };
+    const next = { ...item, label: L.plainName(v.name), qty: [v.menge, `statt ${L.plainName(item.label)}`].filter(Boolean).join(', '), missing: false };
     let notesRow = null;
     if (withNote) {
       const cut = L.addDays(L.todayISO(), -14);
@@ -5322,7 +5341,7 @@ const actions = {
       state.data.shopping = state.data.shopping.filter((i) => i.id !== id);
       if (row) state.data.settings = [...state.data.settings.filter((x) => x.key !== 'liste_weg'), row];
     }, async () => { await store.deleteItems([id]); if (row) await store.saveSettings([row]); });
-    toast(`${item.label} ist von der Liste.`, () => {
+    toast(`${L.plainName(item.label)} ist von der Liste.`, () => {
       const back = item.manual ? null : removedRow(item.week_start, L.itemKey(item.label), false);
       commit(() => {
         state.data.shopping = [...state.data.shopping.filter((i) => i.id !== item.id), item];

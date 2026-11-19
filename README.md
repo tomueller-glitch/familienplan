@@ -403,6 +403,8 @@ Brotbox und Touren: Posten, deren Zweck kein Abendessen ist (`isDinnerUse`), etw
 
 Abendessen oder Brotbox: Ein Zweck mit Wochentag gilt als Abendessen, außer er nennt Brotbox, Frühstück, Snack oder Mittag (`isDinnerUse`). Claude kürzt Gerichtsnamen oft, deshalb zählt der Tag. „Bio-X“ und „X“ sind ein Posten. Entfernte Posten (Kreuz, mit „Rückgängig“) stehen in `ep_settings` unter `liste_weg` (pro Woche) und kommen beim Neuberechnen nicht wieder.
 
+Bio und Angebote: Die Liste zeigt Namen ohne „Bio“ (`plainName`) und Mengen ohne Angebotszusatz (`cleanQty`). Die Familie kauft Bio, wenn es das gibt. Markiert wird nur ein Bio-Angebot: `parseOffers` liest die Angebotsliste aus Claudes Wochenlauf (`ep_ai_runs.offers`), `bioOfferFor` sucht ein Bio-Angebot, das am Einkaufstag gilt und alle Wörter des Postens enthält. Steht in Claudes Menge „Angebot ab …, Bio“, zählt das auch. Prüfung: `node tests/einkauf-zusammenfassen.mjs`, `node tests/brotbox-liste.mjs` (Fall H).
+
 ## Neues Gericht von Claude für einen Tag
 
 Im Tagesbogen und oben bei „Gericht wählen“: „Neues Gericht von Claude“ schickt den Tag, das alte Gericht, den Rest der Woche, die Namen der Sammlung, Esser, Kochzeit, Vorrat und schon Gekauftes an die Funktion `push` (Aktion `neues-gericht`, `suggestNewDish`, Modell aus den Regeln). Sie prüft, dass der Name neu ist und keine Ausschlüsse vorkommen, und fragt sonst einmal nach. „Übernehmen“ speichert das Rezept, setzt es an den Tag, pausiert auf Wunsch das alte Gericht acht Wochen und passt die Einkaufsliste mit `swapShopping` an. Dasselbe passiert jetzt beim Tauschen aus der Sammlung. Prüfung: `node tests/neues-gericht.mjs`, `node --experimental-strip-types tests/funktion-neues-gericht.mts`.

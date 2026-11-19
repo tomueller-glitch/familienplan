@@ -14,3 +14,11 @@ const dishes = [{ id: 'd1', name: 'Chili con Carne', ingredients: [{ n: 'Knoblau
   { id: 'd2', name: 'Spinat-Lasagne', ingredients: [{ n: 'Knoblauchzehe', q: 2, u: 'Stk.', c: 'obst' }, { n: 'Zwiebel', q: 1, u: 'Stk.', c: 'obst' }, { n: 'Hackfleisch', q: 300, u: 'g', c: 'fleisch' }, { n: 'Knoblauch', q: 1, u: 'Zehe', c: 'obst' }] }];
 const plan = [{ day: '2026-11-24', dish_id: 'd1' }, { day: '2026-11-28', dish_id: 'd2' }];
 for (const x of L.buildShopping('2026-11-23', plan, dishes)) console.log('Rezept:', x.label, '|', x.qty, '|', x.purpose);
+// Bio aus dem Namen, Angebote aus der Menge und aus Claudes Angebotsliste
+for (const n of ['Bio-Hähnchenbrustfilet', 'Bio passierte Tomaten', 'Hähnchenbrust (Bio)', 'Milch, Bio', 'Biomilch', 'Bio', 'rote Paprika']) console.log('ohne Bio:', n, '->', L.plainName(n));
+for (const q of ['2 Packungen, Angebot ab 13.11., nicht Bio', '1 kg, Angebot ab 20.11., Bio', '500 g', '1 Packung, nur mit Lidl Plus, Angebot ab 19.11., Bio']) console.log('Menge:', q, '->', JSON.stringify(L.cleanQty(q)));
+const offers = L.parseOffers(['Aldi | Bio-Möhren | 1 kg | 1,29 € | Bio | 20.11. | 25.11. | Sortiment', 'Lidl | Hähnchenbrustfilet | 1 kg | 7,99 € | nicht Bio | 19.11. | | Sortiment', 'Aldi | Bio Eier Freiland 10 Stück | 10 Stück | 3,49 € | Bio | 23.11. | 28.11. | Sortiment', 'Kopfzeile ohne Trenner'].join('\n'), '2026-11-23');
+console.log('Angebote:', offers.length, offers.map((o) => `${o.produkt}:${o.bio}:${o.ab}-${o.bis}:${[...o.words].join('+')}`).join(' | '));
+const tst = (label, due, today) => { const o = L.bioOfferFor({ label, due }, offers, today); return o ? `${o.markt} ${o.preis}` : '-'; };
+console.log('Möhren Sa 21.11.:', tst('Möhren', '2026-11-21', '2026-11-19'), '| Bio-Karotten:', tst('Bio-Karotten', '2026-11-21', '2026-11-19'), '| Möhren am 26.11.:', tst('Möhren', '2026-11-26', '2026-11-19'));
+console.log('Eier Mi 25.11.:', tst('Eier', '2026-11-25', '2026-11-19'), '| Eier Sa 21.11.:', tst('Eier', '2026-11-21', '2026-11-19'), '| Hähnchen (nicht Bio):', tst('Hähnchenbrustfilet', '2026-11-21', '2026-11-19'));

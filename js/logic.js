@@ -590,16 +590,11 @@ export function parseQtyText(text) {
 // Anzeigename für zusammengefasste Schreibweisen: bekannte Einzahl, sonst bei Stückzahlen über 1 die längere Form.
 const SINGULAR_OF = Object.fromEntries(Object.entries(NAME_PLURAL).map(([one, many]) => [many.toLowerCase(), one]));
 function baseName(all, q, u) {
-  // Steht eine Schreibweise mit Bio dabei, heißt der Posten so.
-  const bio = all.filter((n) => /^bio[- ]/i.test(n));
-  const names = bio.length ? bio : all;
+  // Bio steht nicht im Namen auf der Liste (plainName), die Familie kauft ohnehin Bio.
+  const names = [...new Set(all.map(plainName))];
   for (const n of names) {
     if (NAME_PLURAL[n]) return n;
     if (SINGULAR_OF[n.toLowerCase()]) return SINGULAR_OF[n.toLowerCase()];
-  }
-  if (bio.length && !names.some((n) => NAME_PLURAL[n] || SINGULAR_OF[n.toLowerCase()])) {
-    const plain = all.find((n) => !/^bio[- ]/i.test(n) && (NAME_PLURAL[n] || SINGULAR_OF[n.toLowerCase()]));
-    if (plain) return `Bio-${NAME_PLURAL[plain] ? plain : SINGULAR_OF[plain.toLowerCase()]}`;
   }
   if (names.length < 2 || u) return names[0];
   return [...names].sort((a, b) => (q > 1 ? b.length - a.length : a.length - b.length))[0];
@@ -646,6 +641,63 @@ export function mergeList(items, canMerge) {
   if (!removed.length) return items;
   const gone = new Set(removed);
   return items.filter((i) => !gone.has(i.id)).map((i) => changed.find((c) => c.id === i.id) || i);
+}
+
+/* ---------- Bio und Angebote auf der Einkaufsliste ---------- */
+// Die Familie kauft Bio, wenn es das gibt. Auf der Liste steht deshalb kein „Bio“ im Namen.
+export function plainName(label) {
+  const s = String(label || '').trim();
+  const t = s.replace(/^bio[-\s]+/i, '').replace(/\s*\(bio\)\s*$/i, '').replace(/[,\s]+bio$/i, '').trim();
+  return t || s;
+}
+// Claude schreibt Angebote in die Menge: „2 Packungen, Angebot ab 13.11., nicht Bio“. Die Liste zeigt nur die Menge
+// und merkt sich, ob es ein Bio-Angebot ist.
+export function cleanQty(qty) {
+  const parts = String(qty || '').split(/,\s*/).map((x) => x.trim()).filter(Boolean);
+  let offer = null;
+  let bio = null;
+  const keep = [];
+  for (const p of parts) {
+    const m = /^angebot(?:\s+ab\s+(\d{1,2}\.\d{1,2}\.?))?/i.exec(p);
+    if (m) { offer = { ab: m[1] ? m[1].replace(/\.?$/, '.') : '' }; continue; }
+    if (/^nicht\s+bio$/i.test(p)) { bio = false; continue; }
+    if (/^bio$/i.test(p)) { bio = true; continue; }
+    keep.push(p);
+  }
+  return { qty: keep.join(', '), bioOffer: offer && bio === true ? offer : null };
+}
+// Angebotsliste aus Claudes Wochenlauf (eine Zeile pro Angebot):
+// Markt | Produkt | Packungsgröße | Preis | Bio oder nicht Bio | gültig ab | gültig bis | Art
+export function parseOffers(text, weekStart) {
+  const year = Number(String(weekStart || '').slice(0, 4)) || new Date().getFullYear();
+  const wm = Number(String(weekStart || '').slice(5, 7));
+  const date = (x) => {
+    const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(x || ''));
+    if (!m) return null;
+    let y = year;
+    if (wm === 12 && Number(m[2]) === 1) y += 1;
+    if (wm === 1 && Number(m[2]) === 12) y -= 1;
+    return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  };
+  const out = [];
+  for (const line of String(text || '').split(/\n/)) {
+    const f = line.split('|').map((x) => x.trim());
+    if (f.length < 6 || !f[1]) continue;
+    const name = f[1].replace(/\d.*$/, '').replace(/[,(].*$/, '').trim();
+    out.push({
+      markt: f[0], produkt: f[1], menge: f[2] || '', preis: f[3] || '',
+      bio: /\bbio\b/i.test(f[4]) && !/nicht/i.test(f[4]), ab: date(f[5]), bis: date(f[6]),
+      words: new Set(itemKey(plainName(name)).split(' ').map(singularWord)),
+    });
+  }
+  return out;
+}
+// Ein Bio-Angebot passt zu einem Posten, wenn alle Wörter des Postens im Angebot stehen und es am Einkaufstag gilt.
+export function bioOfferFor(item, offers, today) {
+  const day = item.due && item.due >= today ? item.due : today;
+  const words = itemKey(plainName(item.label)).split(' ').filter(Boolean).map(singularWord);
+  if (!words.length) return null;
+  return (offers || []).find((o) => o.bio && (!o.ab || o.ab <= day) && (!o.bis || o.bis >= day) && words.every((w) => o.words.has(w))) || null;
 }
 
 /* ---------- Wofür ein Posten ist, und auf welche Tour er gehört ---------- */

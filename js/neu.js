@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19g', datum: '19. November, nachts', titel: 'Einkaufsliste ohne „Bio“, dafür mit Bio-Angeboten',
+    punkte: [
+      { text: 'Auf der Einkaufsliste steht kein „Bio“ mehr vor den Sachen. Gekauft wird Bio, wenn es das gibt.' },
+      { text: 'Gibt es etwas am Einkaufstag gerade als Bio-Angebot, steht daneben „Bio im Angebot“, darunter Markt und Preis.' },
+      { text: 'Claude schreibt die Liste ab jetzt ohne „Bio“ und sucht bevorzugt Bio-Angebote.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19f', datum: '19. November, nachts', titel: 'iPhone-Kalender auf dem Küchen-Display',
     punkte: [
       { text: 'Im Familie-Fenster unter Küchen-Display, „Kalender fürs Display“: öffentliche iPhone-Kalender eintragen, etwa einen pro Person, den gemeinsamen und den Dienstplan. Das Display zeigt ihre Termine von heute und morgen mit Farbpunkt der Person, neben den Terminen aus dem Familienplan. Auf den Handys erscheinen sie nicht.', fuer: 'eltern' },
