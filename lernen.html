@@ -889,12 +889,22 @@ function badges(){
 }
 
 /* ===== Aktionen ===== */
+// Uhr starten. Fängt er mit Karteikarten oder der Abfrage an, ohne „Start“ zu tippen, läuft sie trotzdem.
+function startTimer(id){
+  if(S.running&&S.running.id===id)return;
+  S.running={id,at:Date.now()};lmStart();
+  if(!S.kick[iso(today())]&&nowMin()>=dayStart(today())-90)S.kick[iso(today())]=hm(nowMin());
+  save();
+}
 /* ===== Lernzeit prüfen ===== */
 // Lern-Aufgaben zählen nur mit der Uhr und ab zwei Dritteln der geplanten Zeit. Zeit außerhalb der App zieht der
 // Lernmodus schon ab. Kürzer oder ohne Uhr („ohne Handy gelernt“) geht an die Eltern: „Zählt“ gibt das Tor,
 // „Nochmal“ plant die Aufgabe neu ein. Kein Gegentor, damit sich Ehrlichkeit lohnt.
 const NEED_SHARE=2/3;
-const needMin=(t,P)=>Math.max(1,Math.ceil((P||planMin(t))*NEED_SHARE));
+// Maßstab ist die Zeit, die heute für die Einheit eingeplant ist und auf der Karte steht. Ist der Tag voll,
+// kürzt die Planung Einheiten (geschätzt 45, geplant 25); dann gelten die 25.
+function planToday(t){const d=simulate()[0],it=d.items.concat(d.over).find(x=>x.t.id===t.id);return it?it.P:planMin(t)}
+const needMin=(t,P)=>Math.max(1,Math.ceil((P||planToday(t))*NEED_SHARE));
 const runMin=()=>S.running?Math.max(0,Math.round((Date.now()-S.running.at)/60000)):0;
 const pendingChecks=()=>S.tasks.filter(t=>!t.done&&t.check);
 function sendToCheck(t,P,actual,why){
@@ -939,9 +949,10 @@ function earlyPanel(t,P){
 function finish(id){
   const t=S.tasks.find(x=>x.id===id);if(!t)return;
   const P=planMin(t);let actual;
-  if(t.kind==='lern'){
-    const run=S.running&&S.running.id===id;
-    if(!run||runMin()<needMin(t,P)){sendToCheck(t,P,run?Math.max(1,runMin()):Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]||1)),run?'kurz':'ohne');return}
+  // Auf dem Gerät von Mama oder Papa gilt das Abhaken als Bestätigung, die Prüfung braucht es nur beim Kind.
+  if(t.kind==='lern'&&kidDevice()){
+    const run=S.running&&S.running.id===id,PT=planToday(t);
+    if(!run||runMin()<needMin(t,PT)){sendToCheck(t,PT,run?Math.max(1,runMin()):Math.round(PT*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]||1)),run?'kurz':'ohne');return}
   }
   if(S.running&&S.running.id===id){actual=Math.max(1,Math.round((Date.now()-S.running.at)/60000));S.running=null}
   else actual=Math.round(P*({kurz:.7,ok:1,lang:1.4}[ui.fbDur]));
@@ -1379,7 +1390,7 @@ function timeLine(segs,P){return `${segs.map(x=>hm(x[0])).join(' und ')} · ${P}
 function fbPanel(t,P){
   const run=S.running&&S.running.id===t.id,measured=run?Math.max(1,Math.round((Date.now()-S.running.at)/60000)):null;
   const b=(act,v,l,cur)=>`<button class="btn sm ${cur===v?'on':''}" data-act="${act}" data-v="${v}">${l}</button>`;
-  const lern=t.kind==='lern',toCheck=lern&&(!run||measured<needMin(t,P));
+  const lern=t.kind==='lern'&&kidDevice(),toCheck=lern&&(!run||measured<needMin(t,P));
   return `<div class="fb">`+(measured?`<div class="q">Gemessen: ${measured} Min. (geplant ${P})</div>`:
     `<div class="q">${lern?'Ohne Handy gelernt? ':''}Wie lange hat es gedauert? Geplant waren ${P} Min.</div><div class="row">${b('fbdur','kurz','Kürzer',ui.fbDur)}${b('fbdur','ok','Ungefähr so',ui.fbDur)}${b('fbdur','lang','Länger',ui.fbDur)}</div>`)+
     (toCheck?`<div class="note" style="margin-top:8px">${run?'Das war kürzer als geplant.':'Ohne Uhr zählt die Lernzeit nicht von selbst.'} Mama oder Papa schauen kurz drüber, dann gibt es das Tor.</div>`:'')+
@@ -1390,7 +1401,7 @@ function fbPanel(t,P){
 function timerRow(t){
   const run=S.running&&S.running.id===t.id;
   return run?`<div class="row" style="margin-top:10px"><span class="chip wa">läuft seit <span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</span><button class="btn primary" data-act="check" data-id="${t.id}">Fertig</button></div>`
-    :`<div class="row" style="margin-top:10px"><button class="btn primary" data-act="start" data-id="${t.id}">Start</button><button class="btn" data-act="check" data-id="${t.id}">${t.kind==='lern'?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
+    :`<div class="row" style="margin-top:10px"><button class="btn primary" data-act="start" data-id="${t.id}">Start</button><button class="btn" data-act="check" data-id="${t.id}">${t.kind==='lern'&&kidDevice()?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
 }
 function renderTaskCard(t,P,segs){
   let h=`<div class="item" style="--c:${col(t.subject)}">
@@ -1526,7 +1537,7 @@ function nextLine(rest){
 function focusActions(t){
   const run=S.running&&S.running.id===t.id;
   return run?`<div class="act"><div class="run"><span data-elapsed="${S.running.at}">${Math.round((Date.now()-S.running.at)/60000)}</span> Min.</div><div class="sub c">läuft</div><button class="btn primary xl" data-act="check" data-id="${t.id}">Fertig</button></div>`
-    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">${t.kind==='lern'?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
+    :`<div class="act"><button class="btn primary xl" data-act="start" data-id="${t.id}">Start</button><button class="lnk" data-act="check" data-id="${t.id}">${t.kind==='lern'&&kidDevice()?'Ohne Handy gelernt':'Schon erledigt'}</button></div>`;
 }
 function renderFocus(plan){
   const T=iso(today()),day=plan[0],q=queueOf(day),hasWork=q.length>0,lm=lmHere();
@@ -1915,7 +1926,7 @@ document.addEventListener('click',e=>{
     case'vchk':answerCheck(b.dataset.k,b.dataset.v==='1');break;
     case'check':{const ct=S.tasks.find(x=>x.id===id);
       // Läuft die Uhr bei einer Lern-Aufgabe noch keine zwei Drittel der Zeit: erst ermutigen weiterzumachen.
-      if(ct&&ct.kind==='lern'&&S.running&&S.running.id===id&&runMin()<needMin(ct,planMin(ct))){ui.early=id;ui.fb=null;break}
+      if(ct&&ct.kind==='lern'&&kidDevice()&&S.running&&S.running.id===id&&runMin()<needMin(ct,planToday(ct))){ui.early=id;ui.fb=null;break}
       ui.early=null;ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break}
     case'earlyback':ui.early=null;break;
     case'earlydone':ui.early=null;ui.fb=id;ui.fbDur='ok';ui.fbFeel='mittel';break;
@@ -1925,7 +1936,7 @@ document.addEventListener('click',e=>{
     case'fbfeel':ui.fbFeel=b.dataset.v;break;
     case'fbsave':finish(ui.fb);break;
     case'fbcancel':ui.fb=null;break;
-    case'start':S.running={id,at:Date.now()};lmStart();if(!S.kick[iso(today())]&&nowMin()>=dayStart(today())-90)S.kick[iso(today())]=hm(nowMin());save();break;
+    case'start':startTimer(id);break;
     case'undo':if(t){const d=t.doneAt;t.done=false;S.goals=S.goals.filter(g=>g.taskId!==id);if(S.wins[d])delete S.wins[d];save()}break;
     case'rv':ui.rv[id]=Object.assign({},ui.rv[id],{[b.dataset.k]:b.dataset.v});break;
     case'rvsave':{const r=ui.rv[id]||{},e=S.exams.find(x=>x.id===id);if(!e)break;
@@ -1936,12 +1947,12 @@ document.addEventListener('click',e=>{
     case'brknew':if(S.brk)S.brk=Object.assign({},S.brk,{idea:breakIdea(S.brk.long,Date.now())});save();break;
     case'famdel':ui.ask=null;(async()=>{try{await famDelete(id);ui.msg='Termin gelöscht, auch im Familienplan.';ui.msgType='okn'}catch(e){ui.msg='Löschen hat nicht geklappt.';ui.msgType='err'}render()})();return;
     case'fammig':(async()=>{try{const n=await famMigrate();save();ui.msg=n?`${n} Termin${n>1?'e':''} in den Familienplan übernommen.`:'Die Termine standen schon im Familienplan, die doppelten sind entfernt.';ui.msgType='okn'}catch(e){ui.msg='Übernehmen hat nicht geklappt.';ui.msgType='err'}render()})();return;
-    case'quiz':if(!t)break;if(t.quiz){ui.quiz={id,order:t.quiz.qs.map((_,i)=>i),pos:0,show:false,ok:0};break}if(!ui.busy)genQuiz(t,true);return;
+    case'quiz':if(!t)break;if(!S.running&&kidDevice())startTimer(t.id);if(t.quiz){ui.quiz={id,order:t.quiz.qs.map((_,i)=>i),pos:0,show:false,ok:0};break}if(!ui.busy)genQuiz(t,true);return;
     case'qshow':if(ui.quiz)ui.quiz.show=true;break;
     case'qok':quizStep(true);break;
     case'qno':quizStep(false);break;
     case'quizend':ui.quiz=null;break;
-    case'cards':cardStart(id,b.dataset.task);break;
+    case'cards':cardStart(id,b.dataset.task);if(b.dataset.task&&!S.running&&kidDevice())startTimer(b.dataset.task);break;
     case'cshow':if(ui.cs)ui.cs.show=true;break;
     case'cok':cardStep(true);break;
     case'cno':cardStep(false);break;

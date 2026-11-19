@@ -2729,7 +2729,8 @@ const fotoEntry = (e) => !!e && (fotoTasks().includes(e.task_id));
 function ensureFotoLinks(ids) {
   state.fotoLinks = state.fotoLinks || {};
   const now = Date.now();
-  const missing = ids.filter((id) => { const x = state.fotoLinks[id]; return !x || (!x.busy && x.url && now - x.at > 50 * 60000); });
+  // Neu holen: noch nie geholt, Link bald abgelaufen (gilt eine Stunde) oder letzter Versuch vor über einer Minute gescheitert.
+  const missing = ids.filter((id) => { const x = state.fotoLinks[id]; return !x || (!x.busy && ((x.url && now - x.at > 50 * 60000) || (x.err && now - x.at > 60000))); });
   if (!missing.length) return;
   missing.forEach((id) => { state.fotoLinks[id] = { busy: true, at: now }; });
   setTimeout(() => {
