@@ -134,6 +134,7 @@ export function fmtStars(avg) {
 const UNIT_PLURAL = {
   Dose: 'Dosen', Packung: 'Packungen', Glas: 'Gläser', Kugel: 'Kugeln', Scheibe: 'Scheiben',
   Prise: 'Prisen', Kopf: 'Köpfe', Tube: 'Tuben', Knolle: 'Knollen', Zehe: 'Zehen', Becher: 'Becher',
+  Stange: 'Stangen', Zweig: 'Zweige',
 };
 const NAME_PLURAL = {
   'Bio-Ei': 'Bio-Eier', 'Ei': 'Eier', 'Zwiebel': 'Zwiebeln', 'Knoblauchzehe': 'Knoblauchzehen',

@@ -401,6 +401,10 @@ Aus dem Vorrat: `fromPantry` in `js/logic.js` sammelt die Zutaten der Gerichte a
 
 Brotbox und Touren: Posten, deren Zweck kein Abendessen ist (`isDinnerUse`), etwa „Brotbox (Di)“, lassen sich nicht aus Rezepten berechnen. „Aus dem Plan neu erstellen“ behält sie samt Touren (`keepNonDinner`, `tripFor`). Werden im Entwurf Tage getauscht, passt `draftShopping` Claudes Liste an, statt sie zu ersetzen. Fehlen Brotbox-Posten aus dem freigegebenen Entwurf, bietet die Liste sie oben zum Nachtragen an. Prüfung: `node tests/brotbox-liste.mjs`.
 
+## Neues Gericht von Claude für einen Tag
+
+Im Tagesbogen und oben bei „Gericht wählen“: „Neues Gericht von Claude“ schickt den Tag, das alte Gericht, den Rest der Woche, die Namen der Sammlung, Esser, Kochzeit, Vorrat und schon Gekauftes an die Funktion `push` (Aktion `neues-gericht`, `suggestNewDish`, Modell aus den Regeln). Sie prüft, dass der Name neu ist und keine Ausschlüsse vorkommen, und fragt sonst einmal nach. „Übernehmen“ speichert das Rezept, setzt es an den Tag, pausiert auf Wunsch das alte Gericht acht Wochen und passt die Einkaufsliste mit `swapShopping` an. Dasselbe passiert jetzt beim Tauschen aus der Sammlung. Prüfung: `node tests/neues-gericht.mjs`, `node --experimental-strip-types tests/funktion-neues-gericht.mts`.
+
 ## Stall-Ampel, Minuten-Shop und Küchen-Display
 
 - Stall-Ampel: `ep_settings` unter `stall` (`on`, `tage`, `last`). Fällig ist `last + tage`, Gelb einen Tag vorher. Meldungen tragen die Kennung `st-…`, die Bestätigung setzt `last`. Aufgabe: `meerschwein-kaefig` oder eine Aufgabe mit Käfig oder Stall im Namen. Prüfung: `node --experimental-strip-types tests/funktion-stall-shop.mts` und `node tests/stall-shop.mjs`.

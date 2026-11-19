@@ -966,3 +966,5 @@ html.anzeige-modus body::before { display: none; }
 .vorrat-frage .posten { margin-top: 8px; }
 .vorrat-frage .knopfreihe { margin-top: 8px; }
 .kasten-zeile { margin: 6px 0 0; }
+.neu-claude { margin: 0 0 14px; }
+.fehler-text { color: var(--rot, #B3261E); margin: 0 0 10px; }

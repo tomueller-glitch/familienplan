@@ -283,6 +283,13 @@ class SupabaseStore {
     try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
     throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
   }
+  async newDish(neu) {
+    const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'neues-gericht', neu } });
+    if (!error) return data.neu;
+    let msg = '';
+    try { msg = (await error.context.json()).error || ''; } catch (e) { /* keine Antwort der Funktion */ }
+    throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
+  }
   async suggestSubstitute(payload) {
     const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'ersatz', ...payload } });
     if (!error) return data.ersatz;
@@ -468,6 +475,21 @@ class LocalStore {
     await new Promise((ok) => setTimeout(ok, 1200));
     const { demoFeast } = await import('./planer.js');
     return demoFeast(fest);
+  }
+  async newDish(neu) {
+    await new Promise((ok) => setTimeout(ok, 900));
+    const n = (neu && Array.isArray(neu.abgelehnt) ? neu.abgelehnt.length : 0) + 1;
+    return {
+      warum: 'Schnell gemacht, viel Eiweiß und mit Gemüse der Saison. Beispiel aus dem Demo-Modus.',
+      gericht: {
+        name: n === 1 ? 'Ofen-Hähnchen mit Kürbis und Kichererbsen (Beispiel)' : `Linsen-Kokos-Curry mit Reis (Beispiel ${n})`,
+        category: n === 1 ? 'gefluegel' : 'vegan', duration_min: 40, tags: ['Schnell'], note: '', prep: '',
+        ingredients: n === 1
+          ? [[600, 'g', 'Hähnchenbrustfilet', 'fleisch'], [1, '', 'Hokkaido-Kürbis', 'obst'], [1, 'Dose', 'Kichererbsen', 'vorrat'], [1, '', 'rote Zwiebel', 'obst'], [200, 'g', 'Feldsalat', 'obst'], [null, '', '2 EL Olivenöl', 'basis']]
+          : [[250, 'g', 'rote Linsen', 'vorrat'], [1, 'Dose', 'Kokosmilch', 'vorrat'], [250, 'g', 'Bio-Reis', 'vorrat'], [200, 'g', 'Babyspinat', 'obst'], [null, '', '1 TL Currypulver', 'basis']],
+        steps: ['Ofen auf 200 Grad vorheizen.', 'Alles schneiden und auf dem Blech verteilen.', '25 Minuten backen.'],
+      },
+    };
   }
   async suggestSubstitute(payload) {
     await new Promise((ok) => setTimeout(ok, 800));

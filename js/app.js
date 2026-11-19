@@ -22,7 +22,7 @@ if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
 }
-const FORM_SHEETS = ['shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
+const FORM_SHEETS = ['neu-gericht', 'shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'termin-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
 const EPOCH = '1970-01-01T00:00:00Z';
 // Küchen-Display: Mit ?anzeige=kueche merkt sich das Gerät, dass es als Anzeige an der Wand hängt (?anzeige=aus beendet).
 const DISPLAY_KEY = 'essensplan.anzeige';
@@ -98,8 +98,8 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
-const ADULT_FORMS = new Set(['stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
+const ADULT_ACTIONS = new Set(['neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'termin-neu', 'termin-bearbeiten', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_FORMS = new Set(['neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'termin', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
 // Brotbox: bewerten dürfen die Kinder. Gibt es keine Erwachsenen, alle.
@@ -3237,7 +3237,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { termine: sheetEvents, 'termin-form': sheetEventForm, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3329,6 +3329,7 @@ function sheetDay({ day }) {
       ${(dish.steps || []).length ? `<div class="knopfreihe koch-start"><button class="knopf" data-action="kochmodus" data-id="${esc(dish.id)}" data-day="${day}">Kochmodus</button></div>` : ''}
       ${recipeHtml(dish, true, guestsOf(day))}
       ${canPlan() ? `<div class="knopfreihe">${day >= L.todayISO() ? `<button class="knopf zweit" data-action="tag-tausch" data-day="${day}">Mit anderem Tag tauschen</button>` : ''}<button class="knopf zweit" data-action="tauschen" data-day="${day}">Gericht tauschen</button>
+      ${day >= L.todayISO() ? `<button class="knopf zweit" data-action="neu-gericht" data-day="${day}">Neues Gericht von Claude</button>` : ''}
       <button class="knopf zweit" data-action="ausfall" data-day="${day}">${p.skipped ? 'Fand doch statt' : 'Ist ausgefallen'}</button></div>` : ''}`,
   };
 }
@@ -3466,7 +3467,9 @@ function sheetSwap({ day }) {
   return {
     over: L.fmtLong(day),
     title: 'Gericht wählen',
-    body: `<p class="meta" style="margin-bottom:12px">Oben stehen die Gerichte, die als Nächstes an der Reihe wären.</p>
+    body: `${day >= L.todayISO() && canPlan() ? `<div class="kasten-text neu-claude"><strong>Etwas ganz Neues?</strong>Claude schlägt ein Rezept vor, das noch nicht in eurer Sammlung steht.
+        <div class="knopfreihe"><button class="knopf zweit klein" data-action="neu-gericht" data-day="${day}">Neues Gericht von Claude</button></div></div>` : ''}
+      <p class="meta" style="margin-bottom:12px">Oben stehen die Gerichte, die als Nächstes an der Reihe wären.</p>
       <ul class="auswahl">${rows}</ul>
       ${p && p.dish_id ? `<div class="knopfreihe"><button class="knopf zweit" data-action="waehlen" data-day="${day}" data-id="">Tag frei lassen</button></div>` : ''}`,
   };
@@ -3856,6 +3859,7 @@ const HELP_KIDS = [
 ];
 const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Termine der Familie, Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
+  ['Neues Gericht von Claude', 'Passt ein Abendessen nicht, im Tag auf „Neues Gericht von Claude“ tippen (auch oben bei „Gericht tauschen“). Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, passend zur Kochzeit, zu euren Regeln und zum Rest der Woche, mit Wunsch wie „schneller“ oder „mit Fisch“. „Anderer Vorschlag“ holt einen neuen. „Übernehmen“ speichert das Rezept in der Sammlung und passt die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, schon Gekauftes wird möglichst weiterverwendet, die neuen Zutaten kommen auf die nächste Tour.'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
   ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
@@ -4233,9 +4237,82 @@ function rateLunch(day, n) {
   }
 }
 
+// Tauscht die Zutaten eines Tages auf der Einkaufsliste: Was nur für das alte Gericht war und noch nicht gekauft ist,
+// fällt weg, bei Posten für mehrere Gerichte nur dieser Zweck. Die Zutaten des neuen Gerichts kommen auf die nächste
+// Tour, die noch kommt (Frisches auf die letzte vor dem Kochtag), sonst auf den Nachkauf. Gekauftes bleibt stehen.
+function swapShopping(day, oldDish, newDish) {
+  const week = L.mondayOf(day);
+  const today = L.todayISO();
+  const list = state.data.shopping.filter((i) => i.week_start === week);
+  if (day < today || !list.some((i) => !i.manual)) return null;
+  const wd = L.WEEKDAYS_SHORT[L.wdIndex(day)];
+  const oldUse = oldDish ? `${L.shortDish(oldDish.name)} (${wd})`.toLowerCase() : '';
+  const newUse = newDish ? `${L.shortDish(newDish.name)} (${wd})` : '';
+  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const dishes = newDish && !state.data.dishes.some((d) => d.id === newDish.id) ? [...state.data.dishes, newDish] : state.data.dishes;
+  const need = (dish) => (dish ? L.buildShopping(week, [{ day, dish_id: dish.id, skipped: false }], dishes, factors, state.data.pantry, packsAll()) : []);
+  // Wie viel das alte Gericht von einem Posten gebraucht hat, damit ein gemeinsamer Posten kleiner wird.
+  const oldNeed = new Map(need(oldDish).map((x) => [L.itemKey(x.label), L.parseQtyText(x.qty)]));
+  const drop = [];
+  const change = [];
+  const bought = [];
+  const boughtKeys = new Map();
+  if (oldUse) {
+    for (const i of list) {
+      if (i.manual) continue;
+      const uses = L.usesOf(i.purpose);
+      const left = uses.filter((u) => u.toLowerCase() !== oldUse);
+      if (left.length === uses.length) continue;
+      const key = L.itemKey(i.label);
+      if (i.checked && i.category !== 'vorhanden') { bought.push(i.label); boughtKeys.set(key, { i, left }); continue; }
+      if (!left.length) { drop.push(i.id); continue; }
+      const have = L.parseQtyText(i.qty);
+      const was = oldNeed.get(key);
+      const rest = have && was && have.u === was.u ? Math.round((have.q - was.q) * 100) / 100 : null;
+      change.push({ ...i, purpose: left.join(', '), ...(rest > 0 ? { qty: L.fmtQty(rest, have.u) } : {}) });
+    }
+  }
+  const add = [];
+  if (newDish) {
+    const own = L.tripsOf(list);
+    const upcoming = (own.length > 1 ? own : KI.shopTrips(week)).filter((t) => t.due && t.due >= today);
+    let sort = Math.max(0, ...list.map((i) => i.sort || 0));
+    for (const it of need(newDish)) {
+      // Was laut Vorrat da ist, fragt der Kasten oben auf der Liste ab.
+      if (it.category === 'vorhanden') continue;
+      // Schon für das alte Gericht gekauft: Das neue nimmt es, nichts doppelt kaufen.
+      const b = boughtKeys.get(L.itemKey(it.label));
+      if (b) { change.push({ ...b.i, purpose: [...b.left, newUse].join(', ') }); boughtKeys.delete(L.itemKey(it.label)); continue; }
+      const t = upcoming.length ? L.tripFor(it, upcoming, week) : { trip: 'Nachkauf', due: null };
+      sort += 1;
+      add.push({ ...it, trip: t.trip, due: t.due, sort });
+    }
+  }
+  const used = bought.filter((label) => !boughtKeys.has(L.itemKey(label)));
+  const spare = bought.filter((label) => boughtKeys.has(L.itemKey(label)));
+  if (!drop.length && !change.length && !add.length) return { added: 0, dropped: 0, used, spare };
+  const gone = new Set(drop);
+  commit(() => {
+    state.data.shopping = [...state.data.shopping.filter((i) => !gone.has(i.id)).map((i) => change.find((c) => c.id === i.id) || i), ...add];
+  }, async () => {
+    await store.deleteItems(drop);
+    await store.saveItems([...change, ...add]);
+  });
+  return { added: add.length, dropped: drop.length, used, spare };
+}
+function swapNote(r) {
+  if (!r) return '';
+  const list = (x) => `${x.slice(0, 4).join(', ')}${x.length > 4 ? ' und mehr' : ''}`;
+  const bits = [r.dropped ? `${r.dropped} Posten weg` : '', r.added ? `${r.added} dazu` : ''].filter(Boolean);
+  return [bits.length ? `Einkaufsliste angepasst: ${bits.join(', ')}.` : '',
+    r.used.length ? `Schon gekauft und im neuen Gericht verwendet: ${list(r.used)}.` : '',
+    r.spare.length ? `Schon gekauft für das alte Gericht: ${list(r.spare)}.` : ''].filter(Boolean).join(' ');
+}
+
 async function setDish(day, dishId) {
   const p = planOf(day);
   if (p && p.dish_id === dishId) { openSheet({ type: 'tag', day }); return; }
+  const oldDish = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
   const rated = state.data.ratings.some((r) => r.day === day);
   if (rated && !(await ask('Für diesen Tag gibt es schon Bewertungen. Beim Tauschen werden sie gelöscht.', 'Trotzdem tauschen'))) { openSheet({ type: 'tauschen', day }); return; }
   const others = state.data.plan.filter((x) => x.day !== day);
@@ -4248,7 +4325,112 @@ async function setDish(day, dishId) {
     if (rated) await store.deleteRatingsForDay(day);
     if (keepRow) await store.savePlan([row]); else await store.deletePlan([day]);
   });
+  const note = swapNote(swapShopping(day, oldDish, dishId ? dishById(dishId) : null));
   if (dishId) openSheet({ type: 'tag', day }); else closeSheet();
+  if (note) toast(note);
+}
+
+/* ---------- Neues Gericht von Claude ---------- */
+// Ein Abendessen zurückgeben: Claude schlägt ein neues Rezept vor, das noch nicht in der Sammlung steht.
+// „Übernehmen“ speichert es in der Sammlung, setzt es an den Tag und passt die Einkaufsliste an.
+function newDishContext(day, wish, rejected) {
+  const p = planOf(day);
+  const old = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
+  const week = L.mondayOf(day);
+  const info = dinnerOf(day);
+  const limits = T.durationLimits(state.data.persons, state.data.events, state.data.attendance, [day]);
+  const lim = limits[day];
+  const main = (d) => (d.ingredients || []).filter((g) => g.c !== 'basis' && g.q != null).slice(0, 6).map((g) => g.n);
+  const oldUse = old ? `${L.shortDish(old.name)} (${L.WEEKDAYS_SHORT[L.wdIndex(day)]})`.toLowerCase() : '';
+  return {
+    tag: day, wochentag: L.fmtLong(day).split(',')[0], alt: old ? old.name : '', wunsch: wish || '', abgelehnt: rejected || [],
+    woche: L.weekDays(week).filter((d) => d !== day).map((d) => {
+      const q = planOf(d);
+      const dd = q && !q.skipped && q.dish_id ? dishById(q.dish_id) : null;
+      return dd ? { tag: d, wochentag: L.fmtLong(d).split(',')[0], gericht: dd.name, zutaten: main(dd) } : null;
+    }).filter(Boolean),
+    sammlung: state.data.dishes.map((d) => d.name),
+    esser: info.eaters, gaeste: guestsOf(day), weg: info.away.map((x) => x.person.name),
+    kochzeit: Number.isFinite(lim) ? lim : 0,
+    gekauft: oldUse ? state.data.shopping.filter((i) => i.week_start === week && i.checked && i.category !== 'vorhanden' && L.usesOf(i.purpose).some((u) => u.toLowerCase() === oldUse)).map((i) => i.label) : [],
+    vorrat: state.data.pantry.filter((x) => x.have).map((x) => x.label),
+    reste: leftovers().map((x) => x.text),
+  };
+}
+async function fetchNewDish() {
+  const sh = state.sheet;
+  if (!sh || sh.type !== 'neu-gericht') return;
+  const day = sh.day;
+  state.sheet = { ...sh, loading: true, error: '' };
+  renderSheet();
+  try {
+    const res = await store.newDish(newDishContext(day, sh.wish, sh.rejected));
+    const dish = normalizeDish(res.gericht, null);
+    if (state.sheet && state.sheet.type === 'neu-gericht' && state.sheet.day === day) {
+      state.sheet = { ...state.sheet, loading: false, result: { dish, warum: res.warum || '' } };
+      renderSheet();
+    }
+  } catch (e) {
+    if (state.sheet && state.sheet.type === 'neu-gericht') {
+      state.sheet = { ...state.sheet, loading: false, error: store.offline ? 'Ohne Internet gibt es keine Vorschläge.' : `Hat nicht geklappt: ${e.message}` };
+      renderSheet();
+    }
+  }
+}
+function sheetNewDish(sh) {
+  const p = planOf(sh.day);
+  const old = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
+  const intro = `<p class="meta" style="margin-bottom:12px">${old ? `Statt „${esc(old.name)}“ schlägt Claude` : 'Claude schlägt'} ein neues Gericht vor, das noch nicht in eurer Sammlung steht. Es passt zur Kochzeit des Tages, zu euren Regeln und zum Rest der Woche${old ? ' und verwendet möglichst, was für das alte Gericht schon gekauft ist' : ''}.</p>`;
+  const wishForm = (label, primary) => `<form class="form" data-form="neu-gericht">
+      <label>Wunsch <small>optional, zum Beispiel „schneller“, „mit Fisch“ oder „vegetarisch“</small><input class="feld" name="wunsch" value="${esc(sh.wish || '')}" maxlength="200" autocomplete="off"></label>
+      ${old && !sh.result ? `<label class="schalter"><input type="checkbox" name="pause"${sh.pause ? ' checked' : ''}> „${esc(L.shortDish(old.name))}“ acht Wochen nicht einplanen</label>` : ''}
+      <button class="knopf${primary ? '' : ' zweit'} breit">${label}</button></form>`;
+  if (sh.loading) {
+    return { over: L.fmtLong(sh.day), title: 'Claude überlegt', body: `<p class="meta">Ein neues Rezept mit Zutaten und Schritten dauert etwa eine halbe Minute.</p><div class="lade-balken" aria-hidden="true"><span></span></div>` };
+  }
+  if (sh.result) {
+    const d = sh.result.dish;
+    return {
+      over: `Vorschlag für ${L.fmtLong(sh.day)}`,
+      title: d.name,
+      body: `${sh.result.warum ? `<p>${esc(sh.result.warum)}</p>` : ''}<p class="meta">${esc(metaText(d))}</p>
+        <div class="knopfreihe"><button class="knopf" data-action="neu-gericht-ok">Übernehmen</button></div>
+        ${recipeHtml(d, false, guestsOf(sh.day))}
+        <h3 class="abteilung">Lieber etwas anderes?</h3>${wishForm('Anderer Vorschlag', false)}
+        <div class="knopfreihe"><button class="knopf zweit" data-action="zu">Abbrechen</button></div>`,
+    };
+  }
+  return {
+    over: L.fmtLong(sh.day),
+    title: 'Neues Gericht von Claude',
+    body: `${intro}${sh.error ? `<p class="fehler-text" role="alert">${esc(sh.error)}</p>` : ''}${wishForm(sh.error ? 'Noch einmal versuchen' : 'Vorschlag holen', true)}`,
+  };
+}
+function acceptNewDish() {
+  const sh = state.sheet;
+  if (!sh || !sh.result) return;
+  const day = sh.day;
+  const p = planOf(day);
+  const oldDish = p && !p.skipped && p.dish_id ? dishById(p.dish_id) : null;
+  let dish = sh.result.dish;
+  // Gibt es den Namen inzwischen doch, bekommt das neue Gericht einen Zusatz.
+  if (state.data.dishes.some((d) => d.name.toLowerCase() === dish.name.toLowerCase())) dish = { ...dish, name: `${dish.name} (neu)` };
+  const paused = sh.pause && oldDish ? { ...oldDish, pause_until: L.addDays(L.todayISO(), 56) } : null;
+  const row = { ...(p || {}), day, dish_id: dish.id, lunchbox: p ? p.lunchbox || '' : '', skipped: false };
+  const rated = state.data.ratings.some((r) => r.day === day);
+  commit(() => {
+    state.data.dishes = [...state.data.dishes.filter((d) => !paused || d.id !== paused.id), ...(paused ? [paused] : []), dish].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    state.data.plan = [...state.data.plan.filter((x) => x.day !== day), row].sort(byDay);
+    state.data.ratings = state.data.ratings.filter((r) => r.day !== day);
+  }, async () => {
+    await store.saveDish(dish);
+    if (paused) await store.saveDish(paused);
+    if (rated) await store.deleteRatingsForDay(day);
+    await store.savePlan([row]);
+  });
+  const note = swapNote(swapShopping(day, oldDish, dish));
+  openSheet({ type: 'tag', day });
+  toast(`${dish.name} steht jetzt am ${L.WEEKDAYS_SHORT[L.wdIndex(day)]} im Plan und in der Sammlung.${note ? ` ${note}` : ''}${paused ? ` „${L.shortDish(oldDish.name)}“ pausiert acht Wochen.` : ''}`);
 }
 
 function fillWeek() {
@@ -4657,6 +4839,8 @@ const actions = {
   tag: ({ day }) => openSheet({ type: 'tag', day }),
   gericht: ({ id }) => openSheet({ type: 'gericht', id }),
   tauschen: ({ day }) => openSheet({ type: 'tauschen', day }),
+  'neu-gericht': ({ day }) => openSheet({ type: 'neu-gericht', day, wish: '', rejected: [] }),
+  'neu-gericht-ok': () => acceptNewDish(),
   'tag-tausch': ({ day }) => openSheet({ type: 'tag-tausch', day }),
   hilfe: () => openSheet({ type: 'hilfe' }),
   packung: ({ id }) => { state.packDraft = null; openSheet({ type: 'packung', id }); },
@@ -5660,6 +5844,13 @@ const forms = {
     renderSheet();
     const f = $('[data-form="rest"] input', $('#sheet-root'));
     if (f) f.focus();
+  },
+  'neu-gericht': (fd) => {
+    const sh = state.sheet;
+    if (!sh || sh.type !== 'neu-gericht') return;
+    const rejected = sh.result ? [...(sh.rejected || []), sh.result.dish.name] : sh.rejected || [];
+    state.sheet = { ...sh, wish: String(fd.get('wunsch') || '').trim().slice(0, 200), pause: sh.result ? sh.pause : !!fd.get('pause'), rejected, result: null };
+    fetchNewDish();
   },
   mittag: async (fd) => {
     state.lunchForm = { personen: Math.min(10, Math.max(1, parseInt(fd.get('personen'), 10) || 1)), minuten: Number(fd.get('minuten')) || 15, wunsch: String(fd.get('wunsch') || '').trim().slice(0, 200) };

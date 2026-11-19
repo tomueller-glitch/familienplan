@@ -1558,6 +1558,97 @@ export async function planFeast(store: Store, f: Row) {
   };
 }
 
+/* ---------- Ein Gericht im Wochenplan neu von Claude ---------- */
+// Die Familie schickt ein Abendessen zurück und bekommt ein neues Rezept, das noch nicht in der Sammlung steht.
+// Die App schickt den Tag, den Rest der Woche, die Namen der Sammlung, Esser und was schon gekauft ist.
+export const NEWDISH_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['warum', 'gericht'],
+  properties: { warum: { type: 'string' }, gericht: (PLAN_SCHEMA.properties.neue_gerichte as Row).items },
+};
+const list80 = (x: unknown, n = 80) => (Array.isArray(x) ? x.map((v) => String(v).slice(0, 120)).filter(Boolean).slice(0, n) : []);
+export function newDishPrompt(b: Row, rules: Rules) {
+  const tag = String(b.tag || '');
+  const woche = (Array.isArray(b.woche) ? b.woche : []).slice(0, 7)
+    .map((x: Row) => `- ${String(x.wochentag || x.tag)}: ${String(x.gericht || '').slice(0, 100)}${Array.isArray(x.zutaten) && x.zutaten.length ? ` (${list80(x.zutaten, 8).join(', ')})` : ''}`);
+  const max = Number(b.kochzeit) > 0 ? Math.round(Number(b.kochzeit)) : 0;
+  const esser = Math.max(1, Math.round(Number(b.esser) || 4));
+  const gaeste = Math.max(0, Math.round(Number(b.gaeste) || 0));
+  return [
+    `Eine Familie mit zwei Erwachsenen und zwei Kindern (12 und 9 Jahre) möchte am ${String(b.wochentag || '')}, ${fmtDay(tag)} ${b.alt ? `statt „${String(b.alt).slice(0, 120)}“ ` : ''}ein anderes Abendessen.`,
+    'Schlag genau ein neues Gericht vor, das noch nicht in ihrer Sammlung steht, auch nicht unter einem anderen Namen oder als kleine Abwandlung.',
+    b.wunsch ? `Wunsch der Familie dazu: ${String(b.wunsch).slice(0, 300)}` : '',
+    list80(b.abgelehnt, 10).length ? `Diese Vorschläge wollte die Familie gerade nicht, also etwas deutlich anderes: ${list80(b.abgelehnt, 10).join(', ')}` : '',
+    '',
+    `Ziele der Familie: ${rules.ziele}`,
+    `Vorlieben: ${rules.vorlieben}`,
+    `Diese Lebensmittel kommen nie vor: ${rules.ausschluesse.join(', ') || 'keine'}.`,
+    `- Kochzeit höchstens ${max || rules.kochzeit} Minuten${max ? '' : ' (werktags)'}.`,
+    `- Es essen ${esser} ${esser === 1 ? 'Person' : 'Personen'} mit${gaeste ? `, dazu ${gaeste} ${gaeste === 1 ? 'Gast' : 'Gäste'}` : ''}${list80(b.weg, 4).length ? `, ${list80(b.weg, 4).join(' und ')} ${list80(b.weg, 4).length === 1 ? 'fehlt' : 'fehlen'}` : ''}. Das Rezept trotzdem für 4 Personen.`,
+    '- Reichlich Eiweiß, als Richtwert mindestens 30 g pro Erwachsenenportion. Kindgerecht, aber nicht langweilig.',
+    '',
+    'Der Rest der Woche, bitte nichts Ähnliches und nicht dieselbe Hauptzutat wie am Tag davor oder danach:',
+    ...(woche.length ? woche : ['- nichts geplant']),
+    '',
+    list80(b.gekauft, 30).length ? `Für das alte Gericht schon eingekauft, bitte möglichst davon verwenden: ${list80(b.gekauft, 30).join(', ')}` : '',
+    list80(b.vorrat, 60).length ? `Im Vorrat: ${list80(b.vorrat, 60).join(', ')}` : '',
+    list80(b.reste, 20).length ? `Muss bald weg: ${list80(b.reste, 20).join(', ')}` : '',
+    '',
+    `Namen in der Sammlung (davon keines): ${list80(b.sammlung, 400).join('; ')}`,
+    '',
+    ...(rules.saison !== false ? seasonLines(mondayOf(tag)) : []),
+    'Rezept:',
+    '- Zutaten für 4 Personen mit Menge, Einheit (g, ml, EL, TL, Stk., Pck., Dose oder leer) und Abteilung. Grundzutaten wie Öl, Salz, Pfeffer, Gewürze bekommen Abteilung "basis", Menge 0 und den Text mit Menge im Namen, zum Beispiel "2 EL Öl".',
+    '- Zutaten so, wie es sie bei Aldi Süd gibt, in üblichen Packungsgrößen.',
+    '- Schritte kurz und klar, mit Thermomix-Angaben (Zeit, Temperatur, Stufe), wo es passt. "tags" zum Beispiel Thermomix, Airfryer, Schnell, Vegan.',
+    '- "vorabend" nur, wenn etwas am Abend vorher zu tun ist, sonst leer. "hinweis" kurz oder leer.',
+    '- "warum": ein bis zwei Sätze an die Eltern, warum das Gericht an diesem Tag passt.',
+    'Deutsch, schlicht und freundlich, ohne Gedankenstriche und ohne Werbesprache.',
+  ].filter((x) => x !== '').join('\n');
+}
+// Prüft den Vorschlag: neuer Name, keine Ausschlüsse. Gibt den Grund zurück, wenn etwas nicht passt.
+export function newDishProblem(g: Row, sammlung: string[], rules: Rules): string {
+  const name = String(g.name || '').trim();
+  if (!name) return 'Das Gericht hatte keinen Namen.';
+  const norm = (x: string) => x.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (sammlung.some((n) => norm(n) === norm(name))) return `„${name}“ steht schon in der Sammlung.`;
+  const words = [name, ...(g.zutaten || []).map((z: Row) => String(z.name || ''))].join(' | ').toLowerCase();
+  const hit = rules.ausschluesse.find((x) => x && words.includes(x.toLowerCase()));
+  if (hit) return `Es enthält „${hit}“, das die Familie nie isst.`;
+  if (!(g.zutaten || []).length || !(g.schritte || []).length) return 'Zutaten oder Schritte fehlten.';
+  return '';
+}
+export async function suggestNewDish(store: Store, b: Row) {
+  const settings = await store.get('ep_settings?select=key,value&key=eq.regeln');
+  const rules = mergeRules((settings[0] || {}).value);
+  const sammlung = list80(b.sammlung, 400);
+  let prompt = newDishPrompt(b, rules);
+  for (let n = 0; n < 2; n += 1) {
+    const params = { model: rules.modell, max_tokens: 8000, messages: [{ role: 'user', content: prompt }], output_config: { format: { type: 'json_schema', schema: NEWDISH_SCHEMA } } };
+    const res = JSON.parse(await apiCall('/messages', { method: 'POST', body: JSON.stringify(params) }));
+    if (res.stop_reason === 'max_tokens') throw new Error('Die Antwort war zu lang.');
+    const d = JSON.parse((res.content || []).filter((c: Row) => c.type === 'text').map((c: Row) => c.text).join(''));
+    const g = d.gericht || {};
+    const why = newDishProblem(g, sammlung, rules);
+    if (why) { prompt += `\n\nDein letzter Vorschlag ging nicht: ${why} Bitte ein anderes Gericht.`; continue; }
+    return {
+      warum: String(d.warum || '').slice(0, 400),
+      gericht: {
+        name: String(g.name).trim().slice(0, 120),
+        category: DISH_KINDS.includes(g.kategorie) ? g.kategorie : 'gemischt',
+        duration_min: Math.max(5, Math.round(Number(g.dauer_min) || 30)),
+        tags: Array.isArray(g.tags) ? g.tags.map(String).slice(0, 8) : [],
+        note: String(g.hinweis || '').slice(0, 400),
+        prep: String(g.vorabend || '').slice(0, 300),
+        ingredients: (g.zutaten || []).slice(0, 40).map((z: Row) => (z.abteilung === 'basis' || !(Number(z.menge) > 0)
+          ? [null, '', String(z.name).trim(), 'basis'] : [Number(z.menge), String(z.einheit || ''), String(z.name).trim(), String(z.abteilung)])),
+        steps: (g.schritte || []).slice(0, 20).map(String),
+      },
+      usage: res.usage || null,
+    };
+  }
+  throw new Error('Claude hat zweimal nichts Passendes gefunden. Bitte mit einem anderen Wunsch noch einmal versuchen.');
+}
+
 /* ---------- Ersatz, wenn im Laden etwas fehlt ---------- */
 
 export const SUBST_SCHEMA = {
@@ -2616,6 +2707,11 @@ async function runTest(req: Request) {
   if (body.action === 'fest') {
     if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
+  // Ein Gericht im Wochenplan zurückgeben und ein neues Rezept bekommen.
+  if (body.action === 'neues-gericht') {
+    if (!env('ANTHROPIC_API_KEY')) return { status: 400, body: { error: 'Bei Supabase fehlt noch der Schlüssel ANTHROPIC_API_KEY.' } };
+    try { return { status: 200, body: { neu: await suggestNewDish(db(), body.neu || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Ersatz für einen Artikel, den es im Laden nicht gab.
   if (body.action === 'ersatz') {

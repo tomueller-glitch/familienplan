@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19d', datum: '19. November, abends', titel: 'Neues Gericht von Claude für einen Tag',
+    punkte: [
+      { text: 'Passt ein Abendessen im Wochenplan nicht, gibt es im Tag den Knopf „Neues Gericht von Claude“. Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, auf Wunsch schneller, mit Fisch oder vegetarisch. Mit „Anderer Vorschlag“ kommt ein neuer, mit „Übernehmen“ steht es im Plan und in der Sammlung.', fuer: 'eltern' },
+      { text: 'Beim Tauschen eines Gerichts passt sich jetzt auch die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, die des neuen kommen auf die nächste Tour. Schon Gekauftes nimmt das neue Gericht, wenn es passt.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19c', datum: '19. November, abends', titel: 'Groß- und Frischeeinkauf, Brotbox-Sachen bleiben',
     punkte: [
       { text: 'Wer im Entwurf von Claude ein Gericht getauscht hat, bekam bisher eine Liste nur aus den Rezepten: Brotbox-Sachen wie Vollkornbrot, Angebote und die Aufteilung in Groß- und Frischeeinkauf fehlten. Jetzt bleibt Claudes Liste, nur die Zutaten des getauschten Gerichts werden ersetzt.', fuer: 'eltern' },
