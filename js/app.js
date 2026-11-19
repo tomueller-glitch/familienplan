@@ -652,6 +652,63 @@ function saveCalFeeds(feeds) {
   commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'kalender'), row]; }, () => store.saveSettings([row]));
 }
 
+/* ---------- Küchen-Display: Kinder haken mit eigener PIN ab ---------- */
+// Nach der richtigen PIN darf das Kind 90 Sekunden lang (bei jedem Tippen neu) seine Tagesaufgaben abhaken.
+const DISP_KID_MS = 90000;
+let dispKidTimer = null;
+function dispKidOk(id) {
+  const k = state.dispKid;
+  return !!k && k.id === id && k.until > Date.now() && !!personById(id) && !isAdult(personById(id));
+}
+function dispKidTouch() {
+  if (!state.dispKid) return;
+  state.dispKid.until = Date.now() + DISP_KID_MS;
+  clearTimeout(dispKidTimer);
+  dispKidTimer = setTimeout(dispKidEnd, DISP_KID_MS + 500);
+}
+function dispKidEnd() {
+  clearTimeout(dispKidTimer);
+  state.dispKid = null;
+  state.dispPin = '';
+  if (state.sheet && /^anz-/.test(state.sheet.type)) { state.sheet = null; renderSheet(); }
+  if (state.phase === 'anzeige') render();
+}
+const dispTasks = (id) => A.tasksFor(state.data.tasks, state.data.taskLog, id, L.todayISO()).fixed.filter((f) => !stHides(f.task));
+function sheetDispPin({ id }) {
+  const k = personById(id);
+  const n = (state.dispPin || '').length;
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
+  return {
+    over: 'Küchen-Display',
+    title: `Hallo ${k ? k.name : ''}`,
+    body: `<p class="meta">Deine PIN, dann kannst du deine Aufgaben von heute abhaken.</p>
+      <div class="anz-pin-punkte" aria-live="polite" aria-label="${n} von 4 Ziffern">${[0, 1, 2, 3].map((i) => `<i${i < n ? ' class="voll"' : ''}></i>`).join('')}</div>
+      ${state.dispPinError ? `<p class="fehler" role="alert">${esc(state.dispPinError)}</p>` : ''}
+      <div class="anz-pin-tasten">${keys.map((x) => (x ? `<button class="anz-taste" data-action="anz-ziffer" data-z="${x}" aria-label="${x === '⌫' ? 'Letzte Ziffer löschen' : x}">${x}</button>` : '<span></span>')).join('')}</div>`,
+  };
+}
+function sheetDispTasks({ id }) {
+  const k = personById(id);
+  const list = dispTasks(id);
+  const row = (f) => {
+    const st = f.done ? f.done.status : '';
+    const foto = !f.done && needsFoto(f.task);
+    const btn = foto ? '<span class="meta">mit Foto, bitte am Handy melden</span>'
+      : !f.done ? `<button class="knopf" data-action="anz-erledigt" data-id="${esc(f.task.id)}">Erledigt</button>`
+        : st === 'offen' ? `<button class="knopf zweit" data-action="anz-zuruecknehmen" data-id="${esc(f.task.id)}">Zurücknehmen</button>`
+          : '<span class="chip ja">bestätigt</span>';
+    return `<li class="anz-aufgabe${f.done ? ' fertig' : ''}"><span class="p-text"><span class="p-name">${esc(f.label)}</span>
+      <span class="p-menge">${f.done ? (st === 'offen' ? 'gemeldet, Mama oder Papa schauen noch' : 'erledigt') : f.task.minutes ? `${f.task.minutes} Minuten` : f.weekly ? 'diese Woche' : 'heute'}${f.rejected && !f.done ? `, nicht anerkannt${f.rejected.note ? `: ${esc(f.rejected.note)}` : ''}` : ''}</span></span>${btn}</li>`;
+  };
+  return {
+    over: 'Küchen-Display',
+    title: `Aufgaben von ${k ? k.name : ''}`,
+    body: `${list.length ? `<ul class="posten anz-aufgaben">${list.map(row).join('')}</ul>` : '<p class="meta">Heute hast du keine festen Aufgaben.</p>'}
+      <p class="meta">Extra-Aufgaben und Minuten einlösen gehen weiter am Handy.</p>
+      <div class="knopfreihe"><button class="knopf breit" data-action="anz-fertig">Fertig</button></div>`,
+  };
+}
+
 /* ---------- Küchen-Display ---------- */
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
@@ -694,21 +751,21 @@ function viewDisplay() {
 
   // Kinder
   const kids = kidsList();
-  const kinder = kids.length && !(away && away.weg !== false) ? `<section class="anz-feld anz-kinder"><h2>Aufgaben</h2><ul>${kids.map((k) => {
+  const kinder = kids.length && !(away && away.weg !== false) ? `<section class="anz-feld anz-kinder"><h2>Aufgaben <small>zum Abhaken auf deinen Namen tippen</small></h2><ul>${kids.map((k) => {
     const fixed = A.tasksFor(state.data.tasks, state.data.taskLog, k.id, today).fixed.filter((f) => !stHides(f.task));
     const must = A.mustToday(fixed, today);
     const open = must.filter((f) => !f.done);
     const acc = A.account(state.data.taskLog, k.id, capOf(k), nowMs(), today);
-    return `<li><span class="anz-k-name">${avatar(k, true)}${esc(k.name)}</span>
+    return `<li><button class="anz-k-knopf" data-action="anz-kind" data-id="${esc(k.id)}" aria-label="${esc(k.name)}: Aufgaben abhaken"><span class="anz-k-name">${avatar(k, true)}${esc(k.name)}</span>
       <span class="anz-k-text">${!must.length ? 'Heute keine festen Aufgaben' : open.length ? `Noch offen: ${esc(open.map((f) => f.label).join(', '))}` : 'Alles erledigt'}</span>
-      <span class="anz-k-min">${acc.balance} Min.</span></li>`;
+      <span class="anz-k-min">${acc.balance} Min.</span></button></li>`;
   }).join('')}</ul></section>` : '';
 
   // Einkauf
   const open = state.data.shopping.filter((i) => i.week_start === L.mondayOf(today) && !i.checked && i.category !== 'vorhanden').length;
 
   return `<div class="anzeige${night ? ' nacht' : ''}">
-    <header class="anz-kopf"><div class="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
+    <header class="anz-kopf"><div class="anz-blatt" data-action="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
       <span class="anz-uhr">${hm(now)}</span></header>
     <div class="anz-raster${lamps.length ? '' : ' ohne-ampeln'}">
       <section class="anz-feld anz-essen"><h2>Heute Abend</h2>${dinner}</section>
@@ -717,8 +774,7 @@ function viewDisplay() {
       ${kinder}
     </div>
     <footer class="anz-fuss"><span>${open ? `${open} ${open === 1 ? 'Sache' : 'Sachen'} auf der Einkaufsliste` : 'Einkaufsliste leer'}</span>
-      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span>
-      <button class="anz-aus" data-action="anzeige-aus">Anzeige beenden</button></footer>
+      <span>${store.offline ? 'Keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span></footer>
   </div>`;
 }
 // Heimkehr eines Kalendertermins mit Heimweg, gerechnet wie fürs Abendessen.
@@ -2844,6 +2900,8 @@ function kidTasks(person) {
     ${fixed.some((f) => f.bin) || state.data.tasks.some((t) => t.schedule === 'tonne' && (t.who || []).includes(person.id)) ? reminderBox() : ''}
     ${extras.length ? `<h2 class="abschnitt abstand">Extra-Aufgaben</h2><p class="meta unter">Wenn es nötig ist und du Zeit hast.</p>${basicsHint(person, today, away)}<ul class="posten">${extras.map(extraRow).join('')}</ul>` : ''}
     ${wishCard(person)}
+    <div class="kasten-text abstand"><strong>PIN fürs Küchen-Display</strong>${person.pin_hash ? 'Mit deiner PIN hakst du am Küchen-Display ab, wenn dein Handy nicht da ist.' : 'Leg eine PIN fest, dann kannst du am Küchen-Display abhaken, wenn dein Handy nicht da ist.'}
+      <div class="knopfreihe"><button class="knopf zweit klein" data-action="kind-pin">${person.pin_hash ? 'PIN ändern' : 'PIN festlegen'}</button></div></div>
     ${doneWeek.length ? `<h2 class="abschnitt abstand">Diese Woche</h2><ul class="verlauf">${doneWeek.map((e) => `<li><span>${L.WD_SHORT[L.wdIndex(e.day)]}</span><span class="v-text">${esc(e.label)}</span>${e.minutes < 0 ? shopChip(e) : statusChip(e)}</li>`).join('')}</ul>` : ''}`;
 }
 
@@ -3219,18 +3277,20 @@ function kmParent() {
 
 function logTask(task, label, id, opts = {}) {
   // Mit Foto entscheiden immer die Eltern, auch bei Grundaufgaben ohne Bestätigung.
+  // opts.person: wer abhakt, wenn es nicht der Mensch am Gerät ist (Küchen-Display).
+  const me = opts.person || state.me;
   const open = !!(task.minutes || basicsConfirm() || opts.foto);
   const entry = {
-    id: id || L.uid(), person_id: state.me, task_id: task.id, day: L.todayISO(), label, minutes: task.minutes,
+    id: id || L.uid(), person_id: me, task_id: task.id, day: L.todayISO(), label, minutes: task.minutes,
     status: open ? 'offen' : 'bestaetigt', created_at: nowStamp(), decided_by: null, decided_at: open ? null : nowStamp(),
   };
-  const left = A.minutesLeftToday(state.data.taskLog, state.me, capOf(personById(state.me)), L.todayISO());
+  const left = A.minutesLeftToday(state.data.taskLog, me, capOf(personById(me)), L.todayISO());
   commit(() => { state.data.taskLog = [...state.data.taskLog, entry]; }, () => store.saveLog([entry]));
   kmConfirmed([entry]);
   if (!task.minutes) { if (open) toast(opts.foto ? 'Foto ist angekommen. Mama oder Papa schauen es sich an.' : 'Erledigt, danke! Mama oder Papa schauen noch drüber.'); return; }
   if (!left) toast('Erledigt, danke! Dein Tageslimit ist schon erreicht, deshalb gibt es heute keine Minuten mehr dafür.');
   else if (left < task.minutes) toast(`Erledigt. Bis zum Tageslimit zählen heute nur noch ${left} Minuten.`);
-  else if (basicsFirst() && A.basicsOpen(state.data.tasks, state.data.taskLog, state.me, L.todayISO()).length) toast(`Erledigt. Die ${task.minutes} Minuten gibt es, sobald deine Grundaufgaben für heute erledigt sind.`);
+  else if (basicsFirst() && A.basicsOpen(state.data.tasks, state.data.taskLog, me, L.todayISO()).length) toast(`Erledigt. Die ${task.minutes} Minuten gibt es, sobald deine Grundaufgaben für heute erledigt sind.`);
   else toast(`Erledigt. Mama oder Papa bestätigen die ${task.minutes} Minuten.`);
 }
 
@@ -3387,7 +3447,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -3402,6 +3462,7 @@ function renderSheet() {
 function openSheet(sheet) { state.sheet = sheet; renderSheet(); }
 function closeSheet() {
   if (askResolve) { answer(false); return; }
+  if (state.sheet && /^anz-/.test(state.sheet.type)) { dispKidEnd(); return; }
   if (state.sheet && state.sheet.type === 'kochen' && !state.shopMode) keepAwake(false);
   pinNext = null;
   state.sheet = null;
@@ -3697,11 +3758,11 @@ function sheetPin({ id, mode }) {
   const eltern = mode === 'eltern';
   const field = (n, label) => `<label>${label}<input class="feld pin" id="${n}" name="${n}" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required${n === 'pin1' ? ' data-autofocus' : ''}></label>`;
   return {
-    over: name,
-    title: neu ? 'PIN festlegen' : eltern ? `Wechsel zu ${name}` : 'PIN eingeben',
+    over: eltern && state.phase === 'anzeige' ? 'Küchen-Display' : name,
+    title: neu ? 'PIN festlegen' : eltern ? (state.phase === 'anzeige' ? 'Anzeige beenden' : `Wechsel zu ${name}`) : 'PIN eingeben',
     body: `<p class="meta" style="margin-bottom:14px">${neu
-        ? `Mit dieser PIN wechselt ${esc(name)} auf jedem Gerät zu den Rechten der Erwachsenen. Die Kinder sollten sie nicht kennen.`
-        : eltern ? 'Damit niemand für den anderen abhakt oder Minuten einlöst, braucht der Wechsel die PIN von Mama oder Papa.'
+        ? (person && !isAdult(person) ? 'Mit dieser PIN hakst du am Küchen-Display deine Aufgaben ab, wenn dein Handy gerade nicht da ist. Verrate sie niemandem, auch nicht deinen Geschwistern.' : `Mit dieser PIN wechselt ${esc(name)} auf jedem Gerät zu den Rechten der Erwachsenen. Die Kinder sollten sie nicht kennen.`)
+        : eltern ? (state.phase === 'anzeige' ? 'Das Küchen-Display beenden. Dafür braucht es die PIN von Mama oder Papa.' : 'Damit niemand für den anderen abhakt oder Minuten einlöst, braucht der Wechsel die PIN von Mama oder Papa.')
           : `${esc(name)} darf den Plan ändern. Zum Wechseln die vierstellige PIN eingeben.`}</p>
       <form class="form" data-form="pin"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="mode" value="${neu ? 'neu' : eltern ? 'eltern' : 'pruefen'}">
       ${field('pin1', neu ? 'Neue PIN, vier Ziffern' : eltern ? 'PIN eines Erwachsenen' : 'PIN')}${neu ? field('pin2', 'PIN wiederholen') : ''}
@@ -3733,10 +3794,10 @@ function sheetFamily() {
         : 'Namen und Rollen ändern Mama oder Papa.'}</p>
       ${noAdult ? '<p class="fehler" style="margin-bottom:12px">Noch ist niemand als erwachsen markiert. Bis dahin kann jeder alles ändern.</p>' : ''}
       <form class="form" data-form="familie">${rows}<p class="fehler" id="familie-fehler" hidden></p><button class="knopf breit">Speichern</button></form>
-      ${edit && state.data.persons.some(isAdult) ? `<h3>PIN der Erwachsenen</h3><ul class="zutaten">${state.data.persons.filter(isAdult).map((p) => `<li class="pin-zeile"><span>${esc(p.name)}: ${p.pin_hash ? 'PIN gesetzt' : 'noch keine PIN'}</span>${p.id === state.me
+      ${edit && state.data.persons.some(isAdult) ? `<h3>PINs</h3><ul class="zutaten">${state.data.persons.map((p) => `<li class="pin-zeile"><span>${esc(p.name)}: ${p.pin_hash ? 'PIN gesetzt' : 'noch keine PIN'}${isAdult(p) ? '' : ' (Küchen-Display)'}</span>${p.id === state.me
         ? `<button class="textknopf" data-action="pin-aendern">${p.pin_hash ? 'Meine PIN ändern' : 'PIN festlegen'}</button>`
         : p.pin_hash ? `<button class="textknopf" data-action="pin-zuruecksetzen" data-id="${esc(p.id)}">Zurücksetzen</button>` : ''}</li>`).join('')}</ul>
-      <p class="meta">Wer seine PIN vergessen hat, bekommt sie von einem anderen Erwachsenen zurückgesetzt und legt beim nächsten Wechsel eine neue fest.</p>
+      <p class="meta">Wer seine PIN vergessen hat, bekommt sie von einem anderen Erwachsenen zurückgesetzt und legt beim nächsten Wechsel eine neue fest. Die Kinder legen ihre PIN fürs Küchen-Display am Handy unter „Aufgaben“ neu fest.</p>
       <label class="schalter" style="margin-top:12px"><input type="checkbox" data-action="kinder-sperre"${kidLock() ? ' checked' : ''}> Kinder wechseln nur mit PIN <small>Wechselt ein Kind auf dem Handy zum anderen Kind, braucht es die PIN von Mama oder Papa.</small></label>` : ''}
       ${pushBlock()}
       <div class="knopfreihe"><button class="knopf zweit klein" data-action="app-wuensche">Wunschzettel für die App${appWishes().filter((w) => !w.done).length ? ` (${appWishes().filter((w) => !w.done).length})` : ''}</button></div>
@@ -4017,7 +4078,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Nur zum Anschauen, der Bildschirm bleibt an, nachts wird es dunkler. Unten „Anzeige beenden“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an, nachts wird es dunkler. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -5713,6 +5774,73 @@ const actions = {
     try { localStorage.setItem(DISPLAY_KEY, 'kueche'); } catch (e) { /* ohne Speicher gilt es bis zum Neuladen */ }
     display = 'kueche'; closeSheet(); state.phase = 'anzeige'; state.loadedAt = Date.now(); render();
   },
+  'anz-kind': ({ id }) => {
+    const k = personById(id);
+    if (state.phase !== 'anzeige' || !k || isAdult(k)) return;
+    if (!k.pin_hash) { toast(`${k.name} hat noch keine PIN. Die legst du am Handy unter „Aufgaben“ fest, ganz unten.`); return; }
+    if (dispKidOk(id)) { dispKidTouch(); openSheet({ type: 'anz-aufgaben', id }); return; }
+    state.dispPin = '';
+    state.dispPinError = '';
+    openSheet({ type: 'anz-pin', id });
+  },
+  'anz-ziffer': async ({ z }) => {
+    const sh = state.sheet;
+    if (!sh || sh.type !== 'anz-pin') return;
+    const k = personById(sh.id);
+    if (!k || !k.pin_hash) return;
+    if (z === '⌫') { state.dispPin = (state.dispPin || '').slice(0, -1); renderSheet(); return; }
+    if (pinLock > Date.now()) { state.dispPinError = 'Zu viele falsche Versuche. In einer Minute geht es wieder.'; state.dispPin = ''; renderSheet(); return; }
+    state.dispPin = `${state.dispPin || ''}${z}`.slice(0, 4);
+    state.dispPinError = '';
+    renderSheet();
+    if (state.dispPin.length < 4) return;
+    let ok = false;
+    try { ok = await pinHash(k.id, state.dispPin) === k.pin_hash; } catch (e) { state.dispPinError = e.message; }
+    state.dispPin = '';
+    if (!ok) {
+      pinFails += 1;
+      if (pinFails >= 5) { pinFails = 0; pinLock = Date.now() + 60000; }
+      if (!state.dispPinError) state.dispPinError = 'Die PIN stimmt nicht.';
+      renderSheet();
+      return;
+    }
+    pinFails = 0;
+    state.dispKid = { id: k.id, until: 0 };
+    dispKidTouch();
+    openSheet({ type: 'anz-aufgaben', id: k.id });
+  },
+  'anz-erledigt': ({ id }) => {
+    const sh = state.sheet;
+    if (!sh || sh.type !== 'anz-aufgaben' || !dispKidOk(sh.id)) { dispKidEnd(); return; }
+    const item = dispTasks(sh.id).find((f) => f.task.id === id);
+    if (!item || item.done || needsFoto(item.task)) return;
+    dispKidTouch();
+    logTask(item.task, item.label, null, { person: sh.id });
+    renderSheet();
+  },
+  'anz-zuruecknehmen': ({ id }) => {
+    const sh = state.sheet;
+    if (!sh || sh.type !== 'anz-aufgaben' || !dispKidOk(sh.id)) { dispKidEnd(); return; }
+    const item = dispTasks(sh.id).find((f) => f.task.id === id);
+    if (!item || !item.done || item.done.status !== 'offen') return;
+    dispKidTouch();
+    commit(() => { state.data.taskLog = state.data.taskLog.filter((e) => e.id !== item.done.id); }, () => store.deleteLog([item.done.id]));
+    renderSheet();
+  },
+  'anz-fertig': () => dispKidEnd(),
+  // Versteckter Ausgang für die Eltern: fünfmal schnell aufs Kalenderblatt tippen, dann die PIN eines Erwachsenen.
+  'anz-blatt': () => {
+    if (state.phase !== 'anzeige') return;
+    const now = Date.now();
+    state.blattTaps = (state.blattTaps || []).filter((t) => now - t < 3000).concat(now);
+    if (state.blattTaps.length < 5) return;
+    state.blattTaps = [];
+    const adult = state.data.persons.find((p) => isAdult(p) && p.pin_hash);
+    if (!adult) { actions['anzeige-aus'](); return; }
+    pinNext = () => actions['anzeige-aus']();
+    openSheet({ type: 'pin', id: adult.id, mode: 'eltern' });
+  },
+  'kind-pin': () => { if (isKidMe()) openSheet({ type: 'pin', id: state.me, mode: 'neu' }); },
   'anzeige-aus': () => {
     try { localStorage.removeItem(DISPLAY_KEY); } catch (e) { /* egal */ }
     display = null; keepAwake(false); state.phase = personById(state.me) ? 'app' : 'wer'; render();
@@ -5804,7 +5932,7 @@ const actions = {
   'pin-zuruecksetzen': async ({ id }) => {
     const person = personById(id);
     if (!person || !canPlan()) return;
-    if (!(await ask(`Die PIN von ${person.name} wird gelöscht. Beim nächsten Wechsel zu ${person.name} wird eine neue festgelegt.`, 'Zurücksetzen'))) { openSheet({ type: 'familie' }); return; }
+    if (!(await ask(`Die PIN von ${person.name} wird gelöscht. ${isAdult(person) ? `Beim nächsten Wechsel zu ${person.name} wird eine neue festgelegt.` : `${person.name} legt am Handy unter „Aufgaben“ eine neue fest.`}`, 'Zurücksetzen'))) { openSheet({ type: 'familie' }); return; }
     const next = { ...person, pin_hash: null };
     commit(() => { state.data.persons = state.data.persons.map((p) => (p.id === id ? next : p)); }, () => store.savePersons([next]));
     openSheet({ type: 'familie' });

@@ -146,4 +146,53 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
     await ctx.close();
   }
 }
+// F: Kind legt am Handy eine PIN fest und hakt am Küchen-Display ab. Kein Knopf zum Beenden.
+{
+  const { createHash } = await import('node:crypto');
+  const h = (id, pin) => createHash('sha256').update(`essensplan|${id}|${pin}`).digest('hex');
+  // Am Handy: Kind 1 legt die PIN fest
+  const db0 = base();
+  const ph = await open(db0, 2);
+  const box = ph.page.locator('.kasten-text', { hasText: 'PIN fürs Küchen-Display' });
+  console.log('F Handy:', (await box.innerText()).replace(/\n+/g, ' | '));
+  await box.locator('[data-action="kind-pin"]').click(); await ph.page.waitForTimeout(300);
+  console.log('F Bogen:', (await ph.page.locator('#sheet-root .meta').first().innerText()).slice(0, 90));
+  await ph.page.fill('#sheet-root [name=pin1]', '1357'); await ph.page.fill('#sheet-root [name=pin2]', '1357');
+  await ph.page.locator('#sheet-root form[data-form=pin] button').click(); await ph.page.waitForTimeout(500);
+  const saved = (await calls(ph.page, 'ep_persons')).flat().filter((r) => r.id === 'p3').pop();
+  console.log('F PIN gespeichert:', !!saved && saved.pin_hash === h('p3', '1357'), '| Fehler:', ph.errs); await ph.ctx.close();
+  // Am Display
+  const db = base(); db.ep_persons = db.ep_persons.map((p) => (p.id === 'p3' ? { ...p, pin_hash: h('p3', '1357') } : p.id === 'p1' ? { ...p, pin_hash: h('p1', '2468') } : p));
+  const { page, ctx, errs } = await openDisplay(db, 1024, 768);
+  console.log('F Beenden-Knopf:', await page.locator('[data-action="anzeige-aus"]').count());
+  await page.locator('[data-action="anz-kind"][data-id="p4"]').click(); await page.waitForTimeout(300);
+  console.log('F ohne PIN:', await toastText(page));
+  await page.locator('[data-action="anz-kind"][data-id="p3"]').click(); await page.waitForTimeout(300);
+  for (const z of '1111') await page.locator(`#sheet-root [data-action="anz-ziffer"][data-z="${z}"]`).click();
+  await page.waitForTimeout(300);
+  console.log('F falsch:', (await page.locator('#sheet-root .fehler').innerText().catch(() => '-')));
+  for (const z of '1357') await page.locator(`#sheet-root [data-action="anz-ziffer"][data-z="${z}"]`).click();
+  await page.waitForTimeout(400);
+  console.log('F Liste:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 400));
+  await shot(page, '#sheet-root .bogen', '/tmp/anz_aufgaben.png');
+  const first = page.locator('#sheet-root [data-action="anz-erledigt"]').first();
+  const tid = await first.getAttribute('data-id');
+  await first.click(); await page.waitForTimeout(400);
+  const log = (await calls(page, 'ep_task_log')).flat().pop();
+  console.log('F abgehakt:', log && `${log.person_id} ${log.task_id === tid} ${log.status}`, '|', (await page.locator(`#sheet-root li:has([data-id="${tid}"])`).innerText()).replace(/\n+/g, ' | '));
+  await page.locator('#sheet-root [data-action="anz-fertig"]').click(); await page.waitForTimeout(300);
+  console.log('F nach Fertig:', await page.locator('#sheet-root .bogen').count(), '| Kinder:', (await page.locator('.anz-kinder').innerText()).replace(/\n+/g, ' | ').slice(0, 200));
+  await page.locator('[data-action="anz-kind"][data-id="p3"]').click(); await page.waitForTimeout(300);
+  console.log('F wieder PIN nötig:', await page.locator('#sheet-root [data-action="anz-ziffer"]').count() > 0);
+  await page.locator('#sheet-root [data-action="zu"]').click(); await page.waitForTimeout(200);
+  for (let i = 0; i < 4; i += 1) await page.locator('[data-action="anz-blatt"]').click();
+  console.log('F vier Tipper:', await page.locator('#sheet-root .bogen').count());
+  await page.locator('[data-action="anz-blatt"]').click(); await page.waitForTimeout(300);
+  console.log('F Ausgang:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 160));
+  await page.fill('#sheet-root [name=pin1]', '1357'); await page.locator('#sheet-root form[data-form=pin] button').click(); await page.waitForTimeout(300);
+  console.log('F Kinder-PIN beendet nicht:', await page.locator('.anzeige').count(), (await page.locator('#sheet-root .fehler').innerText().catch(() => '-')));
+  await page.fill('#sheet-root [name=pin1]', '2468'); await page.locator('#sheet-root form[data-form=pin] button').click(); await page.waitForTimeout(500);
+  console.log('F Eltern-PIN beendet:', await page.locator('.anzeige').count() === 0);
+  console.log('F Fehler:', errs); await ctx.close();
+}
 await b.close(); srv.close();

@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19j', datum: '19. November, spätabends', titel: 'Abhaken am Küchen-Display',
+    punkte: [
+      { text: 'Am Küchen-Display auf deinen Namen tippen, deine PIN eingeben und die Aufgaben von heute abhaken, wenn dein Handy gerade nicht da ist. Die PIN legst du am Handy unter „Aufgaben“ ganz unten fest.', fuer: 'kinder' },
+      { text: 'Die Kinder können am Küchen-Display mit ihrer eigenen PIN die Aufgaben von heute abhaken. Die PIN legen sie am Handy unter „Aufgaben“ fest, zurücksetzen geht im Familie-Fenster.', fuer: 'eltern' },
+      { text: 'Am Küchen-Display gibt es keinen Knopf „Anzeige beenden“ mehr. Beenden: fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19i', datum: '19. November, spätabends', titel: 'Heimweg aus dem Kalender, Termine nur noch im iPhone',
     punkte: [
       { text: 'Steht bei einem Termin im iPhone-Kalender ein Ort, rechnet die App die Fahrzeit nach Hause dazu. Danach richten sich Essenszeit und „kommt später“, auch in Claudes Wochenplan. Das Küchen-Display zeigt „zu Hause etwa …“.' },

@@ -147,7 +147,7 @@ async function openDisplay(db, w, h) {
   await page.screenshot({ path: '/tmp/anzeige_hoch.png' });
   await page.reload(); await page.waitForTimeout(1500);
   console.log('H nach Neuladen noch Display:', await page.locator('.anzeige').count());
-  await page.locator('[data-action="anzeige-aus"]').click(); await page.waitForTimeout(400);
+  for (let i = 0; i < 5; i += 1) await page.locator('[data-action="anz-blatt"]').click(); await page.waitForTimeout(400);
   console.log('H beendet:', await page.locator('.anzeige').count(), await page.evaluate(() => localStorage.getItem('essensplan.anzeige')), '| Personenwahl:', await page.locator('[data-action="ich"]').count());
   console.log('H Fehler:', errs); await ctx.close();
 }
