@@ -37,9 +37,10 @@ export function eventsOn(events, day) {
 }
 
 // Termine aus den abonnierten Kalendern (heute und die nächsten drei Wochen) als Einzeltermine.
+// Sie sind die einzige Quelle für Termine. Die alten Wochentermine (ep_events) zählen nicht mehr.
 // Es zählen nur Kalender, die zu einer Person gehören und nicht auf „nur Anzeige“ stehen,
 // und nur Termine mit Uhrzeit. Ganztägige Einträge wie Geburtstage verschieben das Essen nicht.
-// Ein Termin, der über Mitternacht hinaus läuft (ohne Ende an dem Tag), heißt: an dem Abend weg.
+// Ein Termin, der über Mitternacht hinaus läuft (weiter), heißt: an dem Abend weg. Termine ohne Dauer zählen nur mit ihrer Uhrzeit.
 export function calendarEvents(tage, feeds) {
   const out = [];
   for (const [day, items] of Object.entries(tage || {})) {
@@ -48,28 +49,15 @@ export function calendarEvents(tage, feeds) {
       if (!f || !f.person_id || f.essen === false || !x.titel) return;
       const timed = x.zeit === true || x.von || x.bis;
       if (!timed) return;
-      out.push({ id: `kal-${f.id}-${day}-${i}`, kal: f.id, date: day, title: x.titel, who: [f.person_id], start_time: x.von || null, end_time: x.bis || null, nacht: !x.bis });
+      // Mit Heimweg: zu Hause nach Ende plus Fahrzeit, auf fünf Minuten aufgerundet.
+      const end = toMin(x.bis);
+      const home = end != null && x.weg > 0 ? toHM(Math.min(23 * 60 + 55, Math.ceil((end + x.weg) / 5) * 5)) : null;
+      out.push({ id: `kal-${f.id}-${day}-${i}`, kal: f.id, date: day, title: x.titel, who: [f.person_id], start_time: x.von || null, end_time: x.bis || null, home_time: home, weg: x.weg || 0, nacht: x.weiter === true });
     });
   }
   return out;
 }
 
-const words = (t) => String(t || '').toLowerCase().replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss')
-  .split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
-// Ist ein Termin aus dem Familienplan derselbe wie einer aus dem Kalender? Gleicher Tag vorausgesetzt.
-// Passt die Person, reicht eine ähnliche Uhrzeit (höchstens 30 Minuten) oder ein gemeinsames Wort im Titel.
-// Sonst braucht es beides.
-export function sameEvent(own, cal, personId) {
-  const a = toMin(own.start_time);
-  const b = toMin(cal.von);
-  const near = a != null && b != null && Math.abs(a - b) <= 30;
-  const wa = words(own.title);
-  const wb = words(cal.titel);
-  const like = wa.some((w) => wb.some((v) => v.startsWith(w) || w.startsWith(v)));
-  const person = !!personId && (own.who || []).includes(personId);
-  if (!own.start_time && cal.von) return false;
-  return person ? near || like : near && like;
-}
 
 export const homeOf = (e) => e.home_time || e.end_time || null;
 

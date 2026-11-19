@@ -43,13 +43,13 @@ const feeds = [{ id: 'k1', name: 'Dienst', url: 'webcal://p52-caldav.icloud.com/
   { id: 'k2', name: 'Familie', url: 'webcal://p52-caldav.icloud.com/published/2/BBB', person_id: null },
   { id: 'k3', name: 'Jonas', url: 'webcal://p52-caldav.icloud.com/published/2/CCC', person_id: 'p3' }];
 const KAL = { stand: '2026-11-18T10:00:00Z', feeds: [{ id: 'k1', ok: true, anzahl: 2 }, { id: 'k2', ok: true, anzahl: 2 }, { id: 'k3', ok: false, fehler: 'Den Kalender gibt es unter dieser Adresse nicht (mehr). Ist er noch öffentlich?' }],
-  tage: { '2026-11-18': [{ titel: 'Spätdienst', von: '12:00', bis: '20:30', ganztags: false, kalender: 'k1' }, { titel: 'Elternabend 7b', von: '19:30', bis: '21:00', ganztags: false, kalender: 'k2' }],
-    '2026-11-19': [{ titel: 'Geburtstag Oma', von: null, bis: null, ganztags: true, kalender: 'k2' }, { titel: 'Nachtdienst', von: '19:30', bis: null, ganztags: false, kalender: 'k1' }] } };
-async function openDisplay(db, w, h) {
+  tage: { '2026-11-18': [{ titel: 'Spätdienst', von: '12:00', bis: '20:30', ganztags: false, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3' }, { titel: 'Werkstatt', von: '10:30', bis: '10:30', ganztags: false, zeit: true, kalender: 'k1' }, { titel: 'Elternabend 7b', von: '19:30', bis: '21:00', ganztags: false, kalender: 'k2' }],
+    '2026-11-19': [{ titel: 'Geburtstag Oma', von: null, bis: null, ganztags: true, kalender: 'k2' }, { titel: 'Nachtdienst', von: '19:30', bis: null, ganztags: false, zeit: true, weiter: true, kalender: 'k1' }] } };
+async function openDisplay(db, w, h, kal = KAL) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, serviceWorkers: 'block' });
   await ctx.route('**/js/config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.ESSENSPLAN_CONFIG={supabaseUrl:'https://abcdefghijkl.supabase.co',supabaseKey:'sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxx',vapidPublicKey:''};` }));
   await ctx.addInitScript(INIT, db);
-  await ctx.addInitScript((k) => { window.KAL = k; }, KAL);
+  await ctx.addInitScript((k) => { window.KAL = k; }, kal);
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto('http://localhost:8858/?anzeige=kueche'); await page.waitForTimeout(2200);
   return { page, ctx, errs };
@@ -90,7 +90,7 @@ async function openDisplay(db, w, h) {
   console.log('B nach Entfernen:', JSON.stringify(st2 && st2.value));
   console.log('B Fehler:', errs); await ctx.close();
 }
-// C: Termin im Familienplan und im Kalender steht auf dem Display nur einmal
+// C: Alte Wochentermine aus dem Familienplan erscheinen nicht mehr
 const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_time: '12:00', end_time: '20:30', home_time: null, pause_ferien: false, active: true, sort: 1 };
 {
   const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }]; db.ep_events = [DIENST, { id: 'e2', title: 'Ballett', who: ['p4'], weekdays: [2], start_time: '16:00', end_time: '17:00', home_time: '17:15', pause_ferien: false, active: true, sort: 2 }];
@@ -98,24 +98,52 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   console.log('C Termine:', (await page.locator('.anz-heute').innerText()).replace(/\n+/g, ' | '));
   console.log('C Fehler:', errs); await ctx.close();
 }
-// D: Kalender zählen fürs Abendessen, auch für Claude und die gespeicherten Essenszeiten
+// D: Kalender zählen fürs Abendessen mit Heimweg, auch für Claude und die gespeicherten Essenszeiten. Heimweg einstellen.
 {
-  const KAL2 = { ...KAL, tage: { ...KAL.tage, '2026-11-20': [{ titel: 'Nachtdienst', von: '15:30', bis: null, ganztags: false, zeit: true, kalender: 'k1' }], '2026-11-21': [{ titel: 'Nachtdienst', von: null, bis: '08:00', ganztags: false, zeit: true, kalender: 'k1' }] } };
+  const KAL2 = { ...KAL, wege: { an: true, fehler: '' }, tage: { ...KAL.tage,
+    '2026-11-19': [...KAL.tage['2026-11-19'], { titel: 'Handball', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3', ort: 'Sporthalle Rödental', weg: 17 }],
+    '2026-11-20': [{ titel: 'Nachtdienst', von: '15:30', bis: null, ganztags: false, zeit: true, weiter: true, kalender: 'k1' }], '2026-11-21': [{ titel: 'Nachtdienst', von: null, bis: '08:00', ganztags: false, zeit: true, kalender: 'k1' }] } };
   KAL2.tage['2026-11-18'] = KAL2.tage['2026-11-18'].map((x) => ({ ...x, zeit: true }));
-  const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }]; db.ep_events = [DIENST];
+  const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }, { key: 'heimweg', value: { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' } }]; db.ep_events = [DIENST];
   const { page, ctx, errs } = await open(db, 0, KAL2);
-  await page.evaluate(() => { location.hash = '#woche'; }); await page.waitForTimeout(2500);
+  await page.evaluate(() => { location.hash = '#woche'; }); await page.waitForTimeout(5500);
   console.log('D Abrufe:', await page.evaluate(() => [window.kalCalls, window.kalTage]));
-  const days = await page.evaluate(() => [...document.querySelectorAll('.tag, .tag-karte, [data-day]')].map((x) => x.innerText.replace(/\n+/g, ' / ')).filter((t) => /Mi|Do|Fr/.test(t)).slice(0, 4));
-  console.log('D Woche:', JSON.stringify(days).slice(0, 900));
-  await page.waitForTimeout(3000);
   const plan = (await calls(page, 'ep_plan')).flat().filter((r) => r.day >= '2026-11-18' && r.day <= '2026-11-21').map((r) => `${r.day}:${r.dinner_time}:${(r.dinner_away || []).join('+')}`);
   console.log('D Essenszeiten gespeichert:', plan.join(' '));
   const ctxRow = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'ki_kontext').pop();
   console.log('D Claude:', ctxRow ? ctxRow.value.tage.slice(0, 3).map((t) => `${t.tag}: ${t.essen}, ${t.esser} Esser, weg ${t.weg.join('+') || '-'}, kurz ${t.kurz}`).join(' | ') : 'nicht geschrieben');
-  await page.evaluate(() => { location.hash = '#familie'; }); await page.waitForTimeout(300);
-  await page.locator('[data-action="termine"]').first().click(); await page.waitForTimeout(400);
-  console.log('D Termine:', (await page.locator('#sheet-root .gerichte').innerText()).replace(/\n+/g, ' | '));
+  console.log('D Termine für Claude:', ctxRow ? JSON.stringify(ctxRow.value.auswertung.termine.slice(0, 3)) : '-');
+  console.log('D Kachel:', (await page.locator('.plan-kachel').first().innerText()).replace(/\n+/g, ' | '), '| Termine-Knopf:', await page.locator('[data-action="termine"]').count());
+  await page.locator('.plan-kachel[data-action="kalender-abos"]').click(); await page.waitForTimeout(400);
+  console.log('D Liste:', (await page.locator('#sheet-root .kal-liste').innerText()).replace(/\n+/g, ' | '));
+  await page.locator('#sheet-root [data-action="kalender-weg-art"]').nth(1).click(); await page.waitForTimeout(500);
+  const st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'kalender').pop();
+  console.log('D Heimweg Jonas:', JSON.stringify(st.value.feeds.map((f) => `${f.name}:${f.weg || 'auto'}`)));
+  await page.fill('#sheet-root [name=adresse]', 'Neue Straße 1, 96450 Coburg');
+  await page.locator('#sheet-root form[data-form=heimweg] button.knopf').first().click(); await page.waitForTimeout(800);
+  const hw = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'heimweg').pop();
+  console.log('D Heimweg gespeichert:', JSON.stringify(hw && hw.value), '| Abrufe:', await page.evaluate(() => window.kalCalls));
+  await shot(page, '#sheet-root .bogen', '/tmp/kal_heimweg.png');
   console.log('D Fehler:', errs); await ctx.close();
+  const d2 = await openDisplay(db, 1024, 768, KAL2);
+  console.log('D Display:', (await d2.page.locator('.anz-heute').innerText()).replace(/\n+/g, ' | ').split('Morgen')[1]);
+  await d2.ctx.close();
+}
+// E: iPad mini quer mit vier Ampeln, vollem Tag und langer Zeile zum Abendessen
+{
+  const KAL3 = { ...KAL, tage: { '2026-11-18': [
+    { titel: 'Leseprobe', von: null, bis: null, ganztags: true, kalender: 'k3' }, { titel: 'Abholung schwarze Tonne', von: null, bis: null, ganztags: true, kalender: 'k2' },
+    { titel: 'Werkstatt-Termin: CO-JP 1417', von: '10:30', bis: '10:30', ganztags: false, zeit: true, kalender: 'k1' },
+    { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k1' }, { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3' },
+    { titel: 'GP Märchen', von: '18:00', bis: '21:30', ganztags: false, zeit: true, kalender: 'k1' }],
+    '2026-11-19': [{ titel: 'Musik Schulaufgabe', von: null, bis: null, ganztags: true, kalender: 'k3' }, { titel: 'Turnen', von: '15:30', bis: '17:00', ganztags: false, zeit: true, kalender: 'k3' }] } };
+  const db = base(); db.ep_settings = [{ key: 'kalender', value: { feeds } }, { key: 'stall', value: { on: true, tage: 5, last: '2026-11-12', by: 'p1' } }];
+  for (const [w, h] of [[1024, 768], [1024, 748], [1133, 744], [1024, 690], [744, 1133], [768, 1024]]) {
+    const { page, ctx, errs } = await openDisplay(db, w, h, KAL3);
+    const r = await page.evaluate(() => [document.querySelectorAll('.anz-ampeln li').length, document.documentElement.scrollHeight, innerHeight]);
+    console.log(`E ${w}x${h}: Ampeln ${r[0]}, Höhe ${r[1]} von ${r[2]}${r[1] > r[2] ? ' ZU HOCH' : ''}`, errs.length ? errs : '');
+    if (h === 744) await page.screenshot({ path: "/tmp/mini_quer4.png" }); if (w === 744) await page.screenshot({ path: "/tmp/mini_hoch4.png" });
+    await ctx.close();
+  }
 }
 await b.close(); srv.close();

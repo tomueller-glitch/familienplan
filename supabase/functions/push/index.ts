@@ -1567,8 +1567,8 @@ export async function planFeast(store: Store, f: Row) {
 // jährlich mit Abständen, Wochentagen, Anzahl und Ende), Ausnahmen, verschobene und abgesagte Einzeltermine.
 type IcsProp = { name: string; params: Record<string, string>; value: string };
 type IcsWhen = { date: string; time: string | null; tz: string | null; utc: boolean };
-type IcsEvent = { uid: string; summary: string; start: IcsWhen; end: IcsWhen | null; dur: number | null; rrule: Record<string, string> | null; exdates: Set<string>; recurId: string | null; cancelled: boolean };
-export type CalItem = { titel: string; von: string | null; bis: string | null; ganztags: boolean; zeit?: boolean; kalender: string };
+type IcsEvent = { uid: string; summary: string; ort?: string; geo?: [number, number] | null; start: IcsWhen; end: IcsWhen | null; dur: number | null; rrule: Record<string, string> | null; exdates: Set<string>; recurId: string | null; cancelled: boolean };
+export type CalItem = { titel: string; von: string | null; bis: string | null; ganztags: boolean; zeit?: boolean; weiter?: boolean; kalender: string; ort?: string; geo?: [number, number] | null; weg?: number };
 
 function icsProp(line: string): IcsProp | null {
   let i = 0;
@@ -1610,6 +1610,11 @@ export function parseCalendar(text: string): IcsEvent[] {
     if (!p) continue;
     if (p.name === 'UID') cur.uid = p.value.trim();
     else if (p.name === 'SUMMARY') cur.summary = icsText(p.value);
+    else if (p.name === 'LOCATION') cur.ort = icsText(p.value);
+    else if (p.name === 'X-APPLE-STRUCTURED-LOCATION') {
+      const g = /geo:\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i.exec(p.value);
+      if (g) cur.geo = [Number(g[1]), Number(g[2])];
+    }
     else if (p.name === 'DTSTART') cur.start = icsWhen(p.value, p.params) as IcsWhen;
     else if (p.name === 'DTEND') cur.end = icsWhen(p.value, p.params);
     else if (p.name === 'DURATION') cur.dur = icsDuration(p.value);
@@ -1738,7 +1743,8 @@ export function calendarDays(events: IcsEvent[], days: string[], feed: string): 
     if (e.end && e.end.time) f = Math.max(s, wallToUtcMin(addDays(date, daysBetween(e.start.date, e.end.date)), e.end.time, e.end.utc ? 'UTC' : e.end.tz || tz));
     for (const [d, a, z] of bounds) {
       if (!(s < z && (f > a || (f === s && s >= a)))) continue;
-      res[d].push({ titel: e.summary, von: s >= a ? hm(s) : null, bis: f > s && f < z ? hm(f) : null, ganztags: s <= a && f >= z, zeit: true, kalender: feed });
+      // Ohne Ende (Dauer null) endet der Termin, wo er beginnt. "weiter": läuft über das Tagesende hinaus.
+      res[d].push({ titel: e.summary, von: s >= a ? hm(s) : null, bis: f < z && f >= a ? hm(f) : null, ganztags: s <= a && f >= z, zeit: true, ...(f > z ? { weiter: true } : {}), kalender: feed, ...(e.ort ? { ort: e.ort } : {}), ...(e.geo ? { geo: e.geo } : {}) });
     }
   };
   const old = addDays(first, -31);
@@ -1769,10 +1775,123 @@ export function feedUrl(raw: string): string | null {
     return x.toString();
   } catch { return null; }
 }
+/* ---------- Heimweg mit OpenRouteService ---------- */
+// Aus dem Ort eines Termins und der Adresse der Familie die Fahrzeit nach Hause. Orte und Fahrzeiten
+// werden in ep_settings unter "wege" gemerkt, damit jede Strecke nur einmal gefragt wird.
+// Schlüssel und Adresse stehen unter "heimweg" ({ adresse, schluessel }). Pro Kalender "weg": auto, rad, fuss oder aus.
+const ORS = 'https://api.openrouteservice.org';
+export const WEG_PROFIL: Record<string, string> = { auto: 'driving-car', rad: 'cycling-regular', fuss: 'foot-walking' };
+type Geo = [number, number];
+type WegeCache = { heim?: { adresse: string; geo: Geo | null }; orte: Record<string, Geo | null>; zeiten: Record<string, number | null> };
+const ortKey = (o: string) => o.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 160);
+// Online-Termine und Termine zu Hause haben keinen Weg.
+export const ortOk = (o?: string) => !!o && o.length >= 4 && !/https?:\/\/|www\.|zoom|teams|webex|meet\.google|online|telefon|zuhause|zu hause|daheim/i.test(o);
+const geoKey = (g: Geo) => `${g[0].toFixed(4)},${g[1].toFixed(4)}`;
+const nearby = (a: Geo, b: Geo) => Math.abs(a[0] - b[0]) < 0.002 && Math.abs(a[1] - b[1]) < 0.003;
+class WegFehler extends Error {}
+async function orsCall(url: string, init: RequestInit = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const res = await fetch(url, { ...init, signal: ctl.signal });
+    if (res.status === 401 || res.status === 403) throw new WegFehler('Der Schlüssel für OpenRouteService stimmt nicht.');
+    if (res.status === 429) throw new WegFehler('Das Tageskontingent bei OpenRouteService ist aufgebraucht. Morgen geht es weiter.');
+    if (!res.ok) return null;
+    return await res.json() as Row;
+  } catch (e) {
+    if (e instanceof WegFehler) throw e;
+    return null;
+  } finally { clearTimeout(timer); }
+}
+async function orsGeocode(key: string, text: string, focus: Geo | null): Promise<Geo | null> {
+  const q = new URLSearchParams({ api_key: key, text, size: '1', 'boundary.country': 'DE' });
+  if (focus) { q.set('focus.point.lat', String(focus[0])); q.set('focus.point.lon', String(focus[1])); }
+  const r = await orsCall(`${ORS}/geocode/search?${q}`);
+  const c = r && r.features && r.features[0] && r.features[0].geometry && r.features[0].geometry.coordinates;
+  return Array.isArray(c) && c.length >= 2 ? [Number(c[1]), Number(c[0])] : null;
+}
+async function orsMatrix(key: string, profil: string, heim: Geo, ziele: Geo[]): Promise<(number | null)[]> {
+  const r = await orsCall(`${ORS}/v2/matrix/${profil}`, {
+    method: 'POST', headers: { Authorization: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locations: [[heim[1], heim[0]], ...ziele.map((g) => [g[1], g[0]])], sources: ziele.map((_, i) => i + 1), destinations: [0], metrics: ['duration'] }),
+  });
+  const d = r && Array.isArray(r.durations) ? r.durations : null;
+  return ziele.map((_, i) => (d && d[i] && typeof d[i][0] === 'number' ? Math.round(d[i][0] / 60) : null));
+}
+// Trägt bei den Terminen "weg" (Minuten nach Hause) ein. Gibt einen Fehlertext zurück oder ''.
+export async function addWays(store: Store | null, tage: Record<string, CalItem[]>, feeds: Row[], heimweg: Row, cacheIn: Row): Promise<string> {
+  const key = String((heimweg && heimweg.schluessel) || env('ORS_KEY') || '').trim();
+  const adresse = String((heimweg && heimweg.adresse) || '').trim();
+  if (!key || !adresse) return '';
+  const cache: WegeCache = { heim: cacheIn && cacheIn.heim, orte: { ...((cacheIn && cacheIn.orte) || {}) }, zeiten: { ...((cacheIn && cacheIn.zeiten) || {}) } };
+  let changed = false;
+  if (!cache.heim || cache.heim.adresse !== adresse) {
+    cache.heim = { adresse, geo: await orsGeocode(key, adresse, null) };
+    cache.zeiten = {};
+    changed = true;
+  }
+  const heim = cache.heim.geo;
+  if (!heim) { if (changed && store) await store.upsert('ep_settings', [{ key: 'wege', value: cache, updated_at: nowIso() }]); return 'Die Adresse von zu Hause hat OpenRouteService nicht gefunden.'; }
+  const items: { x: CalItem; profil: string }[] = [];
+  for (const list of Object.values(tage)) for (const x of list) {
+    const f = feeds.find((y) => String(y.id) === x.kalender);
+    if (!f || !f.person_id || f.essen === false || f.weg === 'aus' || !x.zeit || !x.bis) continue;
+    if (!x.geo && !ortOk(x.ort)) continue;
+    items.push({ x, profil: WEG_PROFIL[String(f.weg || 'auto')] || WEG_PROFIL.auto });
+  }
+  // Orte suchen, höchstens 20 neue pro Abruf.
+  let neu = 0;
+  for (const it of items) {
+    if (it.x.geo || !it.x.ort) continue;
+    const k = ortKey(it.x.ort);
+    if (!(k in cache.orte)) {
+      if (neu >= 20) continue;
+      neu += 1;
+      cache.orte[k] = await orsGeocode(key, it.x.ort, heim);
+      changed = true;
+    }
+    if (cache.orte[k]) it.x.geo = cache.orte[k];
+  }
+  // Fahrzeiten, die noch fehlen, pro Verkehrsmittel in einem Abruf.
+  const offen = new Map<string, Geo[]>();
+  for (const it of items) {
+    if (!it.x.geo || nearby(it.x.geo, heim)) continue;
+    const k = `${geoKey(it.x.geo)}|${it.profil}`;
+    if (k in cache.zeiten) continue;
+    const list = offen.get(it.profil) || [];
+    if (!list.some((g) => geoKey(g) === geoKey(it.x.geo as Geo))) list.push(it.x.geo);
+    offen.set(it.profil, list);
+  }
+  for (const [profil, ziele] of offen) {
+    for (let i = 0; i < ziele.length; i += 25) {
+      const part = ziele.slice(i, i + 25);
+      const min = await orsMatrix(key, profil, heim, part);
+      part.forEach((g, n) => { cache.zeiten[`${geoKey(g)}|${profil}`] = min[n]; });
+      changed = true;
+    }
+  }
+  for (const it of items) {
+    if (!it.x.geo) continue;
+    if (nearby(it.x.geo, heim)) { it.x.weg = 0; continue; }
+    const m = cache.zeiten[`${geoKey(it.x.geo)}|${it.profil}`];
+    // Über drei Stunden ist eher eine Reise oder ein falsch gefundener Ort.
+    if (typeof m === 'number' && m <= 180) it.x.weg = m;
+  }
+  if (changed && store) {
+    const orte = Object.entries(cache.orte);
+    if (orte.length > 400) cache.orte = Object.fromEntries(orte.slice(-400));
+    const zeiten = Object.entries(cache.zeiten);
+    if (zeiten.length > 600) cache.zeiten = Object.fromEntries(zeiten.slice(-600));
+    await store.upsert('ep_settings', [{ key: 'wege', value: cache, updated_at: nowIso() }]);
+  }
+  return '';
+}
+
 // tage: wie viele Tage ab heute (das Display braucht zwei, die Essensplanung drei Wochen).
 export async function loadCalendars(store: Store, nowMs = Date.now(), tageAnzahl = 2) {
-  const rows = await store.get('ep_settings?select=key,value&key=eq.kalender');
-  const feeds: Row[] = Array.isArray(((rows[0] || {}).value || {}).feeds) ? rows[0].value.feeds.slice(0, 12) : [];
+  const rows = await store.get('ep_settings?select=key,value&key=in.(kalender,heimweg,wege)');
+  const val = (k: string): Row => (rows.find((r) => r.key === k) || {}).value || {};
+  const feeds: Row[] = Array.isArray(val('kalender').feeds) ? val('kalender').feeds.slice(0, 12) : [];
   const today = berlin(nowMs).day;
   const n = Math.max(1, Math.min(22, Math.round(Number(tageAnzahl) || 2)));
   const days = Array.from({ length: n }, (_, i) => addDays(today, i));
@@ -1796,7 +1915,12 @@ export async function loadCalendars(store: Store, nowMs = Date.now(), tageAnzahl
     }
   }));
   for (const d of days) tage[d].sort((x, y) => (x.ganztags === y.ganztags ? String(x.von || '00:00').localeCompare(String(y.von || '00:00')) : x.ganztags ? -1 : 1));
-  return { stand: new Date(nowMs).toISOString(), tage, feeds: status };
+  let wegFehler = '';
+  try { wegFehler = await addWays(store, tage, feeds, val('heimweg'), val('wege')); } catch (e) { wegFehler = e instanceof WegFehler ? e.message : 'Die Fahrzeiten ließen sich gerade nicht berechnen.'; }
+  // Koordinaten braucht die App nicht.
+  for (const d of days) for (const x of tage[d]) delete x.geo;
+  const wege = !!(val('heimweg').adresse && (val('heimweg').schluessel || env('ORS_KEY')));
+  return { stand: new Date(nowMs).toISOString(), tage, feeds: status, wege: { an: wege, fehler: wegFehler } };
 }
 
 /* ---------- Ein Gericht im Wochenplan neu von Claude ---------- */

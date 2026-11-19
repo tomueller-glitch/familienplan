@@ -1,5 +1,5 @@
 // Kalender-Abos fürs Küchen-Display: iCloud-Kalender lesen, Serien, Ausnahmen, Zeitzonen, Nachtdienste.
-import { parseCalendar, calendarDays, seriesDates, feedUrl, loadCalendars } from '../supabase/functions/push/index.ts';
+import { parseCalendar, calendarDays, seriesDates, feedUrl, loadCalendars, addWays, ortOk } from '../supabase/functions/push/index.ts';
 const ICS = [
   'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Apple Inc.//iPhone OS 18//EN', 'X-WR-CALNAME:Papa',
   'BEGIN:VTIMEZONE', 'TZID:Europe/Berlin', 'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'DTSTART:19810329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT', 'END:VTIMEZONE',
@@ -45,4 +45,49 @@ console.log('Adressen:', feedUrl('webcal://p52-caldav.icloud.com/published/2/abc
   const days = Object.keys(r22.tage);
   console.log('Tage:', days.length, days[0], days[days.length - 1], '| Standard:', Object.keys(r2.tage).length, '| höchstens:', Object.keys(r99.tage).length, '| Abrufe:', hits);
   console.log('Di 24.11. (Ausnahme):', JSON.stringify(r22.tage['2026-11-24'].map((x) => x.titel)), '| Do 26.11.:', JSON.stringify(r22.tage['2026-11-26'].map((x) => `${x.von}-${x.bis} ${x.titel}`)), '| Anzahl:', r22.feeds[0].anzahl);
+}
+// Heimweg: Orte suchen, Fahrzeiten rechnen, alles merken.
+{
+  const real = globalThis.fetch;
+  const log: string[] = [];
+  const GEO: Record<string, [number, number]> = { 'Am Hang 3, 96450 Coburg': [50.26, 10.96], 'HUK-Arena Coburg': [50.25, 10.98], 'Sporthalle Rödental': [50.29, 11.04] };
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const u = new URL(url);
+    if (u.pathname.includes('geocode')) {
+      const t = u.searchParams.get('text') || ''; log.push(`suche ${t}`);
+      if (u.searchParams.get('api_key') === 'falsch') return new Response('{}', { status: 403 });
+      const g = GEO[t]; return new Response(JSON.stringify({ features: g ? [{ geometry: { coordinates: [g[1], g[0]] } }] : [] }), { status: 200 });
+    }
+    const b = JSON.parse(String(init && init.body)); log.push(`matrix ${u.pathname.split('/').pop()} ${b.locations.length - 1} Ziele, Schlüssel ${(init && (init.headers as Record<string, string>).Authorization) || '-'}`);
+    return new Response(JSON.stringify({ durations: b.sources.map((i: number) => [b.locations[i][0] > 11 ? 840 : 500]) }), { status: 200 });
+  }) as typeof fetch;
+  const saved: unknown[] = [];
+  const store = { upsert: async (_t: string, rows: unknown[]) => { saved.push(...rows); } } as never;
+  const feeds = [{ id: 'k1', person_id: 'p1' }, { id: 'k3', person_id: 'p3', weg: 'rad' }, { id: 'k2', person_id: null }, { id: 'k4', person_id: 'p2', weg: 'aus' }];
+  const mk = () => ({ '2026-11-19': [
+    { titel: 'Spiel', von: '16:00', bis: '18:00', ganztags: false, zeit: true, kalender: 'k1', ort: 'HUK-Arena Coburg' },
+    { titel: 'Training', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3', ort: 'Sporthalle Rödental' },
+    { titel: 'Apple-Ort', von: '15:00', bis: '18:40', ganztags: false, zeit: true, kalender: 'k1', ort: 'Klinikum', geo: [50.27, 10.95] as [number, number] },
+    { titel: 'Videocall', von: '18:00', bis: '19:00', ganztags: false, zeit: true, kalender: 'k1', ort: 'https://zoom.us/j/1' },
+    { titel: 'Gemeinsam', von: '17:00', bis: '18:00', ganztags: false, zeit: true, kalender: 'k2', ort: 'HUK-Arena Coburg' },
+    { titel: 'Mama aus', von: '17:00', bis: '18:00', ganztags: false, zeit: true, kalender: 'k4', ort: 'HUK-Arena Coburg' },
+    { titel: 'Unbekannt', von: '17:00', bis: '18:00', ganztags: false, zeit: true, kalender: 'k1', ort: 'Irgendwo 99' },
+  ] });
+  const t1 = mk();
+  const f1 = await addWays(store, t1, feeds, { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' }, {});
+  console.log('Weg 1:', t1['2026-11-19'].map((x) => `${x.titel}=${x.weg ?? '-'}`).join(' '), '| Fehler:', f1 || '-');
+  console.log('Abrufe 1:', log.join(' / '));
+  const cache = (saved.pop() as { value: unknown }).value;
+  log.length = 0;
+  const t2 = mk();
+  await addWays(store, t2, feeds, { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' }, cache as never);
+  console.log('Weg 2 aus dem Speicher:', t2['2026-11-19'].map((x) => x.weg ?? '-').join(' '), '| Abrufe:', log.length, '| gespeichert:', saved.length);
+  console.log('Falscher Schlüssel:', await addWays(store, mk(), feeds, { adresse: 'Neu 1', schluessel: 'falsch' }, {}).catch((e) => e.message));
+  console.log('Ohne Schlüssel:', JSON.stringify(await addWays(store, mk(), feeds, { adresse: 'Am Hang 3' }, {})), '| Orte:', ['Hallenbad Coburg', 'Microsoft Teams', 'zu Hause', ''].map((o) => ortOk(o)).join(' '));
+  globalThis.fetch = real;
+}
+// Termin ohne Ende (Dauer null) ist kein Nachtdienst
+{
+  const z = calendarDays(parseCalendar(['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:w', 'DTSTART;TZID=Europe/Berlin:20261119T103000', 'SUMMARY:Werkstatt', 'END:VEVENT', 'BEGIN:VEVENT', 'UID:n', 'DTSTART;TZID=Europe/Berlin:20261119T153000', 'DTEND;TZID=Europe/Berlin:20261120T080000', 'SUMMARY:Nacht', 'END:VEVENT', 'END:VCALENDAR'].join('\n')), ['2026-11-19', '2026-11-20'], 'x');
+  console.log('Ohne Ende und über Nacht:', JSON.stringify(z));
 }

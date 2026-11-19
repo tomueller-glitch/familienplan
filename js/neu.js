@@ -3,6 +3,16 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-19i', datum: '19. November, spätabends', titel: 'Heimweg aus dem Kalender, Termine nur noch im iPhone',
+    punkte: [
+      { text: 'Steht bei einem Termin im iPhone-Kalender ein Ort, rechnet die App die Fahrzeit nach Hause dazu. Danach richten sich Essenszeit und „kommt später“, auch in Claudes Wochenplan. Das Küchen-Display zeigt „zu Hause etwa …“.' },
+      { text: 'Das Küchen-Display passt auf dem iPad mini quer und hoch auf einen Bildschirm, auch mit vier Ampeln. Die Ampeln stehen dafür zweispaltig.', fuer: 'eltern' },
+      { text: 'Fehler behoben: Ein Termin ohne Ende, etwa ein Werkstatttermin, galt als „über Nacht weg“. Und ein Termin, der in mehreren Kalendern steht, erscheint auf dem Display nur noch einmal mit allen Personen.' },
+      { text: 'Termine gibt es nur noch im iPhone-Kalender. Das Menü „Termine“ im Familienplan ist weg, unter „Planen“ steht jetzt „Kalender“.' },
+      { text: 'Unter „Kalender“, „Heimweg“ einmal die Adresse und den Schlüssel von OpenRouteService eintragen. Pro Kalender lässt sich Auto, Rad, zu Fuß oder kein Heimweg wählen.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-19h', datum: '19. November, spätabends', titel: 'iPhone-Kalender zählen fürs Abendessen',
     punkte: [
       { text: 'Termine aus dem iPhone-Kalender einer Person zählen jetzt fürs Abendessen mit: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, etwa im Nachtdienst, isst nicht mit. Von Hand lässt sich das im Tag wie immer ändern.' },

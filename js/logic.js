@@ -840,7 +840,11 @@ export function buildExport(data, stats, today = todayISO(), nutritionOf = null)
       + 'Den nächsten Plan bitte als Import für die App liefern.',
     familie: persons.map((p) => ({ name: p.name, rolle: p.adult ? 'erwachsen' : 'kind' })),
     essenszeit: 'Abendessen um 18:30 bis 19:00 Uhr, später nur wenn jemand später heimkommt. Ziel: gemeinsam essen.',
-    termine: events.filter((e) => e.active !== false).map((e) => ({
+    // Termine aus den iPhone-Kalendern (mit Datum). Alte Wochentermine nur, falls noch welche übergeben werden.
+    termine: events.filter((e) => (e.date ? e.date > today : e.active !== false)).slice(0, 80).map((e) => (e.date ? {
+      was: e.title, wer: (e.who || []).map(nameOf), tag: e.date,
+      von: e.start_time || null, bis: e.end_time || null, zu_hause: e.home_time || e.end_time || null, ...(e.nacht ? { ueber_nacht: true } : {}),
+    } : {
       was: e.title,
       wer: (e.who || []).map(nameOf),
       tage: (e.weekdays || []).slice().sort().map((w) => WEEKDAYS[w]),
