@@ -31,7 +31,7 @@ await page.fill('[name=pin1]', '1234'); await page.fill('[name=pin2]', '1234'); 
 await page.screenshot({ path: 'x_kopf.png', clip: { x: 0, y: 0, width: 400, height: 120 } });
 // Ersatz: Seelachs als fehlt markieren
 await page.evaluate(() => { location.hash = '#einkauf'; }); await page.waitForTimeout(400); await page.locator('[data-action="einkaufsmodus"]').first().click(); await page.waitForTimeout(300);
-const row = page.locator('.posten li', { hasText: 'Seelachs' }).first();
+const row = page.locator('.posten li:has([data-action="haken"])', { hasText: 'Seelachs' }).first();
 console.log('Seelachs-Zeile:', await row.count());
 await row.locator('[data-action="fehlt"]').click(); await page.waitForTimeout(300);
 await page.locator('.fehlt-kasten [data-action="ersatz"]').first().click(); await page.waitForTimeout(900);

@@ -44,7 +44,7 @@ console.log('Nach 4,2 s neuer Name:', late.includes('Fischstäbchen NEU'));
 // Abhaken im Einkaufsmodus: kurz sichtbar mit Animation, dann weg
 await page.evaluate(() => { sessionStorage.setItem('langsam', '0'); location.hash = '#einkauf'; }); await page.waitForTimeout(500);
 await page.locator('[data-action="einkaufsmodus"]').first().click(); await page.waitForTimeout(300);
-const first = page.locator('.posten li').first(); const label = (await first.locator('.p-name').innerText()).split('\n')[0];
+const first = page.locator('.posten li:has([data-action="haken"])').first(); const label = (await first.locator('.p-name').innerText()).split('\n')[0];
 await first.locator('[data-action="haken"]').click(); await page.waitForTimeout(120);
 console.log('Direkt danach sichtbar mit Animation:', await page.locator('.posten li.gerade-abgehakt').count());
 await page.waitForTimeout(800);

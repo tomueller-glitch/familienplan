@@ -48,14 +48,14 @@ console.log('Gespeichert:', JSON.stringify(calls));
 console.log('Toast:', await page.locator('#toast').innerText());
 // Im Laden: „fehlt“ und „Andere Größe“
 await page.locator('[data-action="einkaufsmodus"]').first().click(); await page.waitForTimeout(300);
-const row = page.locator('.posten li', { hasText: 'Erbsen' }).first();
+const row = page.locator('.posten li:has([data-action="haken"])', { hasText: 'Erbsen' }).first();
 await row.locator('[data-action="fehlt"]').click(); await page.waitForTimeout(300);
 await page.locator('.fehlt-kasten [data-action="packung"]').first().click(); await page.waitForTimeout(300);
 await page.fill('#sheet-root [name=groesse]', '1 kg'); await page.locator('#sheet-root form[data-form="packung-groesse"] button').click(); await page.waitForTimeout(300);
 console.log('Erbsen Schritt 2:', (await sheet()).slice(0, 500));
 await page.locator('#sheet-root input[name=wahl][value=c]').check();
 await page.locator('#sheet-root form[data-form="packung-wahl"] button').click(); await page.waitForTimeout(500);
-console.log('Erbsen auf der Liste:', await page.locator('.posten li', { hasText: 'Erbsen' }).first().innerText().catch(() => 'nicht sichtbar'));
+console.log('Erbsen auf der Liste:', await page.locator('.posten li:has([data-action="haken"])', { hasText: 'Erbsen' }).first().innerText().catch(() => 'nicht sichtbar'));
 console.log('Reste:', JSON.stringify(await page.evaluate(() => { const r = window.calls.filter((c) => c[1] === 'ep_settings' && c[2][0].key === 'reste').pop(); return r ? r[2][0].value.map((x) => [x.text, x.ab]) : null; })));
 await page.locator('.modus-leiste [data-action="einkaufsmodus"]').click(); await page.waitForTimeout(300);
 // Packungsliste

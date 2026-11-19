@@ -3,10 +3,11 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
-    id: '2026-11-19b', datum: '19. November, nachmittags', titel: 'Einkaufsliste ohne doppelte Posten',
+    id: '2026-11-19b', datum: '19. November, nachmittags', titel: 'Einkaufsliste ohne doppelte Posten, Vorrat prüfen',
     punkte: [
       { text: 'Gleiche Zutaten stehen auf der Einkaufsliste nur noch einmal, mit der Gesamtmenge und allen Gerichten. Das gilt auch für „Zwiebel“ und „Zwiebeln“ oder „Stk.“ und „Stück“.' },
       { text: 'Bestehende Listen ab dieser Woche werden beim Öffnen aufgeräumt. Abgehakte und selbst eingetragene Posten bleiben, wie sie sind.', fuer: 'eltern' },
+      { text: 'Aus dem Vorrat: Oben auf der Einkaufsliste steht, was der Wochenplan aus dem Vorrat nimmt. Mit „Ist da“ oder „Fehlt“ kurz bestätigen. Was fehlt, kommt mit Menge und Gerichten auf die nächste Tour und steht im Vorrat auf leer.' },
     ],
   },
   {

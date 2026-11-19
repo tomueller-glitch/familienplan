@@ -445,14 +445,15 @@ export function planWeek(dishes, stats, plan, weekStart, limits = {}, skip = [])
 
 // factors: Anteil der Portionen pro Tag (1 = alle essen mit). pantry: Vorratsliste [{ label, have }].
 const normName = (n) => n.toLowerCase().replace(/^bio[- ]/, '').replace(/\s*\(.*\)\s*/g, '').trim();
-export function inPantry(name, pantry = []) {
-  const n = normName(name);
-  return pantry.some((x) => {
+export function pantryMatch(name, pantry = []) {
+  const n = normName(String(name || ''));
+  return (pantry || []).find((x) => {
     if (!x.have) return false;
-    const v = normName(x.label);
+    const v = normName(String(x.label || ''));
     return v && (n === v || n.startsWith(`${v} `) || n.endsWith(` ${v}`) || v.startsWith(`${n} `));
-  });
+  }) || null;
 }
+export const inPantry = (name, pantry = []) => !!pantryMatch(name, pantry);
 
 // Kurzname eines Gerichts für die Einkaufsliste: „Gebackener Seelachs mit Kartoffeln …“ wird „Gebackener Seelachs“.
 export const WEEKDAYS_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -635,6 +636,43 @@ export function mergeList(items, canMerge) {
   if (!removed.length) return items;
   const gone = new Set(removed);
   return items.filter((i) => !gone.has(i.id)).map((i) => changed.find((c) => c.id === i.id) || i);
+}
+
+// Was der Wochenplan aus dem Vorrat nimmt: Zutaten der geplanten Gerichte, die laut Vorrat da sind und deshalb
+// nicht (oder nur abgehakt) auf der Einkaufsliste stehen. Pro Zutat einmal, mit Menge, Gerichten und Vorrat-Eintrag.
+// minDay: Tage davor zählen nicht mehr, da ist schon gekocht.
+export function fromPantry(weekStart, plan, dishes, pantry = [], factors = {}, minDay = '') {
+  const days = weekDays(weekStart).filter((d) => d >= minDay);
+  const sums = new Map();
+  for (const p of plan) {
+    if (!days.includes(p.day) || p.skipped) continue;
+    const dish = dishes.find((d) => d.id === p.dish_id);
+    if (!dish || (dish.tags || []).includes('Festtag')) continue;
+    for (const ing of dish.ingredients || []) {
+      if (ing.c === 'basis' || ing.q == null) continue;
+      const row = pantryMatch(ing.n, pantry);
+      if (!row) continue;
+      const f = factors[p.day] != null ? factors[p.day] : 1;
+      const { q, u } = baseQty(f === 1 ? ing.q : scaleQty(ing.q, ing.u, f), ing.u);
+      const key = itemKey(ing.n);
+      const cur = sums.get(key) || { key, names: [], parts: new Map(), c: ing.c || 'sonst', uses: [], pantryId: row.id };
+      if (!cur.names.includes(String(ing.n))) cur.names.push(String(ing.n));
+      cur.parts.set(u, (cur.parts.get(u) || 0) + q);
+      const use = `${shortDish(dish.name)} (${WEEKDAYS_SHORT[wdIndex(p.day)]})`;
+      if (!cur.uses.includes(use)) cur.uses.push(use);
+      sums.set(key, cur);
+    }
+  }
+  return [...sums.values()].map((x) => {
+    const parts = [...x.parts.entries()];
+    const one = parts.length === 1 ? parts[0] : null;
+    const name = baseName(x.names, one ? one[1] : 1, one ? one[0] : 'x');
+    return {
+      key: x.key, pantryId: x.pantryId, category: x.c, purpose: x.uses.join(', '),
+      label: one ? nameLabel(name, one[1], one[0]) : name,
+      qty: parts.map(([u, q]) => fmtQty(Math.round(q * 100) / 100, u)).join(' + '),
+    };
+  }).sort((a, b) => a.label.localeCompare(b.label, 'de'));
 }
 
 // Zuordnung Zutat zu Abteilung aus allen bekannten Gerichten, fürs Bearbeiten-Formular.

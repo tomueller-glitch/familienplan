@@ -960,3 +960,8 @@ html.anzeige-modus body::before { display: none; }
 @media (prefers-reduced-motion: no-preference) { .anzeige { transition: filter 1s ease; } }
 .anz-raster.ohne-ampeln { grid-template-areas: "essen heute" "kinder kinder"; }
 @media (orientation: portrait), (max-width: 760px) { .anz-raster.ohne-ampeln { grid-template-areas: "essen" "heute" "kinder"; } }
+
+/* Aus dem Vorrat: wirklich da? */
+.vorrat-frage { margin: 0 0 14px; border-left: 4px solid var(--gelb, #E9B10E); }
+.vorrat-frage .posten { margin-top: 8px; }
+.vorrat-frage .knopfreihe { margin-top: 8px; }

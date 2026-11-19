@@ -1079,6 +1079,72 @@ function dueElsewhere() {
   }).join('');
 }
 
+/* ---------- Aus dem Vorrat: wirklich da? ---------- */
+// Was der Plan aus dem Vorrat nimmt, steht nicht (oder nur abgehakt) auf der Liste. Vor dem Einkauf fragt die App nach,
+// ob es wirklich da ist. „Ist da“ merkt sich die Antwort pro Woche (ep_settings "vorrat_check"), „Fehlt“ setzt den
+// Vorrat auf leer und stellt die Zutat mit Menge und Gerichten auf die Liste.
+const pantryChecks = () => { const v = KI.settingOf(state.data.settings, 'vorrat_check'); return v && typeof v === 'object' ? v : {}; };
+function pantryAsk(week) {
+  if (week < L.addDays(L.mondayOf(L.todayISO()), -7)) return [];
+  const factors = T.portionFactors(state.data.persons, state.data.events, state.data.attendance, L.weekDays(week), state.data.plan);
+  const ok = pantryChecks()[week] || {};
+  // Was schon richtig auf der Liste steht (offen oder gekauft), muss niemand im Vorrat suchen.
+  const listed = new Set(state.data.shopping.filter((i) => i.week_start === week && i.category !== 'vorhanden').map((i) => L.itemKey(i.label)));
+  return L.fromPantry(week, state.data.plan, state.data.dishes, state.data.pantry, factors, L.todayISO()).filter((x) => !ok[x.key] && !listed.has(x.key));
+}
+function pantryBox(week) {
+  const ask = pantryAsk(week);
+  if (!ask.length) return '';
+  return `<div class="kasten-text vorrat-frage"><strong>Aus dem Vorrat: wirklich da?</strong>
+    Diese Sachen nimmt der Plan aus dem Vorrat und kauft sie deshalb nicht ein. Kurz nachschauen:
+    <ul class="posten">${ask.map((x) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(x.label)}</span><span class="p-menge">${esc(x.qty)} für ${esc(x.purpose)}</span></span>
+      <span class="ja-nein"><button class="knopf zweit klein" data-action="vorrat-da" data-id="${esc(x.key)}" aria-label="${esc(x.label)} ist da">Ist da</button><button class="knopf klein" data-action="vorrat-fehlt" data-id="${esc(x.key)}" aria-label="${esc(x.label)} fehlt, auf die Liste">Fehlt</button></span></div></li>`).join('')}</ul>
+    ${ask.length > 1 ? '<div class="knopfreihe"><button class="knopf zweit klein" data-action="vorrat-alle-da">Alles da</button></div>' : ''}</div>`;
+}
+function pantryConfirm(keys) {
+  const week = state.week;
+  const all = pantryChecks();
+  const from = L.addDays(L.mondayOf(L.todayISO()), -14);
+  const value = Object.fromEntries(Object.entries(all).filter(([w]) => w >= from));
+  value[week] = { ...(value[week] || {}) };
+  const by = state.me || null;
+  for (const k of keys) value[week][k] = { by, at: new Date().toISOString() };
+  const row = { key: 'vorrat_check', value, updated_at: new Date().toISOString() };
+  // Wer nachgeschaut hat, hat den Vorrat gerade gesehen: Die Frage „Noch da?“ im Vorrat fängt von vorn an.
+  const ids = new Set(pantryAsk(week).filter((x) => keys.includes(x.key)).map((x) => x.pantryId));
+  const seen = state.data.pantry.filter((x) => ids.has(x.id)).map((x) => ({ ...x, have: true, seen_at: L.todayISO() }));
+  commit(() => {
+    state.data.settings = [...state.data.settings.filter((x) => x.key !== 'vorrat_check'), row];
+    state.data.pantry = state.data.pantry.map((x) => seen.find((y) => y.id === x.id) || x);
+  }, async () => { await store.saveSettings([row]); if (seen.length) await store.savePantry(seen); });
+}
+function pantryMissing(key) {
+  const week = state.week;
+  const x = pantryAsk(week).find((y) => y.key === key);
+  if (!x) return;
+  const today = L.todayISO();
+  const inWeek = state.data.shopping.filter((i) => i.week_start === week).sort((a, b) => a.sort - b.sort);
+  const old = inWeek.find((i) => i.category === 'vorhanden' && L.itemKey(i.label) === key);
+  // Auf die nächste Tour, die noch kommt. Sind alle Touren vorbei, auf den Nachkauf.
+  const trip = inWeek.find((i) => !i.manual && !i.checked && (!i.due || i.due >= today))
+    || (inWeek.length ? { trip: 'Nachkauf', due: null } : null);
+  const item = old
+    ? { ...old, category: L.SHOP_CATS[x.category] ? x.category : L.guessCat(x.label), qty: x.qty, purpose: x.purpose, checked: false, checked_by: null, checked_at: null }
+    : {
+      id: L.uid(), week_start: week, trip: trip ? trip.trip || 'Einkauf' : 'Einkauf', due: trip ? trip.due || null : null,
+      category: L.SHOP_CATS[x.category] ? x.category : L.guessCat(x.label), label: x.label, qty: x.qty, purpose: x.purpose,
+      missing: false, shop: null, sort: (inWeek.length ? Math.max(...inWeek.map((i) => i.sort || 0)) : 0) + 1,
+      checked: false, checked_by: null, checked_at: null, manual: false,
+    };
+  const pan = state.data.pantry.find((y) => y.id === x.pantryId);
+  const empty = pan ? { ...pan, have: false } : null;
+  commit(() => {
+    state.data.shopping = old ? state.data.shopping.map((i) => (i.id === old.id ? item : i)) : [...state.data.shopping, item];
+    if (empty) state.data.pantry = state.data.pantry.map((y) => (y.id === empty.id ? empty : y));
+  }, async () => { await store.saveItems([item]); if (empty) await store.savePantry([empty]); });
+  toast(`${x.label} steht jetzt auf der Liste${item.trip && item.trip !== 'Einkauf' ? ` (${item.trip})` : ''}.`);
+}
+
 function viewEinkauf() {
   const items = state.data.shopping.filter((i) => i.week_start === state.week).sort((a, b) => a.sort - b.sort);
   const hasPlan = L.weekDays(state.week).some((d) => { const p = planOf(d); return p && p.dish_id; });
@@ -1120,9 +1186,9 @@ function viewEinkauf() {
   if (state.shopMode) {
     return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${items.length - done} offen</span><button class="knopf klein" data-action="einkaufsmodus">Beenden</button></div>
       <div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${done}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done / items.length) * 100)}%"></span></div>
-      ${list}${addForm}`;
+      ${pantryBox(state.week)}${list}${addForm}`;
   }
-  return `${dueElsewhere()}<div class="fortschritt">
+  return `${dueElsewhere()}${pantryBox(state.week)}<div class="fortschritt">
       <div class="zeile"><span class="gross">${done} von ${items.length} erledigt</span>
       <label class="schalter"><input type="checkbox" data-action="erledigte"${state.hideDone ? ' checked' : ''}> Erledigte ausblenden</label></div>
       <button class="knopf klein modus-start" data-action="einkaufsmodus">Einkaufsmodus</button>
@@ -3719,7 +3785,7 @@ const HELP_KIDS = [
 const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Termine der Familie, Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
-  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken.'],
+  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
@@ -4147,6 +4213,12 @@ async function rebuildShopping(silent) {
     await store.deleteItems(old.map((i) => i.id));
     await store.saveItems(items);
   });
+  pantryNote(week);
+}
+// Nach einer neuen Liste: Hinweis, dass etwas aus dem Vorrat kommt und geprüft werden sollte.
+function pantryNote(week) {
+  const n = pantryAsk(week).length;
+  if (n) setTimeout(() => toast(`${n === 1 ? '1 Sache kommt' : `${n} Sachen kommen`} aus dem Vorrat. Bitte oben in der Einkaufsliste bestätigen, ob ${n === 1 ? 'sie' : 'alles'} da ist.`), 1600);
 }
 
 // Fühlbare Rückmeldung beim Abhaken. Android kennt navigator.vibrate. Das iPhone (ab iOS 18) gibt beim
@@ -4412,6 +4484,7 @@ function applyImport({ dishes, saved, rows, week, items }) {
     }
   });
   if (!items.length && rows.length && !state.data.shopping.some((i) => i.week_start === week)) rebuildShopping(true);
+  else if (items.length) pantryNote(week);
 }
 
 function acceptDraft(run, d, obj, result, changed, wish) {
@@ -4930,6 +5003,9 @@ const actions = {
     commit(() => { state.data.pantry = rows; }, () => store.savePantry(rows));
     renderSheet();
   },
+  'vorrat-da': ({ id }) => pantryConfirm([id]),
+  'vorrat-alle-da': () => { const keys = pantryAsk(state.week).map((x) => x.key); pantryConfirm(keys); toast(keys.length === 1 ? 'Danke, ist vermerkt.' : `Danke, alle ${keys.length} sind vermerkt.`); },
+  'vorrat-fehlt': ({ id }) => pantryMissing(id),
   'vorrat-ja': ({ id }) => {
     const x = state.data.pantry.find((v) => v.id === id);
     if (!x) return;
