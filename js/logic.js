@@ -636,6 +636,36 @@ export function mergeDuplicates(items, canMerge = () => true) {
   }
   return { changed, removed };
 }
+// Zwei Touren am selben Einkaufstag (gleiche Woche) werden eine Liste: alle Posten bekommen den Namen der Tour
+// mit dem Tag im Namen, sonst die mit den meisten Posten (bei Gleichstand die alphabetisch erste), dazu deren Einkäufer.
+// Gibt die geänderten Posten zurück. Das Ergebnis ist auf jedem Gerät gleich.
+export function sameDayTrips(items) {
+  const days = new Map();
+  for (const i of items) {
+    if (!i || !i.due) continue;
+    const k = `${i.week_start}|${i.due}`;
+    if (!days.has(k)) days.set(k, new Map());
+    const trips = days.get(k);
+    const t = i.trip || 'Einkauf';
+    if (!trips.has(t)) trips.set(t, []);
+    trips.get(t).push(i);
+  }
+  const changed = [];
+  for (const trips of days.values()) {
+    if (trips.size < 2) continue;
+    // Zuerst die Tour, deren Name schon den Tag trägt („… am Sa 21.11.“), dann die mit den meisten Posten.
+    const due = [...trips.values()][0][0].due;
+    const tag = `${Number(due.slice(8, 10))}.${Number(due.slice(5, 7))}.`;
+    const tag2 = `${due.slice(8, 10)}.${due.slice(5, 7)}.`;
+    const named = (t) => (t.includes(tag2) || new RegExp(`(^|\\D)${tag.replace(/\./g, '\\.')}`).test(t) ? 1 : 0);
+    const [target, list] = [...trips.entries()].sort((a, b) => named(b[0]) - named(a[0]) || b[1].length - a[1].length || a[0].localeCompare(b[0]))[0];
+    const buyer = (list.find((x) => x.buyer) || [...trips.values()].flat().find((x) => x.buyer) || {}).buyer || null;
+    for (const [t, its] of trips) {
+      for (const x of its) if (t !== target || (buyer && x.buyer !== buyer)) changed.push({ ...x, trip: target, buyer: buyer || x.buyer || null });
+    }
+  }
+  return changed;
+}
 export function mergeList(items, canMerge) {
   const { changed, removed } = mergeDuplicates(items, canMerge);
   if (!removed.length) return items;

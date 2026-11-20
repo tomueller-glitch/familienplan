@@ -57,4 +57,34 @@ const liste = () => [
   for (const w of ['Knoblauch', 'Zwiebel', 'Rotkohl']) console.log(w, '->', (txt.match(new RegExp(`${w}[^|]*\\| [^|]*\\| [^|]*`, 'g')) || []).join(' || '));
   console.log('Fehler:', errs); await ctx.close();
 }
+// Zwei Touren auf denselben Tag gelegt: eine Liste, doppelte Posten zusammengefasst.
+{
+  const G = 'Großeinkauf am Sa 21.11.'; const F = 'Frischeeinkauf am Mi 25.11.';
+  const t = (id, label, qty, trip, due, extra = {}) => ({ ...it(id, label, qty, '', Number(id.slice(1)), extra), week_start: '2026-11-23', trip, due, buyer: trip === G ? 'p1' : null });
+  const db = base(); db.ep_plan = [...db.ep_plan];
+  db.ep_shopping = [t('x1', 'Zwiebeln', '2 Stück', G, '2026-11-21'), t('x2', 'Feldsalat', '150 g', F, '2026-11-25'), t('x3', 'Zwiebel', '1 Stück', F, '2026-11-25'), t('x4', 'Nudeln', '500 g', G, '2026-11-21', { category: 'vorrat' }), t('x5', 'Milch', '1 l', F, '2026-11-25', { manual: true, category: 'kuehl' })];
+  const { page, ctx, errs } = await open(db, 0);
+  await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
+  await page.locator('[data-action="woche"][data-dir="1"]').first().click(); await page.waitForTimeout(400);
+  const heads = async () => (await page.locator('main').innerText()).split('\n').filter((l) => /einkauf am|Einkaufstag/i.test(l)).join(' | ');
+  console.log('Z vorher:', await heads());
+  const form = page.locator(`form[data-form="einkaufstag"]:has(input[name=trip][value="${F}"])`);
+  await page.evaluate((f) => { const d = [...document.querySelectorAll('details.einkaufstag')].find((x) => x.querySelector(`input[value="${f}"]`)); if (d) d.open = true; }, F);
+  await form.locator('input[type=date]').fill('2026-11-21'); await form.locator('button').click(); await page.waitForTimeout(600);
+  console.log('Z Hinweis:', await toastText(page));
+  const saved = (await calls(page, 'ep_shopping')).flat();
+  const last = new Map(); for (const r of saved) last.set(r.id, r);
+  console.log('Z Posten:', [...last.values()].filter((r) => r.id.startsWith('x')).map((r) => `${r.id}:${r.label}:${r.qty}:${r.trip}:${r.due}:${r.buyer}`).join(' | '));
+  console.log('Z x2:', saved.filter((r) => r.id === 'x2').map((r) => `${r.trip}/${r.due}/${r.buyer}`).join(' , '));
+  console.log('Z gelöscht:', JSON.stringify(await page.evaluate(() => window.calls.filter((c) => c[0] === 'delete' && c[1] === 'ep_shopping'))));
+  console.log('Z nachher:', await heads());
+  console.log('Z Fehler:', errs); await ctx.close();
+}
+// Logik: Touren am selben Tag
+{
+  const L = await import(ROOT + '/js/logic.js');
+  const mk = (id, trip, due, buyer = null, week = '2026-11-23') => ({ id, trip, due, buyer, week_start: week });
+  const ch = L.sameDayTrips([mk('a', 'Groß', '2026-11-21', 'p1'), mk('b', 'Groß', '2026-11-21'), mk('c', 'Frisch', '2026-11-21'), mk('d', 'Frisch', '2026-11-25'), mk('e', 'Andere Woche', '2026-11-21', null, '2026-11-16'), mk('f', 'Einzeln', '2026-11-27')]);
+  console.log('Z Logik:', ch.map((x) => `${x.id}->${x.trip}/${x.buyer}`).join(' '));
+}
 await b.close(); srv.close();

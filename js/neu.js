@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20c', datum: '20. November, morgens', titel: 'Zwei Einkäufe an einem Tag sind eine Liste',
+    punkte: [
+      { text: 'Legst du zwei Einkäufe auf denselben Einkaufstag, werden sie eine Liste. Doppelte Posten wie zweimal Zwiebeln werden dabei zusammengezählt.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20b', datum: '20. November, morgens', titel: 'Küchen-Display auch hell',
     punkte: [
       { text: 'Das Küchen-Display ist tagsüber jetzt hell und ab 18 Uhr dunkel.' },

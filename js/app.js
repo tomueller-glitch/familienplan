@@ -485,8 +485,12 @@ async function commit(apply, persist) {
 function dedupeShopping() {
   if (state.dedupeBusy || !['app', 'anzeige'].includes(state.phase)) return;
   const from = L.addDays(L.mondayOf(L.todayISO()), -7);
-  const { changed, removed } = L.mergeDuplicates(state.data.shopping.filter((i) => i.week_start >= from), (i) => !i.manual && !i.checked && !i.missing);
-  if (!removed.length) return;
+  // Erst Touren am selben Tag zu einer Liste machen, dann doppelte Posten zusammenfassen.
+  const moved = L.sameDayTrips(state.data.shopping.filter((i) => i.week_start >= from));
+  const items = state.data.shopping.filter((i) => i.week_start >= from).map((i) => moved.find((m) => m.id === i.id) || i);
+  const { changed: merged, removed } = L.mergeDuplicates(items, (i) => !i.manual && !i.checked && !i.missing);
+  if (!removed.length && !moved.length) return;
+  const changed = [...merged, ...moved.filter((m) => !merged.some((c) => c.id === m.id) && !removed.includes(m.id))];
   state.dedupeBusy = true;
   const gone = new Set(removed);
   commit(() => {
@@ -6280,6 +6284,27 @@ const forms = {
     const changed = state.data.shopping.filter((i) => i.week_start === state.week && (i.trip || 'Einkauf') === trip).map((i) => ({ ...i, due }));
     if (!changed.length) return;
     const warn = due && KI.shopClosed(due) ? ` Achtung: An dem Tag sind die Märkte zu (${KI.shopHoliday(due) || 'Sonntag'}).` : due && KI.shortDay(due) ? ' An dem Tag schließen die Märkte mittags.' : '';
+    // Liegt an dem Tag schon eine andere Tour, werden beide eine Liste, und doppelte Posten werden zusammengefasst.
+    // Alles in einem Schritt, damit keine Speicherung eine andere überholt.
+    const other = due ? [...new Set(state.data.shopping.filter((i) => i.week_start === state.week && i.due === due && (i.trip || 'Einkauf') !== trip).map((i) => i.trip || 'Einkauf'))] : [];
+    if (other.length) {
+      const week = state.data.shopping.filter((i) => i.week_start === state.week).map((i) => changed.find((c) => c.id === i.id) || i);
+      const moved = L.sameDayTrips(week);
+      const after = week.map((i) => moved.find((m) => m.id === i.id) || i);
+      const { changed: merged, removed } = L.mergeDuplicates(after, (i) => !i.manual && !i.checked && !i.missing);
+      const gone = new Set(removed);
+      const save = after.filter((i) => !gone.has(i.id)).map((i) => merged.find((m) => m.id === i.id) || i)
+        .filter((i) => changed.some((c) => c.id === i.id) || moved.some((m) => m.id === i.id) || merged.some((m) => m.id === i.id));
+      commit(() => {
+        state.data.shopping = state.data.shopping.filter((i) => !gone.has(i.id)).map((i) => save.find((c) => c.id === i.id) || i);
+      }, async () => {
+        await store.saveItems(save);
+        if (removed.length) await store.deleteItems(removed);
+      });
+      const name = (save.find((i) => i.due === due) || {}).trip || trip;
+      toast(`${[trip, ...other].map((t) => t.replace(/ am .*$/, '')).join(' und ')} sind jetzt eine Liste: ${name.replace(/\.$/, '')}.${removed.length ? ` ${removed.length === 1 ? 'Ein doppelter Posten ist' : `${removed.length} doppelte Posten sind`} zusammengefasst.` : ''}${warn}`);
+      return;
+    }
     commit(() => {
       state.data.shopping = state.data.shopping.map((i) => changed.find((c) => c.id === i.id) || i);
     }, () => store.saveItems(changed));
