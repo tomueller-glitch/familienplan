@@ -284,6 +284,11 @@ class SupabaseStore {
     throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
   }
   // „Essen ist fertig“ vom Küchen-Display an die Handys.
+  async shoppingLive(by, trip) {
+    const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'einkauf-live', by, trip } });
+    if (error) throw new Error('Die Nachricht ließ sich gerade nicht senden.');
+    return data || {};
+  }
   async callDinner(art, an) {
     const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'essen-ruf', art, an } });
     if (!error) return data || {};
@@ -492,6 +497,7 @@ class LocalStore {
     return demoFeast(fest);
   }
   async callDinner(art, an) { return { sent: 0, to: an || [] }; }
+  async shoppingLive() { return { sent: 0 }; }
   async calendars() {
     await new Promise((ok) => setTimeout(ok, 500));
     const v = ((this.get() || {}).settings || []).find((x) => x.key === 'kalender');

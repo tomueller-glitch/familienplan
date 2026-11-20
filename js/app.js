@@ -516,6 +516,8 @@ function refresh() {
   grantBonus();
   useImported((KI.settingOf(state.data.settings, 'abfuhr') || {}).liste);
   stats = L.computeStats(state.data.dishes, state.data.plan, state.data.ratings, L.todayISO(), state.data.hearts);
+  duelEnsure();
+  liveNews();
   render();
 }
 
@@ -852,12 +854,13 @@ function saveNotes(list) {
   commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'zettel'), row]; }, () => store.saveSettings([row]));
 }
 function notesBoard() {
-  const list = notesNow().slice(0, 3);
-  if (!list.length) return '';
-  return `<div class="anz-zettel">${list.map((z, n) => {
+  const duel = duelNote();
+  const list = notesNow().slice(0, duel ? 2 : 3);
+  if (!list.length && !duel) return '';
+  return `<div class="anz-zettel">${duel}${list.map((z, n) => {
     const by = personById(z.by);
     return `<button class="zettel z${n % 3}" data-action="anz-zettel" data-id="${esc(z.id)}"><span class="zettel-text">${esc(z.text)}</span>${by ? `<small>${esc(by.name)}</small>` : ''}</button>`;
-  }).join('')}${notesNow().length > 3 ? `<span class="zettel-mehr">+${notesNow().length - 3}</span>` : ''}</div>`;
+  }).join('')}${notesNow().length > list.length ? `<span class="zettel-mehr">+${notesNow().length - list.length}</span>` : ''}</div>`;
 }
 const NOTE_DAUER = [['0', 'Heute'], ['1', 'Bis morgen'], ['3', 'Drei Tage'], ['7', 'Eine Woche']];
 function sheetNotes() {
@@ -1016,7 +1019,7 @@ function viewDisplay() {
       ${kinder}
     </div>
     <footer class="anz-fuss">${istAlleBar()}
-      <span class="anz-stand">${open ? `${open} auf der Einkaufsliste` : 'Einkaufsliste leer'}, ${store.offline ? 'keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span></footer>
+      <span class="anz-stand">${liveNow() ? `${esc(personById(liveNow().by).name)} ist gerade beim Einkaufen, ` : ''}${open ? `${open} auf der Einkaufsliste` : 'Einkaufsliste leer'}, ${store.offline ? 'keine Verbindung, zeigt den letzten Stand' : `Stand ${hm(new Date(state.loadedAt || Date.now()))}`}${state.kal && state.kal.error ? ', Kalender gerade nicht erreichbar' : state.kal && (state.kal.feeds || []).some((f) => !f.ok) ? ', ein Kalender fehlt' : ''}</span></footer>
   </div>`;
 }
 // Heimkehr eines Kalendertermins mit Heimweg, gerechnet wie fürs Abendessen.
@@ -1353,6 +1356,7 @@ function viewWoche() {
   html += abfuhrBox(false);
   html += heartReminder();
   if (heartFirst) html += heartCard(state.week);
+  html += duelCard();
   html += `<h2 class="abschnitt">Die Woche</h2><ul class="woche">${days.map(dayRow).join('')}</ul>
     ${days.some((d) => !(planOf(d) || {}).dish_id && !holidayOf(d)) && canPlan() ? '<div class="fuss"><button class="textknopf" data-action="woche-fuellen">Leere Tage füllen</button></div>' : ''}
     ${planTiles()}`;
@@ -1717,7 +1721,7 @@ function viewEinkauf() {
   const bar = total ? `<div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done.length}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done.length / total) * 100)}%"></span></div>` : '';
   const rows = open.length || state.justChecked ? tripRows(curItems, week, { open: true }) : '<p class="meta ek-leer">Noch nichts drauf. Alles, was ihr ergänzt, kommt auf diesen Einkauf.</p>';
   if (state.shopMode) {
-    return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${open.length} offen</span><button class="knopf klein" data-action="einkaufsmodus">Fertig</button></div>${bar}
+    return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${open.length} offen<small class="live-info">Die anderen wissen Bescheid. Was sie ergänzen, erscheint hier.</small></span><button class="knopf klein" data-action="einkaufsmodus">Fertig</button></div>${bar}
       <h2 class="tour">${esc(tripHead(cur))}</h2>${missingBox(cur, curItems)}${rows}${addForm}`;
   }
   const build = hasPlan && !listed && canPlan()
@@ -1744,7 +1748,7 @@ function viewEinkauf() {
   const planned = (w) => L.weekDays(w).some((d) => { const p = planOf(d); return p && p.dish_id; });
   const rebuild = [...new Set([...(listed ? [week] : []), ...[cur, ...later].flatMap((t) => t.items.filter((i) => !i.manual).map((i) => i.week_start))])]
     .filter((w) => w >= L.addDays(L.mondayOf(today), -7) && planned(w)).sort();
-  return `${draftBox(week)}${pantryBox(week)}${build}${head}${laterHtml}${pastHtml}${shopTools(rebuild)}`;
+  return `${liveBanner()}${draftBox(week)}${pantryBox(week)}${build}${head}${laterHtml}${pastHtml}${shopTools(rebuild)}`;
 }
 // Überschrift eines Einkaufs: „Großeinkauf, Samstag 21.11.“
 const tripHead = (t) => `${tripName(t)}, ${L.WEEKDAYS[L.wdIndex(t.due)]} ${L.fmtShort(t.due)}`;
@@ -1970,10 +1974,11 @@ function itemRow(item) {
   const sub = [cq.qty, item.purpose === 'ist alle' ? `ist alle${by ? `, gemeldet von ${by.name}` : ''}` : '', !item.checked ? packSentence(item) : '', offerText, who ? `abgehakt von ${who.name}` : ''].filter(Boolean).join(', ');
   const istAlleMark = item.purpose === 'ist alle';
   const purpose = istAlleMark ? '' : L.purposeOf(item, state.data.plan, state.data.dishes);
-  return `<li class="${item.checked ? 'erledigt' : ''}${item.missing ? ' fehlt' : ''}${state.justChecked === item.id ? ' gerade-abgehakt' : ''}">
+  const fresh = !item.checked && liveFresh(item);
+  return `<li class="${item.checked ? 'erledigt' : ''}${item.missing ? ' fehlt' : ''}${state.justChecked === item.id ? ' gerade-abgehakt' : ''}${fresh ? ' live-neu' : ''}">
     <button class="haken-knopf" data-action="haken" data-id="${esc(item.id)}" aria-pressed="${!!item.checked}">
       <span class="kasten">${CHECK}</span>
-      <span class="p-text"><span class="p-name">${esc(L.plainName(item.label))}${item.missing ? ' <span class="marke warn">nicht bekommen</span>' : ''}${offer || claudeBio ? ' <span class="marke angebot">Bio im Angebot</span>' : ''}${seasonMark(item)}</span>${sub ? `<span class="p-menge">${esc(sub)}</span>` : ''}${purpose ? `<span class="p-wofuer">für ${esc(purpose)}</span>` : ''}</span></button>
+      <span class="p-text"><span class="p-name">${esc(L.plainName(item.label))}${item.missing ? ' <span class="marke warn">nicht bekommen</span>' : ''}${offer || claudeBio ? ' <span class="marke angebot">Bio im Angebot</span>' : ''}${seasonMark(item)}${fresh ? ` <span class="marke neu">neu von ${esc((personById(item.added_by) || {}).name || '')}</span>` : ''}</span>${sub ? `<span class="p-menge">${esc(sub)}</span>` : ''}${purpose ? `<span class="p-wofuer">für ${esc(purpose)}</span>` : ''}</span></button>
     ${!item.checked && item.category !== 'vorhanden' && (state.shopMode || item.missing) ? `<button class="fehlt-knopf" data-action="fehlt" data-id="${esc(item.id)}" aria-pressed="${!!item.missing}" aria-label="${esc(L.plainName(item.label))} ${item.missing ? 'doch bekommen' : 'nicht bekommen'}">${item.missing ? 'doch da' : 'fehlt'}</button>` : ''}
     ${item.manual || (!item.checked && !state.shopMode) ? `<button class="weg" data-action="posten-weg" data-id="${esc(item.id)}" aria-label="${esc(L.plainName(item.label))} von der Liste nehmen">${CROSS}</button>` : ''}</li>`;
 }
@@ -2187,6 +2192,159 @@ function wishBanner(week) {
     return `<li>${esc(p ? p.name : 'Kind')}: ${esc(w.text)}${ok ? ' <span class="chip ja">im Plan</span>' : w.status === 'nicht' ? ' <span class="chip">diesmal nicht</span>' : ''}
       <button class="textknopf" data-action="wunsch-weg" data-id="${esc(w.id)}" style="padding:0 0 0 6px">löschen</button></li>`;
   }).join('')}</ul><p class="meta">Claude baut einen Wunsch pro Woche ein. Beim Planen von Hand: über „Gericht wählen“ am Tag.</p></div>`;
+}
+
+/* ---------- Live beim Einkaufen ---------- */
+// Wer den Einkaufsmodus startet, steht in ep_settings "einkauf_live" ({ by, due, at }), die anderen bekommen eine
+// Nachricht (Funktion push, Aktion einkauf-live). Was sie dann ergänzen, sieht der Einkäufer sofort, markiert als neu.
+// Nach zwei Stunden gilt der Eintrag als vorbei, falls jemand den Modus nicht beendet hat.
+function liveNow() {
+  const v = KI.settingOf(state.data.settings, 'einkauf_live');
+  return v && v.by && personById(v.by) && nowMs() - Date.parse(v.at || 0) < 2 * 3600000 ? v : null;
+}
+function liveSave(value) {
+  const row = { key: 'einkauf_live', value, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'einkauf_live'), row]; }, () => store.saveSettings([row]));
+}
+function liveStart() {
+  const cur = currentTrip();
+  liveSave({ by: state.me, due: cur.due, at: nowStamp() });
+  state.liveSeen = new Set(state.data.shopping.map((i) => i.id));
+  store.shoppingLive(state.me, tripName(cur)).catch(() => {});
+}
+function liveEnd() {
+  const v = liveNow();
+  if (v && v.by === state.me) liveSave({ by: null, at: nowStamp() });
+  state.liveSeen = null;
+}
+// Posten, die andere während des Einkaufs ergänzt haben.
+const liveFresh = (i) => { const v = liveNow(); return !!(v && state.shopMode && v.by === state.me && i.added_by && i.added_by !== state.me && Date.parse(i.created_at || 0) >= Date.parse(v.at) - 60000); };
+// Neue Posten von den anderen: kurzer Hinweis beim Einkäufer.
+function liveNews() {
+  if (!state.shopMode || !state.liveSeen) return;
+  const fresh = state.data.shopping.filter((i) => !state.liveSeen.has(i.id) && i.added_by && i.added_by !== state.me && !i.checked);
+  for (const i of state.data.shopping) state.liveSeen.add(i.id);
+  if (!fresh.length) return;
+  const by = personById(fresh[0].added_by);
+  try { haptic(); } catch (e) { /* ohne Ruck */ }
+  toast(`${by ? by.name : 'Jemand'} hat ergänzt: ${fresh.map((i) => L.plainName(i.label)).join(', ')}.`);
+}
+function liveBanner() {
+  const v = liveNow();
+  if (!v || v.by === state.me) return '';
+  const p = personById(v.by);
+  return `<div class="kasten-text live-hinweis"><strong>${esc(p.name)} ist gerade beim Einkaufen</strong>Was du jetzt ergänzt, sieht ${esc(p.name)} sofort im Laden.</div>`;
+}
+
+/* ---------- Wunschessen-Duell ---------- */
+// Zwei Gerichte aus der Sammlung, die ganze Familie stimmt ab (je Person eine Stimme, änderbar). Der Sieger kommt in
+// Claudes Plan für die Woche (ep_settings "duell", die Funktion push liest "sieger"). Bei Gleichstand gewinnt, was
+// länger nicht dran war, dann das besser bewertete, sonst entscheidet das Los (für jede Woche fest).
+const duelRaw = () => { const v = KI.settingOf(state.data.settings, 'duell'); return v && v.week ? v : null; };
+const weekHash = (w) => [...w].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+function duelClosed(week) {
+  return L.weekDays(week).some((d) => (planOf(d) || {}).dish_id)
+    || state.data.aiRuns.some((r) => String(r.week_start).slice(0, 10) === week && !['verworfen', 'ersetzt'].includes(r.status));
+}
+// Das Duell der Woche, für die gerade gewünscht wird. Null, wenn es noch keins gibt oder Claude schon plant.
+function duelNow() {
+  const week = wishWeek();
+  const d = duelRaw();
+  return d && d.week === week && !duelClosed(week) && dishById(d.a) && dishById(d.b) ? d : null;
+}
+// Paar für eine Woche: auf jedem Gerät dasselbe. Nichts, was gerade dran war, geplant ist oder pausiert.
+function duelPair(week) {
+  const recent = L.addDays(week, -21);
+  const planned = new Set(state.data.plan.filter((p) => p.day >= L.addDays(week, -7)).map((p) => p.dish_id));
+  const cand = state.data.dishes.filter((d) => L.isDinner(d) && !(stats[d.id] || {}).archived && !(d.pause_until && d.pause_until >= week)
+    && !planned.has(d.id) && !(((stats[d.id] || {}).lastServed || '') >= recent)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  if (cand.length < 2) return null;
+  const h = weekHash(week);
+  const a = cand[h % cand.length];
+  // Möglichst etwas anderes als Gegner: andere Art (Fisch, Geflügel, vegetarisch …).
+  const rest = cand.filter((d) => d.id !== a.id);
+  const other = rest.filter((d) => d.category !== a.category);
+  const pool = other.length ? other : rest;
+  return [a.id, pool[Math.floor(h / 7) % pool.length].id];
+}
+function duelEnsure() {
+  if (!state.fresh || store.offline || !state.data || !state.data.dishes.length) return;
+  const week = wishWeek();
+  const d = duelRaw();
+  if ((d && d.week === week) || duelClosed(week)) return;
+  const pair = duelPair(week);
+  if (!pair) return;
+  const row = { key: 'duell', value: { week, a: pair[0], b: pair[1], stimmen: {}, sieger: null, at: nowStamp() }, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'duell'), row]; }, () => store.saveSettings([row]));
+}
+function duelResult(d) {
+  const v = Object.entries(d.stimmen || {}).filter(([id]) => personById(id)).map(([, x]) => x);
+  const na = v.filter((x) => x === 'a').length;
+  const nb = v.filter((x) => x === 'b').length;
+  if (!na && !nb) return null;
+  const pick = (side, grund) => ({ id: d[side], name: (dishById(d[side]) || {}).name || '', na, nb, grund });
+  if (na !== nb) return pick(na > nb ? 'a' : 'b', '');
+  const last = (id) => (stats[id] || {}).lastServed || '';
+  if (last(d.a) !== last(d.b)) return pick(last(d.a) < last(d.b) ? 'a' : 'b', 'länger nicht dran war');
+  const avg = (id) => ((stats[id] || {}).avg == null ? -1 : stats[id].avg);
+  if (avg(d.a) !== avg(d.b)) return pick(avg(d.a) > avg(d.b) ? 'a' : 'b', 'besser bewertet ist');
+  return pick(weekHash(d.week) % 2 ? 'b' : 'a', 'los');
+}
+function duelVote(pid, side) {
+  const d = duelNow();
+  if (!d || !personById(pid) || !['a', 'b'].includes(side)) return;
+  const next = { ...d, stimmen: { ...(d.stimmen || {}), [pid]: side } };
+  next.sieger = duelResult(next);
+  const row = { key: 'duell', value: next, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'duell'), row]; }, () => store.saveSettings([row]));
+  const all = state.data.persons.every((p) => next.stimmen[p.id]);
+  toast(all && next.sieger ? `Alle haben abgestimmt: ${L.shortDish(next.sieger.name)} kommt in den Plan.` : `Danke, ${personById(pid).name}. Wofür du gestimmt hast, sehen die anderen erst, wenn alle abgestimmt haben.`);
+}
+// Stand als Satz. Wer wofür gestimmt hat, bleibt geheim, bis alle abgestimmt haben.
+function duelStatus(d) {
+  const ps = state.data.persons;
+  const voted = ps.filter((p) => (d.stimmen || {})[p.id]);
+  const r = duelResult(d);
+  if (r && voted.length === ps.length) {
+    const short = L.shortDish(r.name);
+    if (r.grund === 'los') return `${r.na} : ${r.nb}, Gleichstand. Beide waren gleich lange nicht dran und sind gleich bewertet, deshalb hat das Los entschieden: ${short}.`;
+    return r.grund ? `${r.na} : ${r.nb}, Gleichstand. ${short} gewinnt, weil das Gericht ${r.grund}.` : `${Math.max(r.na, r.nb)} : ${Math.min(r.na, r.nb)} für ${short}. Das kommt in den Plan.`;
+  }
+  return voted.length ? `${voted.length} von ${ps.length} haben abgestimmt: ${voted.map((p) => p.name).join(', ')}.` : `Noch hat niemand abgestimmt. Jede Stimme zählt gleich, auch die der Kinder.`;
+}
+function duelCard() {
+  const d = duelNow();
+  if (!d) return '';
+  const mine = (d.stimmen || {})[state.me];
+  const side = (k) => {
+    const dish = dishById(d[k]);
+    const s = stats[dish.id] || {};
+    const meta = [dish.duration_min ? `${dish.duration_min} Min.` : '', s.avg != null ? `${String(Math.round(s.avg * 10) / 10).replace('.', ',')} Sterne` : 'noch ohne Sterne', s.lastServed ? `zuletzt ${L.fmtShort(s.lastServed)}` : 'noch nie dran'].filter(Boolean).join(', ');
+    return `<button class="duell-seite${mine === k ? ' gewaehlt' : ''}" data-action="duell-stimme" data-seite="${k}" aria-pressed="${mine === k}"><span class="duell-name">${esc(dish.name)}</span><span class="duell-meta">${esc(meta)}</span>${mine === k ? '<span class="duell-du">Deine Stimme</span>' : ''}</button>`;
+  };
+  return `<section class="duell-karte"><h2 class="abschnitt">Wunschessen-Duell</h2>
+    <p class="meta">Für die Woche ab ${esc(L.fmtShort(d.week))} Was gewinnt, baut Claude in den Plan ein.</p>
+    <div class="duell">${side('a')}<span class="duell-oder">oder</span>${side('b')}</div>
+    <p class="meta duell-stand">${esc(duelStatus(d))}</p></section>`;
+}
+// Am Küchen-Display als erster Zettel.
+function duelNote() {
+  const d = duelNow();
+  if (!d) return '';
+  const n = Object.keys(d.stimmen || {}).filter((id) => personById(id)).length;
+  return `<button class="zettel zettel-duell" data-action="anz-duell"><span class="zettel-text">Duell: ${esc(L.shortDish(dishById(d.a).name))} oder ${esc(L.shortDish(dishById(d.b).name))}?</span><small>${n} von ${state.data.persons.length} haben abgestimmt</small></button>`;
+}
+function sheetDuel() {
+  const d = duelNow();
+  if (!d) return { over: 'Küchen-Display', title: 'Wunschessen-Duell', body: '<p class="meta">Gerade läuft kein Duell.</p>' };
+  const side = (k) => `<button class="duell-seite gross" data-action="anz-duell-stimme" data-seite="${k}"><span class="duell-name">${esc(dishById(d[k]).name)}</span></button>`;
+  return {
+    over: 'Wunschessen-Duell',
+    title: 'Was soll es nächste Woche geben?',
+    body: `<p class="meta">Auf ein Gericht tippen, dann auf dich und deine PIN eingeben. Die Stimme lässt sich ändern.</p>
+      <div class="duell">${side('a')}<span class="duell-oder">oder</span>${side('b')}</div>
+      <p class="meta duell-stand">${esc(duelStatus(d))}</p>`,
+  };
 }
 
 /* ---------- Zutaten übernehmen (Foto oder eingefügter Text) ---------- */
@@ -3929,7 +4087,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { zettel: sheetNotes, 'anz-zettel': sheetNoteDisplay, warum: sheetWhy, schule: sheetSchool, 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { 'anz-duell': sheetDuel, zettel: sheetNotes, 'anz-zettel': sheetNoteDisplay, warum: sheetWhy, schule: sheetSchool, 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -4556,7 +4714,8 @@ const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Kalender (die iPhone-Kalender der Familie), Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
   ['Neues Gericht von Claude', 'Passt ein Abendessen nicht, im Tag auf „Neues Gericht von Claude“ tippen (auch oben bei „Gericht tauschen“). Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, passend zur Kochzeit, zu euren Regeln und zum Rest der Woche, mit Wunsch wie „schneller“ oder „mit Fisch“. „Anderer Vorschlag“ holt einen neuen. „Übernehmen“ speichert das Rezept in der Sammlung und passt die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, schon Gekauftes wird möglichst weiterverwendet, die neuen Zutaten kommen auf die nächste Tour.'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
-  ['Einkaufen', 'Oben steht immer der nächste Einkauf, egal zu welcher Woche er gehört. Alles, was ihr ergänzt, kommt dorthin, auch „Ist alle“ vom Küchen-Display und Siri. Spätere Einkäufe stehen darunter bei „Danach“, die der letzten Tage bei „Erledigt“, beide zum Aufklappen. Die Liste entsteht aus dem Plan, verteilt auf Großeinkauf und Frischeeinkauf, getrennt nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid, „Tag ändern“ verlegt den Einkauf. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen. Mit „Fertig“ wandert es auf den nächsten Einkauf, mit dem Hinweis „nicht bekommen“. Vorher gibt es noch „Ersatz?“ und „Bei Lidl versuchen“. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was nach dem Einkaufstag noch offen ist und noch gebraucht wird, wandert von selbst auf den nächsten Einkauf. Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf den nächsten Einkauf. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg. „Bio“ steht nicht in den Namen, gekauft wird Bio, wenn es das gibt. „Bio im Angebot“ heißt: Am Einkaufstag gibt es das als Bio-Angebot, Markt und Preis stehen darunter.'],
+  ['Wunschessen-Duell', 'Unter „Woche“ und am Küchen-Display (blauer Zettel) stehen zwei Gerichte für die nächste Woche, die noch nicht geplant ist. Alle stimmen ab, auch die Kinder, jede Stimme zählt gleich und lässt sich ändern. Wer wofür gestimmt hat, zeigt die App erst, wenn alle abgestimmt haben. Der Sieger kommt fest in Claudes Plan, zusätzlich zu einem Wunsch der Kinder. Gleichstand: Es gewinnt, was länger nicht dran war, dann das besser bewertete, sonst das Los. Ist die Woche geplant, beginnt das Duell für die Woche danach.'],
+  ['Einkaufen', 'Oben steht immer der nächste Einkauf, egal zu welcher Woche er gehört. Alles, was ihr ergänzt, kommt dorthin, auch „Ist alle“ vom Küchen-Display und Siri. Spätere Einkäufe stehen darunter bei „Danach“, die der letzten Tage bei „Erledigt“, beide zum Aufklappen. Die Liste entsteht aus dem Plan, verteilt auf Großeinkauf und Frischeeinkauf, getrennt nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid, „Tag ändern“ verlegt den Einkauf. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen. Mit „Fertig“ wandert es auf den nächsten Einkauf, mit dem Hinweis „nicht bekommen“. Vorher gibt es noch „Ersatz?“ und „Bei Lidl versuchen“. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Beim Start bekommen die anderen eine Nachricht. Was sie dann ergänzen, erscheint sofort und gelb markiert. Was nach dem Einkaufstag noch offen ist und noch gebraucht wird, wandert von selbst auf den nächsten Einkauf. Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf den nächsten Einkauf. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg. „Bio“ steht nicht in den Namen, gekauft wird Bio, wenn es das gibt. „Bio im Angebot“ heißt: Am Einkaufstag gibt es das als Bio-Angebot, Markt und Preis stehen darunter.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
@@ -5622,6 +5781,7 @@ const actions = {
     if (state.shopMode && tab !== 'einkauf') {
       // Wie „Fertig“: Was gefehlt hat, kommt auf den nächsten Einkauf.
       const moved = moveMissing(currentTrip().due);
+      liveEnd();
       state.shopMode = false; document.documentElement.classList.remove('einkaufsmodus'); keepAwake(false);
       if (moved) setTimeout(() => toast(`${moved.n === 1 ? '1 Posten, der gefehlt hat, steht' : `${moved.n} Posten, die gefehlt haben, stehen`} jetzt auf dem ${tripLabel(moved.target)}`), 50);
     }
@@ -5695,6 +5855,7 @@ const actions = {
   einkaufsmodus: () => {
     // Beim Beenden kommt, was nicht zu bekommen war, auf den nächsten Einkauf.
     const moved = state.shopMode ? moveMissing(currentTrip().due) : null;
+    if (state.shopMode) liveEnd(); else liveStart();
     state.shopMode = !state.shopMode;
     document.documentElement.classList.toggle('einkaufsmodus', state.shopMode);
     keepAwake(state.shopMode || (state.sheet && state.sheet.type === 'kochen'));
@@ -5798,6 +5959,9 @@ const actions = {
     if (state.sheet && state.sheet.type === 'anz-zettel') { state.sheet = null; renderSheet(); render(); } else renderSheet();
     toast('Zettel abgenommen.', () => { saveNotes([...notesAll(), z]); if (state.sheet) renderSheet(); else render(); });
   },
+  'duell-stimme': ({ seite }) => { duelVote(state.me, seite); },
+  'anz-duell': () => { if (!duelNow()) { toast('Gerade läuft kein Duell.'); return; } openSheet({ type: 'anz-duell' }); },
+  'anz-duell-stimme': ({ seite }) => { closeSheet(); dispAs((who) => { duelVote(who, seite); }); },
   'anz-kochen': ({ id }) => {
     if (!dishById(id)) return;
     state.cookStep = 0;

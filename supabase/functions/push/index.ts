@@ -850,7 +850,7 @@ export function offersPrompt(week: string, lidl = true) {
     + 'Findest du für diese Woche noch nichts, antworte genau mit: keine Angebote gefunden';
 }
 
-export type PlanExtra = { wishes?: { kind: string; wunsch: string }[]; lastWish?: string; prices?: string; reste?: string[]; packungen?: string[] };
+export type PlanExtra = { wishes?: { kind: string; wunsch: string }[]; lastWish?: string; prices?: string; reste?: string[]; packungen?: string[]; duell?: string };
 
 export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; week: string; wish: string; problems?: string[]; urlaub?: Row[]; extra?: PlanExtra }) {
   const { rules, ctx, offers, week, wish, problems } = o;
@@ -911,6 +911,7 @@ export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; w
     `- Tour "frisch": kleiner Einkauf am ${sd.frisch.wd}, ${fmtDay(wed)}${sd.frisch.why ? ` (vorgezogen, weil ${sd.frisch.why})` : ''}, für Frisches, das sonst nicht bis zum Ende der Woche hält`,
     ...(sd.gross.day > addDays(week, -7) && wdOf(sd.gross.day) < 5 ? ['- Der Großeinkauf liegt früher als sonst. Plane Frisches für die ersten Tage der Woche so, dass es bis dahin hält, oder lege es auf die Tour "frisch".'] : []),
     '- "wofuer" immer ausfüllen: Kurzname des Gerichts mit Wochentag, zum Beispiel "Hackbällchen (Mo), Brotbox (Do)".',
+    ...(extra.duell ? ['', `Familien-Duell: Die ganze Familie hat abgestimmt, "${extra.duell}" kommt auf jeden Fall in diese Woche. Es zählt nicht als Kinderwunsch.`] : []),
     '',
     'Wunschessen der Kinder:',
     ...(wishes.length ? [
@@ -2156,7 +2157,7 @@ async function loadPlannerState(store: Store) {
     packungen: packs && typeof packs === 'object' ? Object.values(packs as Record<string, Row>).filter((p) => p && p.name && Number(p.q) > 0)
       .map((p) => `${p.name}: ${fmt(Number(p.q), String(p.u || ''))}${p.markt === 'lidl' ? ' (Lidl)' : ''}`).slice(0, 80) : [],
     reste: Array.isArray(reste) ? (reste as Row[]).map((x) => String(x.text || '').trim()).filter(Boolean).slice(0, 20) : [],
-    rules: mergeRules(get('regeln')), ctx: get('ki_kontext') || null, wish: String(get('wunsch') || ''),
+    rules: mergeRules(get('regeln')), ctx: get('ki_kontext') || null, wish: String(get('wunsch') || ''), duell: (get('duell') || null) as Row | null,
     urlaub: Array.isArray(urlaub) ? urlaub as Row[] : [], wuensche: Array.isArray(wuensche) ? wuensche as Row[] : [],
   };
 }
@@ -2220,6 +2221,11 @@ export function priceTable(receipts: Row[], max = 120) {
     }).join(', ')}`).join('\n');
 }
 
+// Wunschessen-Duell (ep_settings "duell"): Die App schreibt den Sieger samt Gleichstand-Regel in "sieger".
+export function duelWinner(duell: Row | null, week: string) {
+  return duell && duell.week === week && duell.sieger && duell.sieger.name ? String(duell.sieger.name).slice(0, 120) : '';
+}
+
 export function wishesFor(wuensche: Row[], persons: Row[], week: string) {
   const name = (id: string) => (persons.find((p) => p.id === id) || {}).name || 'ein Kind';
   const wishes = wuensche.filter((w) => w.week === week && w.status !== 'nicht' && String(w.text || '').trim())
@@ -2250,7 +2256,7 @@ export async function startRun(store: Store, week: string, trigger: string, wish
 export async function stepPlanner(store: Store, nowMs: number, adults: string[]): Promise<Due[]> {
   const out: Due[] = [];
   if (!env('ANTHROPIC_API_KEY')) return out;
-  const { rules, ctx, urlaub, wuensche, reste, packungen } = await loadPlannerState(store);
+  const { rules, ctx, urlaub, wuensche, reste, packungen, duell } = await loadPlannerState(store);
   // Wünsche und Preise werden erst geladen, wenn ein Plan geschrieben wird.
   let extraCache: { persons: Row[]; prices: string } | null = null;
   const extraFor = async (run: Row): Promise<PlanExtra> => {
@@ -2262,7 +2268,7 @@ export async function stepPlanner(store: Store, nowMs: number, adults: string[])
       ]);
       extraCache = { persons, prices: priceTable(receipts) };
     }
-    return { ...wishesFor(wuensche, extraCache.persons, String(run.week_start).slice(0, 10)), prices: extraCache.prices, reste, packungen };
+    return { ...wishesFor(wuensche, extraCache.persons, String(run.week_start).slice(0, 10)), prices: extraCache.prices, reste, packungen, duell: duelWinner(duell, String(run.week_start).slice(0, 10)) };
   };
   const { day, min, wd } = berlin(nowMs);
 
@@ -2507,6 +2513,24 @@ async function callDinner(store: ReturnType<typeof db>, body: Row, nowMs: number
   const dish = p && !p.skipped ? (dishes.find((d: Row) => d.id === p.dish_id) || {}).name || '' : '';
   const c = dinnerCall(String(body.art || 'jetzt'), '', String(dish).split(/ mit | und |,/)[0], nowMs);
   const r = await sendDue(store, subs, [{ key: c.key, to, msg: c.msg, ttl: 600 }], vapidFromEnv());
+  return { sent: r.sent, to, doppelt: !r.fresh };
+}
+
+// Live-Einkauf: Wer den Einkaufsmodus startet, sagt den anderen Bescheid. Höchstens einmal pro Stunde und Person.
+export function liveCall(name: string, trip: string, by: string, nowMs: number) {
+  const { day } = berlin(nowMs);
+  return {
+    key: `live:${day}:${by}:${Math.floor(nowMs / 3600000)}`,
+    msg: { title: `${name} ist beim Einkaufen`, body: `${trip ? `${trip}. ` : ''}Fehlt noch was? Jetzt eintragen, ${name} sieht es sofort.`, tag: 'einkauf-live', url: './#einkauf' } as Message,
+  };
+}
+async function callLive(store: ReturnType<typeof db>, body: Row, nowMs: number) {
+  const [persons, subs] = await Promise.all([store.get('ep_persons?select=id,name'), store.get('ep_push_subs?select=*')]);
+  const me = persons.find((p: Row) => p.id === body.by);
+  if (!me) return { sent: 0, to: [] };
+  const to = persons.filter((p: Row) => p.id !== me.id).map((p: Row) => p.id);
+  const c = liveCall(String(me.name), String(body.trip || '').slice(0, 60), String(me.id), nowMs);
+  const r = await sendDue(store, subs, [{ key: c.key, to, msg: c.msg, ttl: 1800 }], vapidFromEnv());
   return { sent: r.sent, to, doppelt: !r.fresh };
 }
 
@@ -3173,6 +3197,9 @@ async function runTest(req: Request) {
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'einkauf-live') {
+    try { return { status: 200, body: await callLive(db(), body, Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
   if (body.action === 'essen-ruf') {
     try { return { status: 200, body: await callDinner(db(), body, Date.now()) } ; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }

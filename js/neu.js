@@ -3,6 +3,15 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20d', datum: '20. November, nachts', titel: 'Wunschessen-Duell und Live beim Einkaufen',
+    punkte: [
+      { text: 'Wunschessen-Duell: Unter „Woche“ und als blauer Zettel am Küchen-Display stehen zwei Gerichte für die nächste Woche. Alle vier stimmen ab, jede Stimme zählt gleich. Wer wofür gestimmt hat, sieht man erst, wenn alle abgestimmt haben. Der Sieger kommt in Claudes Plan.' },
+      { text: 'Gleichstand: Es gewinnt das Gericht, das länger nicht dran war. Sind beide gleich lange nicht dran, das besser bewertete. Ist auch das gleich, entscheidet das Los.' },
+      { text: 'Live beim Einkaufen: Wer den Einkaufsmodus startet, sagt den anderen per Nachricht Bescheid. Was sie dann ergänzen, erscheint sofort in der Liste im Laden, gelb markiert mit „neu von …“. Das Küchen-Display zeigt unten, wer gerade einkauft.' },
+      { text: 'Prüfung der App: Fehlendes wandert auch, wenn man den Einkaufsmodus über einen anderen Bereich verlässt. Im Laden fehlen die Zeilen „für …“. Seltenes steht unter „Einstellungen zur Liste“.' },
+    ],
+  },
+  {
     id: '2026-11-20e', datum: '20. November, abends', titel: 'Einkaufsliste: eine Liste, kein Nachkauf mehr',
     punkte: [
       { text: 'Unter „Einkauf“ steht oben immer der nächste Einkauf, egal zu welcher Woche er gehört. Was ihr ergänzt, kommt dorthin, auch „Ist alle“ vom Küchen-Display und Siri.' },

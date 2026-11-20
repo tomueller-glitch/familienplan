@@ -415,11 +415,11 @@ if (fs.existsSync('/tmp/gross48mp.jpg')) {
       await page.locator('[data-action="anz-essen-ruf"][data-art="jetzt"]').click(); await page.waitForTimeout(400);
       const inv = await page.evaluate(() => window.calls.filter((c) => c[0] === 'invoke' && c[2].action === 'essen-ruf').pop());
       console.log('M gerufen:', JSON.stringify(inv && inv[2]), '|', await toastText(page));
-      await page.locator('.zettel').first().click(); await page.waitForTimeout(300);
+      await page.locator('.zettel:not(.zettel-duell)').first().click(); await page.waitForTimeout(300);
       console.log('M Zettel offen:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 160));
       await page.locator('#sheet-root [data-action="zettel-weg"]').click(); await page.waitForTimeout(300);
       const z = (await calls(page, 'ep_settings')).flat().filter((x) => x.key === 'zettel').pop();
-      console.log('M abgenommen:', JSON.stringify(z && z.value.map((x) => x.id)), '| Zettel jetzt:', await page.locator('.zettel').count());
+      console.log('M abgenommen:', JSON.stringify(z && z.value.map((x) => x.id)), '| Zettel jetzt:', await page.locator('.zettel:not(.zettel-duell)').count());
       const kb = page.locator('[data-action="anz-kochen"]');
       if (await kb.count()) {
         await kb.click(); await page.waitForTimeout(300);
