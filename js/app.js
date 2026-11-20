@@ -233,11 +233,21 @@ function updateBanner() {
   b.addEventListener('click', () => location.reload());
   document.body.appendChild(b);
 }
+// Das Küchen-Display läuft ohne Pause und wird nie angetippt (oft im geführten Zugriff). Es fragt deshalb alle
+// zehn Minuten selbst nach einer neuen Fassung und lädt sie von allein, sobald niemand gerade etwas eingibt.
+let updateReady = false;
+function autoReload() {
+  if (updateReady && state.phase === 'anzeige' && !state.sheet && !state.dispKid && !askResolve) location.reload();
+}
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.type === 'neue-version') updateBanner(); });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: 'pruefen' });
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'neue-version') return;
+    if (state.phase === 'anzeige') { updateReady = true; autoReload(); } else updateBanner();
   });
+  const ask = () => { if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({ type: 'pruefen' }); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ask(); });
+  setInterval(() => { if (document.visibilityState === 'visible') ask(); }, 10 * 60000);
+  setInterval(autoReload, 30000);
 }
 
 /* ---------- Was ist neu? ---------- */
@@ -4412,7 +4422,7 @@ const HELP_ADULTS = [
   ['Notizen fürs nächste Mal', 'Unter jedem Rezept und am Ende des Kochmodus steht „Notiz fürs nächste Mal“, zum Beispiel „Möhren zu den Erbsen“ oder „Senfsoße dazu“. Die Notiz erscheint beim nächsten Mal im Rezept und am Anfang des Kochmodus, und Claude berücksichtigt sie beim Planen und Einkaufen.'],
   ['Schultage und Kinder-Sperre', 'Bei jeder Aufgabe lässt sich „Nur an Schultagen“ anhaken, dann ruht sie am Wochenende, in den Ferien und an Feiertagen. Im Familie-Fenster sorgt „Kinder wechseln nur mit PIN“ dafür, dass ein Kind nicht ohne die PIN von Mama oder Papa zum anderen Kind wechseln kann.'],
   ['Packungsgrößen', 'Gibt es etwas im Markt nur in einer anderen Größe, im Einkaufsmodus auf „fehlt“ und dann „Andere Größe“ tippen, oder unten bei „Liste“ auf „Packungsgrößen“. Die App fragt dann, ob das Rezept auf 1 oder 2 Packungen umgerechnet wird oder bleibt (der Rest kommt auf „Was muss weg?“). Größen vom Kassenzettel lernt sie von selbst, und Claude plant künftig mit ganzen Packungen.'],
-  ['Updates', 'Gibt es eine neue Fassung der App, erscheint unten „Neue Version der App. Tippen zum Laden.“ Ein Tipp genügt. Danach zeigt ein Fenster einmal, was neu ist. Unten in dieser Hilfe öffnet „Was ist neu?“ die Liste jederzeit.'],
+  ['Updates', 'Gibt es eine neue Fassung der App, erscheint unten „Neue Version der App. Tippen zum Laden.“ Ein Tipp genügt. Die App schaut alle zehn Minuten nach, solange sie offen ist. Das Küchen-Display lädt eine neue Fassung von allein, sobald niemand gerade etwas eingibt. Danach zeigt ein Fenster einmal, was neu ist. Unten in dieser Hilfe öffnet „Was ist neu?“ die Liste jederzeit.'],
   ['Müllabfuhr', 'Die Abholtermine stehen in der App. Gehen sie zu Ende, erscheint ein Hinweis. Dann auf abfuhrkalender.ceb-coburg.de die Kalenderdatei (.ics) für eure Straße laden und im Familie-Fenster oder unter „Aufgaben“ hochladen.'],
   ['Kosten, Saison und Festtage', 'Unter der Woche stehen die geschätzten Kosten der geplanten Abendessen und was vom Monatsbudget übrig ist. In der Einkaufsliste markiert „Saison“ Obst und Gemüse aus der Region, das lässt sich in den Regeln für Claude abschalten. Unter „Festtage“ lässt sich ein Fest vom letzten Jahr mit einem Tipp wieder übernehmen.'],
 ];

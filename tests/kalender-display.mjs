@@ -362,4 +362,20 @@ if (fs.existsSync('/tmp/gross48mp.jpg')) {
   console.log('I Julia Fr:', JSON.stringify(st2.value.kinder.p4.tage[5]), JSON.stringify(st2.value.frueher));
   console.log('I Fehler Handy:', ph.errs); await ph.ctx.close();
 }
+// K: Neue Version auf dem Display: lädt von selbst neu, aber nicht während jemand seine PIN eingibt
+{
+  const { createHash } = await import('node:crypto');
+  const db = base(); db.ep_persons = db.ep_persons.map((p) => (p.id === 'p3' ? { ...p, pin_hash: createHash('sha256').update('essensplan|p3|1357').digest('hex') } : p));
+  const { page, ctx, errs } = await openDisplay(db, 1024, 768);
+  let loads = 0; page.on('load', () => { loads += 1; });
+  const melden = () => page.evaluate(() => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'neue-version' } })));
+  await page.locator('[data-action="anz-kind"][data-id="p3"]').click(); await page.waitForTimeout(300);
+  await melden(); await page.waitForTimeout(800);
+  console.log('K mit offenem PIN-Feld neu geladen:', loads, '| Banner:', await page.locator('#neue-version').count());
+  await page.locator('#sheet-root [data-action="zu"]').click(); await page.waitForTimeout(200);
+  await page.evaluate(() => { window.__vorher = 1; });
+  await melden(); await page.waitForTimeout(1500);
+  console.log('K ohne Eingabe neu geladen:', loads, '| alte Seite weg:', await page.evaluate(() => window.__vorher === undefined));
+  console.log('K Fehler:', errs); await ctx.close();
+}
 await b.close(); srv.close();

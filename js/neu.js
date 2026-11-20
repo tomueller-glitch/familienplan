@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20i', datum: '20. November, nachmittags', titel: 'Küchen-Display holt Updates selbst',
+    punkte: [
+      { text: 'Fehler behoben: Das Küchen-Display hat neue Fassungen der App nicht bemerkt, weil es nie in den Hintergrund geht. Jetzt schaut es alle zehn Minuten nach und lädt sie von allein, auch im geführten Zugriff, aber nie, während jemand seine PIN eingibt.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20h', datum: '20. November, nachmittags', titel: 'Küchen-Display räumt auf',
     punkte: [
       { text: 'Auf dem Küchen-Display verschwinden Termine von heute eine halbe Stunde nach ihrem Ende, „kommt heim“ eine halbe Stunde nach der Uhrzeit. Ganztägiges und Nachtdienste bleiben stehen.' },
