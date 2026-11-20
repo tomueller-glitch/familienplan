@@ -588,7 +588,8 @@ function render() {
   app.innerHTML = view();
   document.documentElement.classList.toggle('anzeige-modus', state.phase === 'anzeige');
   if (state.phase !== 'anzeige') document.documentElement.classList.remove('anzeige-hell');
-  if (state.phase === 'anzeige') keepAwake(true);
+  if (state.phase === 'anzeige') keepAwake(!isNight());
+  document.documentElement.classList.toggle('anzeige-nacht', state.phase === 'anzeige' && isNight());
   scheduleDinnerSync();
   scheduleContextSync();
   if (viewKey === lastView) window.scrollTo(0, scrollY); else window.scrollTo(0, 0);
@@ -912,7 +913,15 @@ function sheetWhy({ day, id }) {
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
 // und hält den Bildschirm wach. Nachts (22 bis 6 Uhr) wird es dunkler.
+// Nachtruhe am Küchen-Display: von 0 bis 6 Uhr schwarz und ohne Wachhalten, damit die automatische Sperre des
+// iPads (im geführten Zugriff „Display-Sperre“) den Bildschirm ausschaltet. Ein Tipp zeigt alles für zwei Minuten.
+const NIGHT = { from: 0, to: 6 };
+const isNight = () => dispHour() >= NIGHT.from && dispHour() < NIGHT.to && !(state.nightWake > Date.now());
+function viewNight() {
+  return '<button class="anz-nacht" data-action="anz-wach" aria-label="Küchen-Display für zwei Minuten anzeigen"></button>';
+}
 function viewDisplay() {
+  if (isNight()) return viewNight();
   const now = new Date();
   const today = L.todayISO();
   const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -4953,7 +4962,7 @@ async function keepAwake(on) {
     if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch (e) { wakeLock = null; }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ((state.sheet && state.sheet.type === 'kochen') || state.shopMode || state.phase === 'anzeige')) keepAwake(true); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ((state.sheet && state.sheet.type === 'kochen') || state.shopMode || (state.phase === 'anzeige' && !isNight()))) keepAwake(true); });
 
 let audioCtx = null;
 function beep() {
@@ -5962,6 +5971,7 @@ const actions = {
   reste: () => openSheet({ type: 'reste' }),
   zettel: () => openSheet({ type: 'zettel' }),
   'anz-zettel': ({ id }) => openSheet({ type: 'anz-zettel', id }),
+  'anz-wach': () => { state.nightWake = Date.now() + 2 * 60000; render(); },
   'zettel-weg': ({ id }) => {
     const z = notesAll().find((x) => x.id === id);
     if (!z) return;

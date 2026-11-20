@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20n', datum: '20. November, nachts', titel: 'Nachtruhe am Küchen-Display',
+    punkte: [
+      { text: 'Von 0 bis 6 Uhr ist das Küchen-Display schwarz und hält den Bildschirm nicht mehr wach. Ist im geführten Zugriff eine Display-Sperre eingestellt, geht der Bildschirm dann ganz aus. Ein Tipp zeigt alles für zwei Minuten.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20k', datum: '20. November, spät', titel: 'Dienstplan als Kalender: nur fürs Essen',
     punkte: [
       { text: 'Kalender haben jetzt drei Arten: Display und Essen, nur Display, nur fürs Essen. „Nur fürs Essen“ passt für einen Dienstplan: Die Dienste stehen nicht am Küchen-Display, zählen aber fürs Abendessen. Umstellen unter Planen > Kalender mit dem Knopf neben dem Kalender.', fuer: 'eltern' },

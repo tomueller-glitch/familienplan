@@ -105,4 +105,14 @@ const db = () => { const d = base(); d.ep_settings = [{ key: 'kalender', value: 
   const t = (await page.locator('body').innerText()).replace(/\n+/g, ' | ');
   console.log('D 24-Stunden-Dienst ab 20 Uhr:', (t.match(/Heute Abend.{0,140}/) || [''])[0], '| Fehler:', errs); await ctx.close();
 }
+{
+  // Nachtruhe: 2 Uhr schwarz, ein Tipp zeigt das Display, 6 Uhr wieder normal.
+  const n = await openDisplay(db(), 1133, 744, KALA, { stunde: 2, minute: 10 });
+  console.log('N 2 Uhr:', await n.page.locator('.anz-nacht').count(), '| Text:', JSON.stringify((await n.page.locator('body').innerText()).trim().slice(0, 20)), '| Klasse:', await n.page.evaluate(() => document.documentElement.classList.contains('anzeige-nacht')));
+  await n.page.locator('.anz-nacht').click(); await n.page.waitForTimeout(300);
+  console.log('N nach Tipp:', await n.page.locator('.anz-nacht').count(), '| Uhr sichtbar:', await n.page.locator('.anz-blatt').count());
+  console.log('N Fehler:', n.errs); await n.ctx.close();
+  const m = await openDisplay(db(), 1133, 744, KALA, { stunde: 6, minute: 0 });
+  console.log('N 6 Uhr:', await m.page.locator('.anz-nacht').count(), await m.page.locator('.anz-blatt').count()); await m.ctx.close();
+}
 await b.close(); srv.close();
