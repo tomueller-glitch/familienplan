@@ -158,34 +158,98 @@ export function demoIngredients() {
   };
 }
 
-// Preisgedächtnis: pro Artikel und Markt der übliche (mittlere) und der letzte Preis.
-// Gleiche Regeln wie priceTable in der Push-Funktion.
+// Preisgedächtnis: pro Artikel und Markt vergleichbare Preise. Ein Zeilenbetrag allein sagt wenig, deshalb:
+// Preis je Packung (Zeilenbetrag geteilt durch die Anzahl) und, wo die Größe bekannt ist, der Grundpreis
+// je kg, je l oder je Stück. Gleiche Regeln wie priceTable in der Push-Funktion.
 const median = (xs) => { const v = xs.slice().sort((a, b) => a - b); const m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+
+// Größe aus „400 g“, „0,532 kg“, „1,5 l“, „10 Stück“, „10er“, auch mitten im Text („MILCH 3,5% 1L“).
+export function sizeOf(text) {
+  const t = ` ${String(text || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2')} `;
+  const m = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*(kg|g|gr|gramm|ml|cl|l|ltr|liter)(?![a-zäöü])/.exec(t);
+  if (m) {
+    const q = Number(m[1]);
+    const u = m[2];
+    if (!(q > 0)) return null;
+    if (u === 'kg') return { q: q * 1000, u: 'g' };
+    if (u === 'g' || u === 'gr' || u === 'gramm') return { q, u: 'g' };
+    if (u === 'ml') return { q, u: 'ml' };
+    if (u === 'cl') return { q: q * 10, u: 'ml' };
+    return { q: q * 1000, u: 'ml' };
+  }
+  const st = /(?:^|[^\d.])(\d+)\s*(?:stück|stk\.?|st\.|er)(?![a-zäöü])/.exec(t);
+  return st && Number(st[1]) > 0 ? { q: Number(st[1]), u: 'Stück' } : null;
+}
+// Ohne Zahlen, Mengen und Satzzeichen: „Bio-Vollmilch 1 l“ und „Bio-Vollmilch“ sind ein Artikel. „Bio“ bleibt drin.
+export function priceKey(name) {
+  return String(name || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2')
+    .replace(/\d+(?:\.\d+)?\s*(kg|g|gr|ml|cl|l|ltr|liter|stück|stk\.?|st\.|er|%)?(?![a-zäöü])/g, ' ')
+    .replace(/[^a-zäöüß]+/g, ' ').trim();
+}
+// Eine Kassenzettelzeile: Anzahl, Preis je Packung, Größe und Grundpreis (je kg, l oder Stück).
+export function unitInfo(p) {
+  const preis = Number(p && p.preis);
+  if (!(preis > 0)) return null;
+  const n = Number(p.anzahl) > 0 ? Number(p.anzahl) : 1;
+  const each = preis / n;
+  const size = sizeOf(p.packung) || sizeOf(p.text) || sizeOf(p.name);
+  let grund = null;
+  if (size && size.u === 'g') grund = { wert: each / (size.q / 1000), je: 'kg' };
+  else if (size && size.u === 'ml') grund = { wert: each / (size.q / 1000), je: 'l' };
+  else if (size && size.u === 'Stück') grund = { wert: each / size.q, je: 'Stück' };
+  return { n, each: money(each), size, grund: grund ? { wert: money(grund.wert), je: grund.je } : null };
+}
+const SIZE_TXT = (s) => (!s ? '' : s.u === 'g' ? (s.q >= 1000 ? `${String(s.q / 1000).replace('.', ',')} kg` : `${Math.round(s.q)} g`)
+  : s.u === 'ml' ? (s.q >= 1000 ? `${String(s.q / 1000).replace('.', ',')} l` : `${Math.round(s.q)} ml`) : `${s.q} Stück`);
+export const sizeText = SIZE_TXT;
+export const grundText = (g) => (g ? `${euro(g.wert)}/${g.je}` : '');
+
 export function priceBook(receipts) {
   const book = new Map();
   for (const r of receipts || []) {
     for (const p of r.items || []) {
-      const price = Number(p.preis);
-      if (!(price > 0) || p.kategorie === 'Pfand und Rabatt') continue;
+      if (p.kategorie === 'Pfand und Rabatt') continue;
+      const u = unitInfo(p);
+      if (!u) continue;
       const name = String(p.name || p.text || '').trim();
-      const key = name.toLowerCase();
+      const key = priceKey(name);
       if (!key) continue;
       const e = book.get(key) || { name, kategorie: p.kategorie, n: 0, shops: new Map() };
       const shop = r.shop || 'anderer Markt';
       const list = e.shops.get(shop) || [];
-      list.push({ price, day: r.day });
+      list.push({ ...u, day: r.day, name });
       e.shops.set(shop, list);
       e.n += 1;
+      // Der kürzeste Name ist meist der allgemeinste.
+      if (name.length < e.name.length) e.name = name;
       book.set(key, e);
     }
   }
   return [...book.values()].map((e) => {
+    // Grundpreise vergleichen nur in derselben Einheit: die, die am häufigsten vorkommt.
+    const units = {};
+    for (const list of e.shops.values()) for (const x of list) if (x.grund) units[x.grund.je] = (units[x.grund.je] || 0) + 1;
+    const je = Object.entries(units).sort((a, b) => b[1] - a[1])[0];
+    const unit = je ? je[0] : null;
     const shops = [...e.shops.entries()].map(([shop, list]) => {
       const sorted = list.slice().sort((a, b) => (a.day < b.day ? -1 : 1));
       const last = sorted[sorted.length - 1];
-      return { shop, n: list.length, median: money(median(list.map((x) => x.price))), last: last.price, lastDay: last.day };
-    }).sort((a, b) => a.median - b.median);
-    return { name: e.name, kategorie: e.kategorie, n: e.n, shops, cheapest: shops.length > 1 ? shops[0].shop : null };
+      const g = list.filter((x) => x.grund && x.grund.je === unit).map((x) => x.grund.wert);
+      const sizes = [...new Set(list.map((x) => SIZE_TXT(x.size)).filter(Boolean))];
+      return {
+        shop, n: list.length,
+        median: money(median(list.map((x) => x.each))), last: last.each, lastDay: last.day,
+        grund: g.length ? { wert: money(median(g)), je: unit } : null,
+        lastGrund: last.grund && last.grund.je === unit ? last.grund : null,
+        sizes,
+      };
+    });
+    // Günstiger heißt: niedrigerer Grundpreis in derselben Einheit. Ohne Größe nur bei gleicher Packungsgröße.
+    const comparable = shops.length > 1 && (shops.every((x) => x.grund)
+      || (shops.every((x) => x.sizes.length === 1) && new Set(shops.map((x) => x.sizes[0])).size === 1));
+    const val = (x) => (x.grund ? x.grund.wert : x.median);
+    shops.sort((a, b) => val(a) - val(b));
+    return { name: e.name, kategorie: e.kategorie, n: e.n, unit, shops, cheapest: comparable && val(shops[0]) < val(shops[1]) ? shops[0].shop : null };
   }).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'de'));
 }
 

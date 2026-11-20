@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20g', datum: '20. November, nachmittags', titel: 'Preisgedächtnis mit Grundpreisen',
+    punkte: [
+      { text: 'Das Preisgedächtnis zeigt jetzt, wo die Größe bekannt ist, den Preis je kg, je Liter oder je Stück. So lassen sich 1 l Milch bei Aldi und 0,5 l bei Lidl vergleichen. „Günstiger“ steht nur noch dort, wo der Vergleich wirklich stimmt.', fuer: 'eltern' },
+      { text: 'Claude liest beim Kassenzettel die Anzahl („2 x 1,29“) und bei gewogenen Sachen das Gewicht mit. Beim Prüfen stehen bei jedem Posten Anzahl, Größe und der Grundpreis, die Größe lässt sich nachtragen.', fuer: 'eltern' },
+      { text: 'Die geschätzten Kosten über dem Einkauf rechnen jetzt mit dem Preis je Packung. Vorher zählte eine Zeile „2 x Milch“ wie eine Packung zum doppelten Preis.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20f', datum: '20. November, mittags', titel: 'Nicht bekommen: Nachkauf geht wieder',
     punkte: [
       { text: 'Fehler behoben: „Auf Nachkauf setzen“ und „Bei Lidl versuchen“ ließen Posten aus der Liste der anderen Woche liegen, wenn zwei Wochen am selben Tag eingekauft werden. Jetzt kommen alle nicht bekommenen Posten mit.', fuer: 'eltern' },

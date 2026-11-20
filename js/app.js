@@ -2409,6 +2409,7 @@ function draftOf(r) {
 
 const parseEuro = (v) => { const n = parseFloat(String(v || '').replace(/\s|€/g, '').replace(',', '.')); return Number.isFinite(n) ? HB.money(n) : null; };
 const fmtInput = (n) => (n === '' || n == null ? '' : HB.money(n).toFixed(2).replace('.', ','));
+const fmtNum = (n) => String(Math.round((Number(n) || 1) * 1000) / 1000).replace('.', ',');
 
 // Eingaben aus dem Formular in den Entwurf übernehmen, damit beim Hinzufügen und Löschen nichts verloren geht.
 function readReceiptForm(form) {
@@ -2423,6 +2424,8 @@ function readReceiptForm(form) {
     name: String(fd.get(`p_name_${n}`) ?? p.name).trim(),
     preis: parseEuro(fd.get(`p_preis_${n}`)) ?? 0,
     kategorie: String(fd.get(`p_kat_${n}`) || p.kategorie || 'Sonstiges'),
+    anzahl: fd.has(`p_anz_${n}`) ? (parseEuro(fd.get(`p_anz_${n}`)) || 1) : (p.anzahl || 1),
+    packung: fd.has(`p_pack_${n}`) ? String(fd.get(`p_pack_${n}`) || '').trim().slice(0, 20) : (p.packung || ''),
   }));
   d.checked = fd.getAll('abhaken').map(String);
 }
@@ -2448,6 +2451,9 @@ function sheetReceipt() {
       <input class="feld preis" name="p_preis_${n}" value="${esc(fmtInput(p.preis))}" inputmode="decimal" aria-label="Preis von ${esc(p.name || `Artikel ${n + 1}`)}" autocomplete="off">
       <select class="feld" name="p_kat_${n}" aria-label="Kategorie von ${esc(p.name || `Artikel ${n + 1}`)}">${cats.map((c) => `<option${c === p.kategorie ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <button type="button" class="weg" data-action="beleg-posten-weg" data-n="${n}" aria-label="${esc(p.name || 'Posten')} entfernen">${CROSS}</button>
+      <span class="beleg-menge"><label>Anzahl<input class="feld" name="p_anz_${n}" value="${esc(fmtNum(p.anzahl || 1))}" inputmode="decimal" autocomplete="off"></label>
+      <label>Größe<input class="feld" name="p_pack_${n}" value="${esc(p.packung || HB.sizeText(HB.sizeOf(p.text) || HB.sizeOf(p.name)))}" placeholder="z. B. 500 g" autocomplete="off"></label>
+      <span class="beleg-grund">${(() => { const u = HB.unitInfo(p); return u && u.grund ? HB.grundText(u.grund) : u && u.n > 1 ? `${HB.euro(u.each)} je Stück` : ''; })()}</span></span>
       ${p.text && p.text !== p.name ? `<span class="p-menge beleg-roh">Auf dem Zettel: ${esc(p.text)}</span>` : ''}</li>`).join('');
   return {
     over: 'Haushaltsbuch',
@@ -2504,13 +2510,20 @@ function sheetYear({ year }) {
 
 function sheetPrices() {
   const book = HB.priceBook(state.data.receipts);
+  const cell = (e, x) => {
+    const main = x.grund ? HB.grundText(x.grund) : `${HB.euro(x.median)} je Packung`;
+    const info = [x.grund ? `${x.sizes.length ? `${x.sizes.join(' oder ')} für ` : ''}${HB.euro(x.median)}` : 'Größe unbekannt',
+      x.n > 1 ? `${x.n}x` : L.fmtShort(x.lastDay),
+      x.n > 1 && (x.lastGrund ? HB.grundText(x.lastGrund) !== HB.grundText(x.grund) : x.last !== x.median) ? `zuletzt ${x.lastGrund ? HB.grundText(x.lastGrund) : HB.euro(x.last)}` : ''].filter(Boolean).join(', ');
+    return `<span class="${e.cheapest === x.shop ? 'guenstig' : ''}">${esc(x.shop)} <b>${esc(main)}</b> <small>(${esc(info)})</small></span>`;
+  };
   const rows = book.map((e) => `<li class="preis-zeile" data-suche="${esc(e.name.toLowerCase())}">
       <span class="p-name">${esc(e.name)}</span>
-      <span class="preis-maerkte">${e.shops.map((x) => `<span class="${e.cheapest === x.shop ? 'guenstig' : ''}">${esc(x.shop)} ${HB.euro(x.median)}${x.n > 1 ? ` <small>(${x.n}x, zuletzt ${HB.euro(x.last)})</small>` : ` <small>(${esc(L.fmtShort(x.lastDay))})</small>`}</span>`).join('')}</span></li>`).join('');
+      <span class="preis-maerkte">${e.shops.map((x) => cell(e, x)).join('')}</span></li>`).join('');
   return {
     over: 'Haushaltsbuch',
     title: 'Preisgedächtnis',
-    body: `<p class="meta">Was ihr laut Kassenzetteln wo bezahlt habt. Bei mehreren Käufen steht der übliche Preis. Gibt es einen Artikel in beiden Märkten, ist der günstigere markiert. Claude nutzt diese Preise beim Wochenplan, um Angebote zu prüfen und die Kosten zu schätzen.</p>
+    body: `<p class="meta">Was ihr laut Kassenzetteln wo bezahlt habt, vergleichbar gemacht: Wo die Größe bekannt ist, steht der Grundpreis je kg, je Liter oder je Stück, sonst der Preis je Packung. Bei mehreren Käufen steht der übliche Wert. Günstiger markiert ist ein Markt nur, wenn sich die Preise wirklich vergleichen lassen. Fehlt eine Größe, lässt sie sich beim Kassenzettel unter „Größe“ nachtragen. Claude vergleicht Angebote beim Wochenplan über den Grundpreis.</p>
       <input class="feld" id="preis-suche" placeholder="Suchen, z. B. Milch" aria-label="Artikel suchen" autocomplete="off" style="margin:12px 0">
       ${rows ? `<ul class="preis-liste">${rows}</ul>` : '<p class="meta">Noch keine Preise.</p>'}`,
   };
@@ -6805,7 +6818,7 @@ const forms = {
     const now = new Date().toISOString();
     const row = {
       id: d.id, day: d.day, shop: d.shop, total: d.total != null ? d.total : HB.itemsSum(items),
-      items: items.map((p) => ({ text: p.text || '', name: p.name, preis: HB.money(p.preis), kategorie: p.kategorie || 'Sonstiges', ...(p.packung ? { packung: String(p.packung) } : {}) })),
+      items: items.map((p) => ({ text: p.text || '', name: p.name, preis: HB.money(p.preis), kategorie: p.kategorie || 'Sonstiges', ...(p.packung ? { packung: String(p.packung) } : {}), ...(Number(p.anzahl) > 0 && Number(p.anzahl) !== 1 ? { anzahl: Number(p.anzahl) } : {}), ...(p.gewogen ? { gewogen: true } : {}) })),
       note: d.note || '', created_by: old ? old.created_by : state.me, created_at: old ? old.created_at : now, updated_at: now,
     };
     const before = d.items.map((p, n) => [p, d.before[n]]).filter(([p]) => p.name).map(([, b]) => b);
@@ -6826,7 +6839,8 @@ const forms = {
     });
     if (merken) saveHousehold({ merken });
     // Packungsgrößen vom Kassenzettel lernen. Was ihr selbst eingetragen habt, bleibt.
-    const learned = P.learnFromReceipt(packsAll(), row.items, row.shop, now);
+    // Gewogenes (Obst, Käse an der Theke) hat keine feste Packung.
+    const learned = P.learnFromReceipt(packsAll(), row.items.filter((p) => !p.gewogen), row.shop, now);
     if (learned.added) savePacks(learned.packs);
     state.receiptDraft = null;
     state.month = HB.monthOf(row.day);

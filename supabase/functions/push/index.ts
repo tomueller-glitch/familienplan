@@ -960,7 +960,7 @@ export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; w
     ...((extra.reste || []).length ? ['', 'Was muss weg (bald verbrauchen):', ...(extra.reste || []).map((x) => `- ${x}`)] : []),
     ...((extra.packungen || []).length ? ['', 'Packungsgrößen, wie es sie im Markt wirklich gibt (von der Familie gemeldet oder vom Kassenzettel):', ...(extra.packungen || []).map((x) => `- ${x}`)] : []),
     '',
-    'Preisgedächtnis (was die Familie zuletzt bezahlt hat, aus den Kassenzetteln):',
+    'Preisgedächtnis (was die Familie bezahlt hat, aus den Kassenzetteln; Preis je Packung, in Klammern der Grundpreis je kg, l oder Stück). Vergleiche Angebote über den Grundpreis, nicht über den Packungspreis:',
     extra.prices && extra.prices.trim() ? extra.prices.trim() : 'Noch keine Kassenzettel erfasst.',
     ...(problems && problems.length ? ['', 'Dein letzter Entwurf hatte diese Fehler. Bitte behebe sie:', ...problems.map((x) => `- ${x}`)] : []),
   ].join('\n');
@@ -1202,11 +1202,13 @@ export function receiptSchema(cats: string[]) {
         type: 'array',
         items: {
           type: 'object', additionalProperties: false,
-          required: ['text', 'name', 'preis', 'kategorie', 'packung'],
+          required: ['text', 'name', 'preis', 'anzahl', 'gewogen', 'kategorie', 'packung'],
           properties: {
             text: { type: 'string' },
             name: { type: 'string' },
             preis: { type: 'number' },
+            anzahl: { type: 'number' },
+            gewogen: { type: 'boolean' },
             kategorie: { type: 'string', enum: cats },
             packung: { type: 'string' },
           },
@@ -1224,11 +1226,12 @@ export function receiptPrompt(cats: string[], learned: Record<string, string>) {
     '- "datum": Kaufdatum als JJJJ-MM-TT. Ist keins lesbar, leer lassen.',
     '- "summe": der bezahlte Gesamtbetrag in Euro (Zeile SUMME, Zu zahlen oder Gesamt).',
     '- "posten": jede Artikelzeile einzeln. "text" so wie auf dem Zettel, "name" gut lesbar ausgeschrieben (aus "BIO HAEHN.BR.FIL" wird "Bio-Hähnchenbrustfilet"), "preis" der Zeilenbetrag in Euro.',
-    '- Mengenzeilen wie "2 x 1,29" gehören zum Artikel darüber, "preis" ist dann der Gesamtbetrag der Zeile.',
+    '- Mengenzeilen wie "2 x 1,29" gehören zum Artikel darüber, "preis" ist dann der Gesamtbetrag der Zeile und "anzahl" 2. Sonst ist "anzahl" 1.',
+    '- Waagenartikel wie "0,532 kg x 2,99 EUR/kg": "anzahl" 1, "gewogen" true, "packung" das Gewicht ("0,532 kg"), "preis" der Zeilenbetrag. Sonst ist "gewogen" false.',
     '- Rabatte, Preisnachlässe und Pfandrückgabe als eigener Posten mit negativem Preis, Pfand und Rabatte in die Kategorie "Pfand und Rabatt".',
     '- Zwischensummen, Zahlungsart, Steuerzeilen, Rückgeld und Kartenbeleg sind keine Posten.',
     `- "kategorie": genau eine aus: ${cats.join(', ')}.`,
-    '- "packung": die Packungsgröße, wenn sie auf dem Zettel im Artikeltext steht (aus "PUTENBR.FIL. 400G" wird "400 g", aus "MILCH 1L" wird "1 l", aus "EIER 10ER" wird "10 Stück"). Steht keine Größe da, leer lassen und nichts raten.',
+    '- "packung": die Größe einer Packung, wenn sie auf dem Zettel steht (aus "PUTENBR.FIL. 400G" wird "400 g", aus "MILCH 1L" wird "1 l", aus "EIER 10ER" wird "10 Stück"), bei Waagenartikeln das Gewicht. Steht keine Größe da, leer lassen und nichts raten.',
     ...(known.length ? ['- So hat die Familie Artikel bisher eingeordnet, daran halten: ' + known.map(([k, v]) => `${k} = ${v}`).join('; ')] : []),
     '- "hinweis": kurz, wenn etwas unsicher oder unleserlich war, sonst leer. Weicht die Summe der Posten vom Gesamtbetrag ab, sag es dort.',
     'Rate keine Artikel dazu, die nicht auf dem Zettel stehen.',
@@ -1259,7 +1262,8 @@ export function parseReceipt(res: Row, cats: string[]) {
   const money = (x: unknown) => Math.round((Number(x) || 0) * 100) / 100;
   const posten = (Array.isArray(d.posten) ? d.posten : []).map((p: Row) => ({
     text: String(p.text || '').slice(0, 120), name: String(p.name || p.text || '').slice(0, 120),
-    preis: money(p.preis), kategorie: cats.includes(p.kategorie) ? p.kategorie : 'Sonstiges', packung: String(p.packung || '').slice(0, 20),
+    preis: money(p.preis), anzahl: Number(p.anzahl) > 0 ? Math.round(Number(p.anzahl) * 1000) / 1000 : 1, gewogen: p.gewogen === true,
+    kategorie: cats.includes(p.kategorie) ? p.kategorie : 'Sonstiges', packung: String(p.packung || '').slice(0, 20),
   })).filter((p: Row) => p.name);
   return {
     markt: String(d.markt || '').slice(0, 60),
@@ -2163,24 +2167,57 @@ const median = (xs: number[]) => { const s = xs.slice().sort((a, b) => a - b); c
 const eur = (x: number) => `${(Math.round(x * 100) / 100).toFixed(2).replace('.', ',')} €`;
 
 // Kompakte Preisliste aus den Kassenzetteln: pro Artikel und Markt der übliche Preis. Gleiche Regeln wie js/haushalt.js (priceBook).
+// Gleiche Regeln wie priceBook in js/haushalt.js: Preis je Packung und Grundpreis je kg, l oder Stück.
+export function sizeOf(text: unknown): { q: number; u: string } | null {
+  const t = ` ${String(text || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2')} `;
+  const m = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*(kg|g|gr|gramm|ml|cl|l|ltr|liter)(?![a-zäöü])/.exec(t);
+  if (m) {
+    const q = Number(m[1]);
+    const u = m[2];
+    if (!(q > 0)) return null;
+    if (u === 'kg') return { q: q * 1000, u: 'g' };
+    if (u === 'g' || u === 'gr' || u === 'gramm') return { q, u: 'g' };
+    if (u === 'ml') return { q, u: 'ml' };
+    if (u === 'cl') return { q: q * 10, u: 'ml' };
+    return { q: q * 1000, u: 'ml' };
+  }
+  const st = /(?:^|[^\d.])(\d+)\s*(?:stück|stk\.?|st\.|er)(?![a-zäöü])/.exec(t);
+  return st && Number(st[1]) > 0 ? { q: Number(st[1]), u: 'Stück' } : null;
+}
+export function priceKey(name: string) {
+  return String(name || '').toLowerCase().replace(/(\d),(\d)/g, '$1.$2')
+    .replace(/\d+(?:\.\d+)?\s*(kg|g|gr|ml|cl|l|ltr|liter|stück|stk\.?|st\.|er|%)?(?![a-zäöü])/g, ' ')
+    .replace(/[^a-zäöüß]+/g, ' ').trim();
+}
 export function priceTable(receipts: Row[], max = 120) {
-  const book = new Map<string, { name: string; shops: Map<string, number[]>; n: number }>();
+  type Hit = { each: number; grund: number | null; je: string | null };
+  const book = new Map<string, { name: string; shops: Map<string, Hit[]>; n: number }>();
   for (const r of receipts) {
     for (const p of (r.items || [])) {
       const price = Number(p.preis);
       if (!(price > 0) || p.kategorie === 'Pfand und Rabatt') continue;
       const name = String(p.name || p.text || '').trim();
-      const key = name.toLowerCase();
+      const key = priceKey(name);
       if (!key) continue;
+      const n = Number(p.anzahl) > 0 ? Number(p.anzahl) : 1;
+      const each = price / n;
+      const size = sizeOf(p.packung) || sizeOf(p.text) || sizeOf(p.name);
+      const hit: Hit = size ? { each, grund: size.u === 'Stück' ? each / size.q : each / (size.q / 1000), je: size.u === 'g' ? 'kg' : size.u === 'ml' ? 'l' : 'Stück' } : { each, grund: null, je: null };
       const e = book.get(key) || { name, shops: new Map(), n: 0 };
       const shop = String(r.shop || 'anderer Markt');
-      e.shops.set(shop, [...(e.shops.get(shop) || []), price]);
+      e.shops.set(shop, [...(e.shops.get(shop) || []), hit]);
       e.n += 1;
+      if (name.length < e.name.length) e.name = name;
       book.set(key, e);
     }
   }
   return [...book.values()].sort((a, b) => b.n - a.n).slice(0, max)
-    .map((e) => `${e.name}: ${[...e.shops.entries()].map(([shop, xs]) => `${shop} ${eur(median(xs))}${xs.length > 1 ? ` (${xs.length}x)` : ''}`).join(', ')}`).join('\n');
+    .map((e) => `${e.name}: ${[...e.shops.entries()].map(([shop, xs]) => {
+      const g = xs.filter((x) => x.grund != null);
+      const je = g.length ? g[0].je : null;
+      const gs = g.filter((x) => x.je === je).map((x) => x.grund as number);
+      return `${shop} ${eur(median(xs.map((x) => x.each)))} je Packung${gs.length ? ` (${eur(median(gs))}/${je})` : ''}${xs.length > 1 ? ` (${xs.length}x)` : ''}`;
+    }).join(', ')}`).join('\n');
 }
 
 export function wishesFor(wuensche: Row[], persons: Row[], week: string) {

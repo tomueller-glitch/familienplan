@@ -1143,3 +1143,11 @@ html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { backgrou
 .schul-tabelle .feld.zeit { width: 100%; min-width: 0; }
 .schul-kind { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--linie, #d5dfe2); }
 .form .reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+/* Kassenzettel: Anzahl, Größe und Grundpreis je Posten */
+.beleg-menge { grid-column: 1 / -1; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 6px; align-items: end; }
+.beleg-menge label { font-size: 12px; color: var(--tinte-2, #4F6972); display: grid; gap: 2px; }
+.beleg-menge .feld { padding: 6px 8px; font-size: 15px; }
+.beleg-grund { font-size: 13px; color: var(--tinte-2, #4F6972); padding-bottom: 8px; white-space: nowrap; }
+.preis-maerkte b { font-weight: 600; }
+.beleg-menge .feld { min-width: 0; width: 100%; box-sizing: border-box; }
+.beleg-menge { grid-template-columns: 64px minmax(0, 1fr) minmax(64px, auto); }
