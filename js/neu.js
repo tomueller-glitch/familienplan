@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20f', datum: '20. November, mittags', titel: 'Nicht bekommen: Nachkauf geht wieder',
+    punkte: [
+      { text: 'Fehler behoben: „Auf Nachkauf setzen“ und „Bei Lidl versuchen“ ließen Posten aus der Liste der anderen Woche liegen, wenn zwei Wochen am selben Tag eingekauft werden. Jetzt kommen alle nicht bekommenen Posten mit.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20e', datum: '20. November', titel: 'Wann die Kinder von der Schule kommen',
     punkte: [
       { text: 'Das Küchen-Display zeigt bei den Terminen, wann die Kinder etwa von der Schule heimkommen: Schulschluss, an OGTS-Tagen deren Ende, plus Heimweg.' },

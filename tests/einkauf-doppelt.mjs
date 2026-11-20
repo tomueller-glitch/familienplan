@@ -102,6 +102,25 @@ const liste = () => [
   console.log('Y KW 48:', await rows());
   console.log('Y Fehler:', errs); await ctx.close();
 }
+// X: „Nicht bekommen“ auf die nächste Tour oder „Nachkauf“ setzen, auch wenn zwei Wochen am selben Tag einkaufen
+for (const fall of ['eine Woche', 'zwei Wochen']) {
+  const G = 'Großeinkauf am Sa 21.11.'; const F = 'Frischeeinkauf am Mi 18.11.';
+  const t = (id, label, qty, trip, due, week, extra = {}) => ({ ...it(id, label, qty, '', Number(id.slice(1)), extra), week_start: week, trip, due });
+  const db = base();
+  db.ep_shopping = fall === 'eine Woche'
+    ? [t('w1', 'Feldsalat', '150 g', F, '2026-11-18', '2026-11-16', { missing: true }), t('w2', 'Milch', '1 l', F, '2026-11-18', '2026-11-16')]
+    : [t('w1', 'Feldsalat', '150 g', F, '2026-11-18', '2026-11-16', { missing: true }), t('w2', 'Milch', '1 l', F, '2026-11-18', '2026-11-16'),
+      t('w3', 'Zwiebel', '1 Stück', G, '2026-11-18', '2026-11-23', { missing: true }), t('w4', 'Nudeln', '500 g', G, '2026-11-18', '2026-11-23')];
+  const { page, ctx, errs } = await open(db, 0);
+  await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
+  const btn = page.locator('[data-action="fehlt-verschieben"]');
+  console.log(`X ${fall} Knopf:`, await btn.count() ? await btn.first().innerText() : '-');
+  if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(500); }
+  console.log(`X ${fall} Hinweis:`, await toastText(page));
+  const saved = (await calls(page, 'ep_shopping')).flat(); const last = new Map(); for (const r of saved) last.set(r.id, r);
+  console.log(`X ${fall} Posten:`, [...last.values()].filter((r) => r.id.startsWith('w')).map((r) => `${r.id}:${r.trip}:${r.week_start}:${r.missing}`).join(' | '), '| Kasten noch da:', await page.locator('.fehlt-kasten').count());
+  console.log(`X ${fall} Fehler:`, errs); await ctx.close();
+}
 // Logik: Touren am selben Tag
 {
   const L = await import(ROOT + '/js/logic.js');
