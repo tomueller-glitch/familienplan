@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20k', datum: '20. November, nachmittags', titel: 'Statusleiste unauffälliger',
+    punkte: [
+      { text: 'Die App reicht jetzt bis unter die Statusleiste mit Uhrzeit und Akku. Auf dem Küchen-Display fällt die Leiste dadurch kaum noch auf. Ausblenden lässt sie sich auf dem iPad nicht.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20j', datum: '20. November, nachmittags', titel: 'Reste erst nach dem Kochen',
     punkte: [
       { text: 'Reste, die sich aus Packungsgrößen ergeben, stehen nicht mehr vorab auf „Was muss weg?“. Nach dem Kochen fragt die App im Wochenplan „Reste von …?“ mit den erwarteten Resten zum Abhaken und Ändern. „Übernehmen“ setzt sie auf „Was muss weg?“, „Nichts übrig“ verwirft sie.', fuer: 'eltern' },

@@ -1156,3 +1156,6 @@ html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { backgrou
 .reste-frage .schalter { display: flex; align-items: center; gap: 8px; }
 .reste-frage .schalter .feld { flex: 1; min-width: 0; }
 .reste-frage > .feld { width: 100%; box-sizing: border-box; }
+/* Küchen-Display: Hintergrund bis unter die Statusleiste des iPads, Inhalt beginnt darunter */
+html.anzeige-modus .anzeige { padding-top: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-top, 0px)); padding-left: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-left, 0px)); padding-right: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-right, 0px)); padding-bottom: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-bottom, 0px)); }
+@media (max-height: 800px) and (orientation: landscape) { html.anzeige-modus .anzeige { padding: calc(10px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px)); } }
