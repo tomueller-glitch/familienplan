@@ -24,7 +24,7 @@ if (store.mode === 'local') {
   const t = readLocal(TESTDAY_KEY);
   if (t && /^\d{4}-\d{2}-\d{2}$/.test(t)) globalThis.ESSENSPLAN_HEUTE = t;
 }
-const FORM_SHEETS = ['kalender', 'neu-gericht', 'shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
+const FORM_SHEETS = ['zettel', 'warum', 'kalender', 'neu-gericht', 'shop-admin', 'foto', 'packung', 'packungen', 'zurueckholen', 'vorschau', 'mittag', 'mittag-laden', 'mittag-ergebnis', 'app-wuensche', 'moegen', 'feste', 'fest', 'fest-laden', 'jahr', 'ersatz', 'ersatz-laden', 'reste', 'laufweg', 'kochen', 'preise', 'siri', 'zutaten', 'zutaten-laden', 'rezept-laden', 'rezept-neu', 'beleg', 'beleg-laden', 'haushalt', 'urlaub', 'gericht-form', 'import', 'familie', 'frage', 'pin', 'export', 'einloesen', 'aufgabe-form', 'vorrat', 'immer', 'regeln', 'entwurf'];
 const EPOCH = '1970-01-01T00:00:00Z';
 // Küchen-Display: Mit ?anzeige=kueche merkt sich das Gerät, dass es als Anzeige an der Wand hängt (?anzeige=aus beendet).
 const DISPLAY_KEY = 'essensplan.anzeige';
@@ -847,6 +847,68 @@ function sheetRateDisplay({ id }) {
   };
 }
 
+/* ---------- Zettel fürs Küchen-Display ---------- */
+// ep_settings "zettel": [{ id, text, by, at, bis }]. bis: letzter Tag, an dem der Zettel hängt.
+const notesAll = () => { const v = KI.settingOf(state.data.settings, 'zettel'); return Array.isArray(v) ? v : []; };
+const notesNow = () => notesAll().filter((z) => !z.bis || z.bis >= L.todayISO()).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+function saveNotes(list) {
+  const today = L.todayISO();
+  const row = { key: 'zettel', value: list.filter((z) => !z.bis || z.bis >= L.addDays(today, -1)).slice(-30), updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'zettel'), row]; }, () => store.saveSettings([row]));
+}
+function notesBoard() {
+  const list = notesNow().slice(0, 3);
+  if (!list.length) return '';
+  return `<div class="anz-zettel">${list.map((z, n) => {
+    const by = personById(z.by);
+    return `<button class="zettel z${n % 3}" data-action="anz-zettel" data-id="${esc(z.id)}"><span class="zettel-text">${esc(z.text)}</span>${by ? `<small>${esc(by.name)}</small>` : ''}</button>`;
+  }).join('')}${notesNow().length > 3 ? `<span class="zettel-mehr">+${notesNow().length - 3}</span>` : ''}</div>`;
+}
+const NOTE_DAUER = [['0', 'Heute'], ['1', 'Bis morgen'], ['3', 'Drei Tage'], ['7', 'Eine Woche']];
+function sheetNotes() {
+  const list = notesNow();
+  return {
+    over: 'Küchen-Display',
+    title: 'Zettel fürs Küchen-Display',
+    body: `<p class="meta">Kurze Nachricht an alle, die in die Küche kommen, etwa „Paket ist beim Nachbarn“ oder „Julia heute bei Oma“. Der Zettel hängt oben am Display und verschwindet von selbst.</p>
+      <form class="form" data-form="zettel"><label>Zettel<textarea class="feld" name="text" maxlength="120" rows="2" required placeholder="Was sollen alle wissen?"></textarea></label>
+      <label>Hängt<select class="feld" name="dauer">${NOTE_DAUER.map(([v, t]) => `<option value="${v}"${v === '1' ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <button class="knopf">Aufhängen</button></form>
+      ${list.length ? `<h3 class="abteilung">Hängt gerade</h3><ul class="zutaten">${list.map((z) => `<li class="pin-zeile"><span>${esc(z.text)} <small class="meta">${esc([(personById(z.by) || {}).name, z.bis ? (z.bis === L.todayISO() ? 'bis heute Abend' : `bis ${L.WD_SHORT[L.wdIndex(z.bis)]}`) : ''].filter(Boolean).join(', '))}</small></span>${canPlan() || z.by === state.me ? `<button class="textknopf" data-action="zettel-weg" data-id="${esc(z.id)}">Abnehmen</button>` : ''}</li>`).join('')}</ul>` : ''}`,
+  };
+}
+function sheetNoteDisplay({ id }) {
+  const z = notesAll().find((x) => x.id === id);
+  if (!z) return { over: 'Zettel', title: 'Schon abgenommen', body: '' };
+  const by = personById(z.by);
+  return {
+    over: `Zettel${by ? ` von ${by.name}` : ''}`,
+    title: z.text,
+    body: `<p class="meta">${esc(z.at ? `Aufgehängt ${L.fmtShort(String(z.at).slice(0, 10))}` : '')}${z.bis ? `, hängt ${z.bis === L.todayISO() ? 'bis heute Abend' : `bis ${L.WD_SHORT[L.wdIndex(z.bis)]} ${L.fmtShort(z.bis).replace(/\.$/, '')}`}` : ''}.</p>
+      <div class="knopfreihe"><button class="knopf" data-action="zettel-weg" data-id="${esc(z.id)}">Erledigt, abnehmen</button><button class="knopf zweit" data-action="zu">Hängen lassen</button></div>`,
+  };
+}
+
+/* ---------- Nachfrage bei mittleren Noten ---------- */
+// Nach 2 oder 3 Sternen: Was hat nicht gepasst? Das wird eine Notiz zum Rezept („Notizen der Familie“), die Claude
+// beim Planen berücksichtigt und die beim nächsten Kochen oben im Kochmodus steht.
+const WHY = ['zu scharf', 'zu fade', 'zu trocken', 'zu fettig', 'zu viel Arbeit', 'zu wenig', 'zu viel'];
+function sheetWhy({ day, id }) {
+  const x = personById(id);
+  const p = planOf(day);
+  const dish = p && dishById(p.dish_id);
+  return {
+    over: dish ? dish.name : 'Abendessen',
+    title: `Was hat nicht gepasst${x && id !== state.me ? `, ${x.name}` : ''}?`,
+    body: `<p class="meta">Das merkt sich die App beim Rezept. Claude berücksichtigt es beim nächsten Plan, und beim Kochen steht es oben.</p>
+      <form class="form" data-form="warum" data-day="${day}" data-id="${esc(id)}">
+      <div class="warum-chips">${WHY.map((w) => `<label class="chip-wahl"><input type="checkbox" name="w" value="${esc(w)}"><span>${esc(w)}</span></label>`).join('')}</div>
+      <label>Mag eine Zutat nicht<input class="feld" name="zutat" maxlength="40" autocomplete="off" placeholder="zum Beispiel Pilze"></label>
+      <label>Sonst<input class="feld" name="sonst" maxlength="80" autocomplete="off" placeholder="zum Beispiel lieber mit Reis statt Nudeln"></label>
+      <div class="knopfreihe"><button class="knopf">Merken</button><button type="button" class="knopf zweit" data-action="zu">Überspringen</button></div></form>`,
+  };
+}
+
 /* ---------- Küchen-Display ---------- */
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
@@ -907,12 +969,16 @@ function viewDisplay() {
     dinner = `<p class="anz-gericht anz-tipp">${esc(sum ? W.clothesTip(sum) : 'Guten Morgen')}</p>
       <dl class="anz-zeilen">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
   } else {
-    const extra = [
-      prepTomorrow.length ? ['Für morgen', prepTomorrow.join(' ')] : null,
-      lunchTomorrow ? ['Brotbox morgen', lunchTomorrow] : null,
-    ].filter(Boolean);
+    // Vorbereitung und Brotbox für morgen stehen jetzt bei „Morgen“ in der Terminspalte.
+    const extra = [];
+    // Vor und um die Essenszeit: Kochmodus am Display und die Handys zum Essen rufen.
+    const dmin = T.toMin(info.time);
+    const actionRow = dish && !askRating && minNow >= dmin - 180 && minNow < dmin + 30
+      ? `<div class="anz-aktionen">${(dish.steps || []).length ? `<button class="anz-knopf" data-action="anz-kochen" data-id="${esc(dish.id)}">Kochen</button>` : ''}
+        <button class="anz-knopf" data-action="anz-essen-ruf" data-art="gleich">Essen in 5 Min.</button>
+        <button class="anz-knopf stark" data-action="anz-essen-ruf" data-art="jetzt">Essen ist fertig</button></div>` : '';
     dinner = `<p class="anz-gericht">${dish ? esc(dish.name) : p && p.skipped ? 'Heute kein Abendessen geplant' : 'Noch nichts geplant'}</p>
-      ${ratingRow || (dinnerMeta.length && dish ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : '')}
+      ${ratingRow || (actionRow ? `<div class="anz-meta-zeile">${dinnerMeta.length ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : ''}${actionRow}</div>` : dinnerMeta.length && dish ? `<p class="anz-meta">${esc(dinnerMeta.join(', '))}</p>` : '')}
       ${extra.length ? `<dl class="anz-zeilen">${extra.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
       ${tomorrow ? `<p class="anz-morgen">Morgen: ${esc(tomorrow.name)}</p>` : ''}`;
   }
@@ -946,7 +1012,8 @@ function viewDisplay() {
   document.documentElement.classList.toggle('anzeige-hell', light);
   return `<div class="anzeige${night ? ' nacht' : ''}${light ? ' hell' : ''}">
     <header class="anz-kopf"><div class="anz-blatt" data-action="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
-      <span class="anz-uhr">${Number.isInteger(globalThis.ESSENSPLAN_STUNDE) ? `${String(hour).padStart(2, '0')}:${String(dispMinute()).padStart(2, '0')}` : hm(now)}</span></header>
+      <span class="anz-uhr">${Number.isInteger(globalThis.ESSENSPLAN_STUNDE) ? `${String(hour).padStart(2, '0')}:${String(dispMinute()).padStart(2, '0')}` : hm(now)}</span>
+      ${notesBoard()}</header>
     <div class="anz-raster${lamps.length ? '' : ' ohne-ampeln'}">
       <section class="anz-feld anz-essen${morning && !awayNow ? ' morgens' : ''}"><h2>${dinnerHead}</h2>${dinner}</section>
       ${ampeln}
@@ -1003,7 +1070,16 @@ function displayDay(d, isToday) {
   const rows = all.map((x) => `<li${x.heim ? ' class="anz-heim"' : ''}><span class="anz-zeit${x.ganztags ? ' ganz' : ''}">${esc(time(x))}</span><span>${dot(x.people)}${esc(x.titel)}${x.heim ? `<small>${esc(x.heim)}</small>` : x.people.length || x.quelle ? `<small>${esc([x.people.map((p) => p.name).join(', '), x.quelle && !x.people.some((p) => p.name === x.quelle) ? x.quelle : '', homeOfItem(x) ? `zu Hause etwa ${homeOfItem(x)}` : ''].filter(Boolean).join(', '))}</small>` : ''}</span></li>`);
   if (bin) rows.push(`<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>`);
   const head = isToday ? 'Heute' : `Morgen, ${L.fmtLong(d).split(',')[0]}`;
-  return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : `<p class="anz-leer">${isToday ? 'Heute steht nichts mehr an.' : 'Keine Termine.'}</p>`}`;
+  // Bei morgen, ab mittags: was heute Abend vorzubereiten ist und die Brotbox (vorher stand das beim Abendessen).
+  const prepRows = [];
+  if (!isToday && dispHour() >= 12) {
+    const pr = prepFor(d);
+    if (pr.length) prepRows.push(['Vorbereiten', pr.join(' ')]);
+    const lb = L.isSchoolDay(d) ? lunchOf(d) : '';
+    if (lb) prepRows.push(['Brotbox', lb]);
+  }
+  const prepHtml = prepRows.length ? `<dl class="anz-zeilen anz-morgen-zeilen">${prepRows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : '';
+  return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${prepHtml}${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : prepHtml ? '' : `<p class="anz-leer">${isToday ? 'Heute steht nichts mehr an.' : 'Keine Termine.'}</p>`}`;
 }
 // Abonnierte Kalender: Einstellung "kalender" ({ feeds }) und die Termine von heute und morgen aus der Funktion push.
 const calFeeds = () => { const v = KI.settingOf(state.data.settings, 'kalender'); return v && Array.isArray(v.feeds) ? v.feeds : []; };
@@ -1302,6 +1378,7 @@ function planTiles() {
   const tile = (action, title, meta) => `<button class="plan-kachel" data-action="${action}"><span class="pk-titel">${title}</span><span class="pk-meta">${esc(meta)}</span></button>`;
   return `<h2 class="abschnitt" style="margin-top:26px">Planen</h2><div class="plan-kacheln">
     ${tile('kalender-abos', 'Kalender', kals ? `${kals} iPhone-${kals === 1 ? 'Kalender' : 'Kalender'}` : 'iPhone-Kalender verbinden')}
+    ${tile('zettel', 'Zettel fürs Küchen-Display', notesNow().length ? `${notesNow().length} ${notesNow().length === 1 ? 'Zettel hängt' : 'Zettel hängen'}` : 'Kurze Nachricht an alle')}
     ${tile('schule', 'Schule', (() => { const t = kids().map((k) => { const x = schoolOf(k.id, today); return x ? `${k.name} ${x.heim}` : ''; }).filter(Boolean); return t.length ? `Heute zu Hause: ${t.join(', ')}` : 'Schulschluss, OGTS, früher aus'; })())}
     ${tile('urlaub', 'Urlaub und auswärts', away ? `${away.name || 'Urlaub'} ab ${L.fmtShort(away.von)}` : 'Nichts eingetragen')}
     ${tile('reste', 'Was muss weg?', rest ? `${rest} ${rest === 1 ? 'Eintrag' : 'Einträge'}` : 'Reste und Gartenernte')}
@@ -3780,7 +3857,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { schule: sheetSchool, 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { zettel: sheetNotes, 'anz-zettel': sheetNoteDisplay, warum: sheetWhy, schule: sheetSchool, 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -4413,7 +4490,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an. Die Farbe stellt ihr im Familie-Fenster ein: automatisch (tagsüber hell, ab 18 Uhr dunkel), immer hell oder immer dunkel. Nachts ab 22 Uhr wird es zusätzlich gedimmt. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Morgens (bis 12 Uhr) steht oben, was die Kinder anziehen sollen, das Wetter, die Brotbox und wer heute eine Probe schreibt. Nachmittags und abends steht dort das Abendessen, was für morgen vorzubereiten ist und die Brotbox für morgen. Eine halbe Stunde nach dem Essen fragt das Display „Wie war’s?“: Jeder tippt auf sich, gibt seine PIN ein und vergibt Sterne. Bei den Terminen steht, wann die Kinder etwa von der Schule heimkommen (Planen, „Schule“: Unterrichtsende, OGTS, Heimweg und „Früher aus“). Unten stehen „Ist alle?“-Knöpfe aus „Immer wieder“ (die ersten fünf in der dort eingestellten Reihenfolge, die übrigen unter „Mehr“). Antippen, auf sich tippen und die PIN eingeben setzt die Sache auf die Einkaufsliste. Dort steht dann „ist alle, gemeldet von …“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an. Die Farbe stellt ihr im Familie-Fenster ein: automatisch (tagsüber hell, ab 18 Uhr dunkel), immer hell oder immer dunkel. Nachts ab 22 Uhr wird es zusätzlich gedimmt. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Morgens (bis 12 Uhr) steht oben, was die Kinder anziehen sollen, das Wetter, die Brotbox und wer heute eine Probe schreibt. Nachmittags und abends steht dort das Abendessen, was für morgen vorzubereiten ist und die Brotbox für morgen. Eine halbe Stunde nach dem Essen fragt das Display „Wie war’s?“: Jeder tippt auf sich, gibt seine PIN ein und vergibt Sterne. Bei den Terminen steht, wann die Kinder etwa von der Schule heimkommen (Planen, „Schule“: Unterrichtsende, OGTS, Heimweg und „Früher aus“). Vor dem Abendessen: „Kochen“ öffnet den Kochmodus groß am Display, „Essen in 5 Min.“ und „Essen ist fertig“ schicken allen, die zu Hause mitessen, eine Nachricht. Oben rechts hängen Zettel (Planen, „Zettel fürs Küchen-Display“), antippen zum Abnehmen. Unten stehen „Ist alle?“-Knöpfe aus „Immer wieder“ (die ersten fünf in der dort eingestellten Reihenfolge, die übrigen unter „Mehr“). Antippen, auf sich tippen und die PIN eingeben setzt die Sache auf die Einkaufsliste. Dort steht dann „ist alle, gemeldet von …“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -5629,6 +5706,33 @@ const actions = {
   },
   'laufweg-oeffnen': () => openSheet({ type: 'laufweg' }),
   reste: () => openSheet({ type: 'reste' }),
+  zettel: () => openSheet({ type: 'zettel' }),
+  'anz-zettel': ({ id }) => openSheet({ type: 'anz-zettel', id }),
+  'zettel-weg': ({ id }) => {
+    const z = notesAll().find((x) => x.id === id);
+    if (!z) return;
+    if (state.phase !== 'anzeige' && !(canPlan() || z.by === state.me)) return;
+    saveNotes(notesAll().filter((x) => x.id !== id));
+    if (state.sheet && state.sheet.type === 'anz-zettel') { state.sheet = null; renderSheet(); render(); } else renderSheet();
+    toast('Zettel abgenommen.', () => { saveNotes([...notesAll(), z]); if (state.sheet) renderSheet(); else render(); });
+  },
+  'anz-kochen': ({ id }) => {
+    if (!dishById(id)) return;
+    state.cookStep = 0;
+    state.cookChecked = [];
+    openSheet({ type: 'kochen', id, day: L.todayISO() });
+    keepAwake(true);
+  },
+  'anz-essen-ruf': async ({ art }) => {
+    if (state.essenRufAt && Date.now() - state.essenRufAt < 20000) { toast('Gerade schon gerufen.'); return; }
+    state.essenRufAt = Date.now();
+    const info = T.dinnerInfo(state.data.persons, allEvents(), state.data.attendance, L.todayISO(), state.data.plan);
+    const home = info.people.filter((x) => !['weg', 'spaet'].includes(x.status)).map((x) => x.person);
+    try {
+      const r = await store.callDinner(art === 'gleich' ? 'gleich' : 'jetzt', home.map((x) => x.id));
+      toast(r && r.doppelt ? 'Schon gerufen, die Nachricht ist unterwegs.' : `Gerufen: ${home.map((x) => x.name).join(', ')}.`);
+    } catch (e) { toast(e.message); }
+  },
   'vorabend-haken': ({ day, n }) => {
     const st = prepState(day);
     const items = prepAll(day).filter((t) => !(st.weg || []).includes(t));
@@ -5794,7 +5898,12 @@ const actions = {
   'haushalt-vergessen': () => { saveHousehold({ merken: {} }); renderSheet(); },
   'tag-tausch-mit': ({ day, with: other }) => swapDays(day, other),
   waehlen: ({ day, id }) => setDish(day, id || null),
-  stern: ({ day, n }) => rate(day, Number(n)),
+  stern: ({ day, n }) => {
+    const before = state.data.ratings.find((r) => r.day === day && r.person_id === state.me);
+    rate(day, Number(n));
+    const now = state.data.ratings.find((r) => r.day === day && r.person_id === state.me);
+    if (now && [2, 3].includes(now.stars) && (!before || before.stars !== now.stars)) openSheet({ type: 'warum', day, id: state.me });
+  },
   ausfall: ({ day }) => {
     const p = planOf(day);
     if (!p) return;
@@ -6352,6 +6461,7 @@ const actions = {
     const k = state.dispKid;
     if (!k || k.id !== sh.id || k.until <= Date.now()) { dispKidEnd(); return; }
     rate(L.todayISO(), Number(n), sh.id, false);
+    if ([2, 3].includes(Number(n))) { state.dispKid = null; openSheet({ type: 'warum', day: L.todayISO(), id: sh.id }); toast(`Danke, ${x ? x.name : ''}!`); return; }
     state.dispKid = null;
     state.sheet = null;
     renderSheet();
@@ -6708,6 +6818,33 @@ const forms = {
     state.packDraft = null;
     closeSheet();
     toast(msg.trim());
+  },
+  zettel: (fd) => {
+    const text = String(fd.get('text') || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+    if (!text) return;
+    const days = Math.max(0, Math.min(7, parseInt(fd.get('dauer'), 10) || 0));
+    saveNotes([...notesAll(), { id: L.uid(), text, by: state.me, at: new Date().toISOString(), bis: L.addDays(L.todayISO(), days) }]);
+    renderSheet();
+    toast('Hängt jetzt am Küchen-Display.');
+  },
+  warum: (fd, form) => {
+    const day = form.dataset.day;
+    const who = form.dataset.id;
+    const p = planOf(day);
+    const dish = p && dishById(p.dish_id);
+    const parts = [...fd.getAll('w').map(String)];
+    const z = String(fd.get('zutat') || '').trim();
+    if (z) parts.push(`mag ${z} nicht`);
+    const sonst = String(fd.get('sonst') || '').trim();
+    if (sonst) parts.push(sonst);
+    if (dish && parts.length) {
+      const name = (personById(who) || {}).name;
+      saveRecipeNotes(dish.id, [...recipeNotes(dish.id), { id: L.uid(), text: `${name ? `${name}: ` : ''}${parts.join(', ')}`, by: who, at: new Date().toISOString() }]);
+    }
+    state.sheet = null;
+    renderSheet();
+    render();
+    toast(parts.length ? 'Gemerkt, beim nächsten Mal wird es besser.' : 'Danke!');
   },
   'reste-frage': (fd, form) => {
     const ids = String(form.dataset.ids || '').split(',');

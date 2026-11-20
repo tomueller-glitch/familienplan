@@ -1165,3 +1165,39 @@ html.anzeige-modus .anzeige { padding-top: calc(clamp(16px, 2.4vw, 32px) + env(s
 .vorabend-liste .haken-knopf { padding: 6px 4px; min-height: 44px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .vorabend-liste li.erledigt .vorabend-text { text-decoration: line-through; opacity: .6; }
 .vorabend.fertig { opacity: .75; }
+/* Küchen-Display: Kochen und zum Essen rufen */
+.anz-aktionen { display: flex; flex-wrap: wrap; gap: 10px; margin-top: .55em; }
+.anz-knopf { font: 600 1em/1.1 inherit; font-family: inherit; color: var(--a-tinte); background: rgba(255,255,255,.07); border: 1px solid var(--a-linie); border-radius: 12px; padding: 10px 16px; min-height: 48px; cursor: pointer; }
+.anz-knopf.stark { background: #2F7A4F; border-color: #2F7A4F; color: #fff; }
+.anzeige.hell .anz-knopf { background: #F3F7F8; }
+.anzeige.hell .anz-knopf.stark { background: #23704A; color: #fff; }
+.anz-knopf:focus-visible { outline: 3px solid currentColor; outline-offset: 2px; }
+/* Zettel oben rechts im Kopf */
+.anz-kopf { flex-wrap: nowrap; }
+.anz-zettel { margin-left: auto; display: flex; gap: 12px; align-items: flex-start; min-width: 0; max-width: 62%; }
+.zettel { font: inherit; text-align: left; cursor: pointer; border: 0; border-radius: 3px; padding: 10px 12px 8px; width: 15em; max-width: 100%; min-width: 0;
+  color: #3B3214; box-shadow: 0 2px 6px rgba(0,0,0,.25); transform: rotate(-1.2deg); display: grid; gap: 4px; font-size: .82em; line-height: 1.3; }
+.zettel.z0 { background: #FFF1A8; } .zettel.z1 { background: #FFD9A8; transform: rotate(1deg); } .zettel.z2 { background: #CDEFC4; transform: rotate(-.6deg); }
+.zettel-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.zettel small { opacity: .7; font-size: .85em; }
+.zettel-mehr { align-self: center; color: var(--a-leise); }
+/* Bei Kochen am Display: großer Bogen */
+html.anzeige-modus #sheet-root .bogen { max-width: min(900px, 94vw); font-size: 20px; }
+html.anzeige-modus #sheet-root .koch-text { font-size: 30px; line-height: 1.35; }
+html.anzeige-modus #sheet-root .koch-nav .knopf { min-height: 64px; font-size: 22px; flex: 1; }
+/* Nachfrage bei mittleren Noten */
+.warum-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.chip-wahl input { position: absolute; opacity: 0; pointer-events: none; }
+.chip-wahl span { display: inline-block; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--linie, #d5dfe2); background: var(--blatt, #fff); cursor: pointer; }
+.chip-wahl input:checked + span { background: var(--tinte, #14323C); color: #fff; border-color: var(--tinte, #14323C); }
+.chip-wahl input:focus-visible + span { outline: 3px solid var(--tinte, #14323C); outline-offset: 2px; }
+.anz-meta-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: .3em; }
+.anz-meta-zeile .anz-meta { margin: 0; }
+.anz-meta-zeile .anz-aktionen { margin-top: 0; margin-left: auto; }
+@media (max-height: 800px) and (orientation: landscape) {
+  .anz-knopf { min-height: 40px; padding: 6px 12px; font-size: .9em; }
+  .anz-aktionen { gap: 8px; }
+  .zettel { padding: 8px 10px 6px; font-size: .78em; width: 13em; }
+}
+.anz-morgen-zeilen { margin: 0 0 .5em; }
+@media (orientation: portrait) and (max-height: 1050px) { .anz-morgen-zeilen dd { -webkit-line-clamp: 1; } .anz-knopf { min-height: 42px; padding: 6px 12px; } }

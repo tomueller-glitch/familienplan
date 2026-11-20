@@ -3,6 +3,15 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20m', datum: '20. November, abends', titel: 'Küchen-Display: Zettel, Kochen, Essen rufen',
+    punkte: [
+      { text: 'Zettel fürs Küchen-Display: Unter Planen eine kurze Nachricht aufhängen, etwa „Paket ist beim Nachbarn“. Sie hängt oben am Display, bis heute Abend oder ein paar Tage, und lässt sich dort abnehmen.' },
+      { text: 'Vor dem Abendessen gibt es am Display „Kochen“ (Kochmodus groß, mit Timern), „Essen in 5 Min.“ und „Essen ist fertig“. Die beiden letzten schicken allen, die zu Hause mitessen, eine Nachricht aufs Handy.' },
+      { text: 'Bei 2 oder 3 Sternen fragt die App, was nicht gepasst hat (zu scharf, mag eine Zutat nicht …). Das steht dann beim Rezept, Claude berücksichtigt es beim nächsten Plan.' },
+      { text: 'Was für morgen vorzubereiten ist und die Brotbox für morgen stehen am Display jetzt bei „Morgen“ in der Terminspalte.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20l', datum: '20. November, abends', titel: 'Heute Abend für morgen: abhaken und löschen',
     punkte: [
       { text: 'Was heute Abend für morgen vorzubereiten ist, lässt sich jetzt abhaken. Ist alles erledigt, steht „alles erledigt“ da, und auf dem Küchen-Display verschwindet der Punkt.' },

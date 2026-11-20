@@ -2481,6 +2481,35 @@ export function reviewMessages(value: Row | null, persons: Row[], nowMs: number,
   }];
 }
 
+/* ---------- Essen ist fertig ---------- */
+// Vom Küchen-Display: „Essen in 5 Minuten“ oder „Essen ist fertig“ an alle, die heute mitessen und zu Hause sind.
+// Höchstens einmal in zwei Minuten je Art, damit mehrfaches Tippen nicht mehrfach klingelt.
+export function dinnerCall(art: string, names: string, dish: string, nowMs: number) {
+  const { day } = berlin(nowMs);
+  const soon = art === 'gleich';
+  return {
+    key: `essen:${day}:${soon ? 'gleich' : 'jetzt'}:${Math.floor(nowMs / 120000)}`,
+    msg: { title: soon ? 'Essen in 5 Minuten' : 'Essen ist fertig!', body: `${dish ? `Heute: ${dish}. ` : ''}${soon ? 'Bitte gleich an den Tisch kommen.' : 'Bitte jetzt an den Tisch kommen.'}`, tag: 'essen', url: './#woche' } as Message,
+    names,
+  };
+}
+async function callDinner(store: ReturnType<typeof db>, body: Row, nowMs: number) {
+  const [persons, subs, plan, dishes] = await Promise.all([
+    store.get('ep_persons?select=id,name'),
+    store.get('ep_push_subs?select=*'),
+    store.get(`ep_plan?select=day,dish_id,skipped&day=eq.${berlin(nowMs).day}`),
+    store.get('ep_dishes?select=id,name'),
+  ]);
+  const want: string[] = Array.isArray(body.an) ? body.an.map(String) : [];
+  const to = persons.filter((p: Row) => !want.length || want.includes(p.id)).map((p: Row) => p.id);
+  if (!to.length) return { sent: 0, to: [] };
+  const p = plan[0];
+  const dish = p && !p.skipped ? (dishes.find((d: Row) => d.id === p.dish_id) || {}).name || '' : '';
+  const c = dinnerCall(String(body.art || 'jetzt'), '', String(dish).split(/ mit | und |,/)[0], nowMs);
+  const r = await sendDue(store, subs, [{ key: c.key, to, msg: c.msg, ttl: 600 }], vapidFromEnv());
+  return { sent: r.sent, to, doppelt: !r.fresh };
+}
+
 /* ---------- Reste nach dem Kochen ---------- */
 // ep_settings "reste_erwartet": Reste, die laut Packungsgrößen übrig bleiben müssten. Am Kochtag, eine Dreiviertelstunde
 // nach der Essenszeit (bis 21:30), fragen die Eltern per Nachricht nach. Bestätigt wird in der App.
@@ -3144,6 +3173,9 @@ async function runTest(req: Request) {
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'essen-ruf') {
+    try { return { status: 200, body: await callDinner(db(), body, Date.now()) } ; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
   if (body.action === 'kalender') {
     try { return { status: 200, body: await loadCalendars(db(), Date.now(), Number(body.tage) || 2) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }

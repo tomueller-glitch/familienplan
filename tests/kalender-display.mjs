@@ -397,4 +397,72 @@ if (fs.existsSync('/tmp/gross48mp.jpg')) {
   await page.locator('.vorabend').first().screenshot({ path: '/tmp/vorabend.png' });
   console.log('L Fehler:', errs); await ctx.close();
 }
+// M: Zettel, Kochen am Display, zum Essen rufen, Nachfrage bei mittleren Noten
+{
+  const { createHash } = await import('node:crypto');
+  const mkM = () => {
+    const db = base();
+    db.ep_persons = db.ep_persons.map((p) => ({ ...p, name: { p1: 'Papa', p2: 'Mama', p3: 'Philip', p4: 'Julia' }[p.id], ...(p.id === 'p4' ? { pin_hash: createHash('sha256').update('essensplan|p4|1122').digest('hex') } : {}) }));
+    db.ep_settings = [{ key: 'zettel', value: [{ id: 'z1', text: 'Paket ist beim Nachbarn (Hausnummer 12)', by: 'p2', at: '2026-11-18T09:00:00Z', bis: '2026-11-18' }, { id: 'z2', text: 'Julia heute bei Oma, kommt um 19 Uhr', by: 'p1', at: '2026-11-18T10:00:00Z', bis: '2026-11-19' }, { id: 'z3', text: 'Alt', by: 'p1', at: '2026-11-10T10:00:00Z', bis: '2026-11-11' }] }];
+    return db;
+  };
+  for (const [w, h] of [[1133, 744], [744, 1133]]) {
+    const { page, ctx, errs } = await openDisplay(mkM(), w, h, KAL, { stunde: 17, minute: 40 });
+    const r = await page.evaluate(() => [document.documentElement.scrollHeight, innerHeight]);
+    console.log(`M ${w}x${h}: Zettel ${await page.locator('.zettel').count()}, Knöpfe ${await page.locator('.anz-aktionen button').allInnerTexts()}, Höhe ${r[0]} von ${r[1]}${r[0] > r[1] ? ' ZU HOCH' : ''}`);
+    await page.screenshot({ path: `/tmp/m_${w}.png` });
+    if (w === 1133) {
+      await page.locator('[data-action="anz-essen-ruf"][data-art="jetzt"]').click(); await page.waitForTimeout(400);
+      const inv = await page.evaluate(() => window.calls.filter((c) => c[0] === 'invoke' && c[2].action === 'essen-ruf').pop());
+      console.log('M gerufen:', JSON.stringify(inv && inv[2]), '|', await toastText(page));
+      await page.locator('.zettel').first().click(); await page.waitForTimeout(300);
+      console.log('M Zettel offen:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 160));
+      await page.locator('#sheet-root [data-action="zettel-weg"]').click(); await page.waitForTimeout(300);
+      const z = (await calls(page, 'ep_settings')).flat().filter((x) => x.key === 'zettel').pop();
+      console.log('M abgenommen:', JSON.stringify(z && z.value.map((x) => x.id)), '| Zettel jetzt:', await page.locator('.zettel').count());
+      const kb = page.locator('[data-action="anz-kochen"]');
+      if (await kb.count()) {
+        await kb.click(); await page.waitForTimeout(300);
+        await page.locator('#sheet-root [data-action="koch-schritt"][data-dir="1"]').click(); await page.waitForTimeout(300);
+        await page.screenshot({ path: '/tmp/m_kochen.png' });
+        console.log('M Kochen:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 200));
+      }
+    }
+    console.log(`M Fehler ${w}:`, errs); await ctx.close();
+  }
+  // Nach dem Essen am Display: Julia gibt 3 Sterne, dann die Nachfrage
+  const { page, ctx, errs } = await openDisplay(mkM(), 1133, 744, KAL, { stunde: 19, minute: 40 });
+  await page.locator('[data-action="anz-wie"][data-id="p4"]').click(); await page.waitForTimeout(300);
+  for (const z of '1122') await page.locator(`#sheet-root [data-action="anz-ziffer"][data-z="${z}"]`).click();
+  await page.waitForTimeout(400);
+  await page.locator('#sheet-root [data-action="anz-stern"][data-n="3"]').click(); await page.waitForTimeout(400);
+  console.log('M Nachfrage:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 220));
+  await page.locator('#sheet-root .chip-wahl', { hasText: 'zu scharf' }).click();
+  await page.fill('#sheet-root [name=zutat]', 'Pilze');
+  await page.screenshot({ path: '/tmp/m_warum.png' });
+  await page.locator('#sheet-root form[data-form=warum] button.knopf').first().click(); await page.waitForTimeout(400);
+  const n = (await calls(page, 'ep_settings')).flat().filter((x) => x.key === 'rezept_notizen').pop();
+  console.log('M Notiz:', JSON.stringify(n && n.value), '|', await toastText(page));
+  console.log('M Fehler:', errs); await ctx.close();
+  // Am Handy: Zettel aufhängen
+  const ph = await open(mkM(), 3);
+  await ph.page.locator('[data-tab="woche"]').click(); await ph.page.waitForTimeout(300);
+  await ph.page.locator('.plan-kachel[data-action="zettel"]').click(); await ph.page.waitForTimeout(300);
+  await ph.page.fill('#sheet-root [name=text]', 'Bin beim Training, komme 19 Uhr'); await ph.page.selectOption('#sheet-root [name=dauer]', '0');
+  await ph.page.locator('#sheet-root form[data-form=zettel] button').click(); await ph.page.waitForTimeout(300);
+  const zz = (await calls(ph.page, 'ep_settings')).flat().filter((x) => x.key === 'zettel').pop();
+  console.log('M Handy Zettel:', JSON.stringify(zz && zz.value.slice(-1)), '|', await toastText(ph.page));
+  console.log('M Fehler Handy:', ph.errs); await ph.ctx.close();
+  const ph2 = await open(mkM(), 0);
+  await ph2.page.locator('[data-tab="woche"]').click(); await ph2.page.waitForTimeout(300);
+  const st = ph2.page.locator('[data-action="stern"][data-n="2"]').first();
+  if (await st.count()) {
+    await st.click(); await ph2.page.waitForTimeout(400);
+    console.log('M Handy 2 Sterne:', await ph2.page.locator('#sheet-root .bogen').count() ? (await ph2.page.locator('#sheet-root .bogen h2, #sheet-root .bogen .titel').first().innerText().catch(() => 'Bogen offen')) : 'keine Nachfrage');
+    await ph2.page.locator('#sheet-root [data-action="zu"]').first().click().catch(() => {}); await ph2.page.waitForTimeout(200);
+    await ph2.page.locator('[data-action="stern"][data-n="5"]').first().click(); await ph2.page.waitForTimeout(300);
+    console.log('M Handy 5 Sterne, Nachfrage:', await ph2.page.locator('#sheet-root form[data-form=warum]').count());
+  } else console.log('M Handy: keine Sterne sichtbar');
+  console.log('M Fehler Handy 2:', ph2.errs); await ph2.ctx.close();
+}
 await b.close(); srv.close();
