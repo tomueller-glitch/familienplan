@@ -100,8 +100,8 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
-const ADULT_FORMS = new Set(['schule', 'frueher', 'kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
+const ADULT_ACTIONS = new Set(['reste-nichts', 'frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_FORMS = new Set(['reste-frage', 'schule', 'frueher', 'kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
 // Brotbox: bewerten dürfen die Kinder. Gibt es keine Erwachsenen, alle.
@@ -580,6 +580,10 @@ function render() {
   const viewKey = `${state.phase}|${state.tab}|${state.week}`;
   const scrollY = window.scrollY;
   dedupeShopping();
+  if (state.phase === 'app' && state.fresh && Date.now() - (state.restCheckAt || 0) > 60000) {
+    state.restCheckAt = Date.now();
+    setTimeout(() => { migrateExpected(); pruneExpected(); }, 0);
+  }
   app.innerHTML = view();
   document.documentElement.classList.toggle('anzeige-modus', state.phase === 'anzeige');
   if (state.phase !== 'anzeige') document.documentElement.classList.remove('anzeige-hell');
@@ -1260,7 +1264,7 @@ function viewWoche() {
       <div class="fuss"><button class="textknopf" data-action="urlaub">Urlaub und Tage auswärts</button></div>`;
   }
   if (!planned.length) {
-    return `${html}${draftBanner()}${reviewBanner()}${wishBanner(state.week)}${feastBanner(state.week)}${canPlan() ? leftoverCard() : ''}${heartReminder()}${abfuhrBox(false)}<div class="leer"><h2 class="abschnitt">Für diese Woche steht noch nichts fest</h2>
+    return `${html}${draftBanner()}${restQuestionCard()}${reviewBanner()}${wishBanner(state.week)}${feastBanner(state.week)}${canPlan() ? leftoverCard() : ''}${heartReminder()}${abfuhrBox(false)}<div class="leer"><h2 class="abschnitt">Für diese Woche steht noch nichts fest</h2>
       ${canPlan() ? `<p>Der Vorschlag nimmt gut bewertete Gerichte, die länger nicht dran waren.</p>
       <div class="knopfreihe"><button class="knopf" data-action="woche-fuellen">Woche vorschlagen</button>
 </div>` : '<p>Mama oder Papa planen die Woche.</p>'}</div>
@@ -1269,6 +1273,7 @@ function viewWoche() {
   // Für die Kinder steht die Wahl oben, solange sie offen ist. Die Eltern sehen das Ergebnis unter der Woche.
   const heartFirst = canRateLunch() && L.heartOpen(state.week);
   html += draftBanner();
+  html += restQuestionCard();
   html += reviewBanner();
   html += wishBanner(state.week);
   html += feastBanner(state.week);
@@ -4488,6 +4493,67 @@ function saveLeftovers(list) {
   const row = { key: 'reste', value: list, updated_at: new Date().toISOString() };
   commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'reste'), row]; }, () => store.saveSettings([row]));
 }
+// Reste, die laut Packungsgrößen übrig bleiben müssten. Sie kommen erst nach dem Kochen auf „Was muss weg?“,
+// wenn ihr sie bestätigt. Einstellung "reste_erwartet": [{ id, text, day, dish_id, dish, created_at }].
+const expectedLeft = () => { const v = KI.settingOf(state.data.settings, 'reste_erwartet'); return Array.isArray(v) ? v : []; };
+function saveExpected(list) {
+  const row = { key: 'reste_erwartet', value: list, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'reste_erwartet'), row]; }, () => store.saveSettings([row]));
+}
+// Früher standen solche Reste mit „ab“ gleich auf „Was muss weg?“. Sie wandern einmal in die Nachfrage.
+function migrateExpected() {
+  if (!canPlan() || !state.fresh) return;
+  const old = leftovers().filter((x) => x.ab);
+  if (!old.length) return;
+  const have = new Set(expectedLeft().map((x) => x.id));
+  const moved = old.filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, text: x.text, day: /Portion/.test(x.text) ? L.addDays(x.ab, -1) : x.ab, dish_id: null, dish: '', created_at: x.created_at || nowStamp() }));
+  saveLeftovers(leftovers().filter((x) => !x.ab));
+  if (moved.length) saveExpected([...expectedLeft(), ...moved]);
+}
+// Wann gefragt wird: am Kochtag eine halbe Stunde nach dem Essen, danach bis drei Tage später. Wurde das Gericht
+// nicht gekocht (Tag ausgelassen oder anderes Gericht), fällt die Nachfrage still weg.
+function restQuestions() {
+  const today = L.todayISO();
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const groups = new Map();
+  for (const x of expectedLeft()) {
+    const p = planOf(x.day);
+    if (x.day > today || x.day < L.addDays(today, -3)) continue;
+    if (x.dish_id && (!p || p.skipped || p.dish_id !== x.dish_id)) continue;
+    if (x.day === today) {
+      const info = T.dinnerInfo(state.data.persons, allEvents(), state.data.attendance, x.day, state.data.plan);
+      if (nowMin < T.toMin(info.time) + 30 && !globalThis.ESSENSPLAN_HEUTE) continue;
+    }
+    const k = `${x.day}|${x.dish_id || x.dish}`;
+    if (!groups.has(k)) groups.set(k, { day: x.day, dish: x.dish || (dishById(p && p.dish_id) || {}).name || '', items: [] });
+    groups.get(k).items.push(x);
+  }
+  return [...groups.values()];
+}
+// Aufräumen: was älter als drei Tage ist oder nicht gekocht wurde, verschwindet aus der Nachfrage.
+function pruneExpected() {
+  const today = L.todayISO();
+  const keep = expectedLeft().filter((x) => {
+    if (x.day < L.addDays(today, -3)) return false;
+    const p = planOf(x.day);
+    return !(x.dish_id && x.day <= today && (!p || p.skipped || p.dish_id !== x.dish_id));
+  });
+  if (keep.length !== expectedLeft().length) saveExpected(keep);
+}
+function restQuestionCard() {
+  if (!canPlan()) return '';
+  return restQuestions().map((g) => {
+    const when = g.day === L.todayISO() ? 'heute' : g.day === L.addDays(L.todayISO(), -1) ? 'gestern' : `am ${L.WD_SHORT[L.wdIndex(g.day)]} ${L.fmtShort(g.day)}`;
+    return `<form class="kasten-text reste-frage" data-form="reste-frage" data-ids="${esc(g.items.map((x) => x.id).join(','))}">
+      <strong>Reste ${g.dish ? `von ${esc(L.shortDish(g.dish))} ` : ''}(${esc(when)})?</strong>
+      Laut Packungsgrößen müsste etwas übrig sein. Was stimmt, kommt auf „Was muss weg?“.
+      <ul class="reste-liste">${g.items.map((x) => `<li><label class="schalter"><input type="checkbox" name="nimm" value="${esc(x.id)}" checked> <input class="feld" name="text_${esc(x.id)}" value="${esc(x.text)}" aria-label="Rest" autocomplete="off"></label></li>`).join('')}</ul>
+      <input class="feld" name="sonst" placeholder="Sonst noch etwas übrig? (leer lassen, wenn nicht)" autocomplete="off" aria-label="Sonst noch übrig">
+      <div class="knopfreihe" style="margin-top:8px"><button class="knopf klein">Übernehmen</button><button type="button" class="knopf zweit klein" data-action="reste-nichts" data-ids="${esc(g.items.map((x) => x.id).join(','))}">Nichts übrig</button></div></form>`;
+  }).join('');
+}
+
 // Gerichte, die einen der Reste verwenden (für „Gericht wählen“).
 const LEFT_STOP = new Set(['garten', 'halber', 'halbe', 'halbes', 'becher', 'packung', 'packungen', 'rest', 'reste', 'angebrochen', 'angebrochene', 'angebrochener', 'glas', 'dose', 'stück', 'frisch', 'frische', 'eigene', 'eigenen', 'übrig', 'noch', 'ernte', 'beutel', 'bund', 'viel', 'viele', 'paar']);
 function leftoverHits(dish) {
@@ -5540,6 +5606,12 @@ const actions = {
   },
   'laufweg-oeffnen': () => openSheet({ type: 'laufweg' }),
   reste: () => openSheet({ type: 'reste' }),
+  'reste-nichts': ({ ids }) => {
+    const set = new Set(String(ids || '').split(','));
+    saveExpected(expectedLeft().filter((x) => !set.has(x.id)));
+    render();
+    toast('Gut, nichts übrig.');
+  },
   'rest-weg': ({ id }) => { saveLeftovers(leftovers().filter((x) => x.id !== id)); renderSheet(); },
   laufweg: ({ shop, cat, dir }) => {
     const key = shop === 'lidl' ? 'lidl' : 'aldi';
@@ -6557,8 +6629,8 @@ const forms = {
     let nextDish = null;
     if (wahl === 'c') {
       rows.push({ ...item, qty: P.packText(o.count, size) + ` (für ${P.fmtSize(P.needOf(ing).q, size.u)})`, missing: false });
-      if (o.rest > 0 && !['tk', 'vorrat'].includes(ing.c || item.category)) rest.push({ id: L.uid(), text: `${P.fmtSize(o.rest, size.u)} ${ing.n}${P.isFresh(ing.c || item.category) ? ' (frisch: einfrieren oder bald verbrauchen)' : ''}`, person_id: state.me, created_at: now, ab: item.due || day });
-      msg = `Rezept bleibt. ${o.rest > 0 ? (['tk', 'vorrat'].includes(ing.c || item.category) ? `${P.fmtSize(o.rest, size.u)} bleiben im Vorrat.` : `${P.fmtSize(o.rest, size.u)} stehen ab dem Einkauf auf „Was muss weg?“.`) : ''}`;
+      if (o.rest > 0 && !['tk', 'vorrat'].includes(ing.c || item.category)) rest.push({ id: L.uid(), text: `${P.fmtSize(o.rest, size.u)} ${ing.n}${P.isFresh(ing.c || item.category) ? ' (frisch: einfrieren oder bald verbrauchen)' : ''}`, day, dish_id: dish.id, dish: dish.name, created_at: now });
+      msg = `Rezept bleibt. ${o.rest > 0 ? (['tk', 'vorrat'].includes(ing.c || item.category) ? `${P.fmtSize(o.rest, size.u)} bleiben im Vorrat.` : `Nach dem Kochen fragt die App, ob ${P.fmtSize(o.rest, size.u)} übrig sind.`) : ''}`;
     } else {
       const n = wahl === 'a' ? 1 : 2;
       const f = wahl === 'a' ? o.f1 : o.f2;
@@ -6581,8 +6653,8 @@ const forms = {
             purpose: `${L.shortDish(dish.name)} (${L.WD_SHORT[L.wdIndex(day)]})`, missing: false, ...(item.shop ? { shop: item.shop } : {}) });
         });
       }
-      if (servings > 4) rest.push({ id: L.uid(), text: `etwa ${servings - 4} ${servings - 4 === 1 ? 'Portion' : 'Portionen'} ${L.shortDish(dish.name)}`, person_id: state.me, created_at: now, ab: L.addDays(day, 1) });
-      msg = `Rezept auf ${n === 1 ? '1 Packung' : '2 Packungen'} umgerechnet.${rows.length > 1 ? ` ${rows.length - 1} Zusatzmengen stehen auf der Liste.` : ''}${servings > 4 ? ` Die Reste stehen ab ${L.WD_SHORT[L.wdIndex(L.addDays(day, 1))]} auf „Was muss weg?“.` : ''}`;
+      if (servings > 4) rest.push({ id: L.uid(), text: `etwa ${servings - 4} ${servings - 4 === 1 ? 'Portion' : 'Portionen'} ${L.shortDish(dish.name)}`, day, dish_id: dish.id, dish: dish.name, created_at: now });
+      msg = `Rezept auf ${n === 1 ? '1 Packung' : '2 Packungen'} umgerechnet.${rows.length > 1 ? ` ${rows.length - 1} Zusatzmengen stehen auf der Liste.` : ''}${servings > 4 ? ' Nach dem Kochen fragt die App, ob Reste übrig sind.' : ''}`;
     }
     commit(() => {
       if (nextDish) state.data.dishes = state.data.dishes.map((x) => (x.id === nextDish.id ? nextDish : x));
@@ -6591,10 +6663,23 @@ const forms = {
       if (nextDish) await store.saveDish(nextDish);
       await store.saveItems(rows);
     });
-    if (rest.length) saveLeftovers([...leftovers(), ...rest]);
+    if (rest.length) saveExpected([...expectedLeft(), ...rest]);
     state.packDraft = null;
     closeSheet();
     toast(msg.trim());
+  },
+  'reste-frage': (fd, form) => {
+    const ids = String(form.dataset.ids || '').split(',');
+    const take = new Set(fd.getAll('nimm').map(String));
+    const now = nowStamp();
+    const add = ids.filter((id) => take.has(id)).map((id) => String(fd.get(`text_${id}`) || '').trim().slice(0, 80)).filter(Boolean)
+      .map((text) => ({ id: L.uid(), text, person_id: state.me, created_at: now }));
+    const extra = String(fd.get('sonst') || '').trim().slice(0, 80);
+    if (extra) add.push({ id: L.uid(), text: extra, person_id: state.me, created_at: now });
+    saveExpected(expectedLeft().filter((x) => !ids.includes(x.id)));
+    if (add.length) saveLeftovers([...leftovers(), ...add]);
+    render();
+    toast(add.length ? `${add.length === 1 ? '1 Rest steht' : `${add.length} Reste stehen`} jetzt auf „Was muss weg?“.` : 'Gut, nichts übrig.');
   },
   rest: (fd) => {
     const text = String(fd.get('text') || '').trim().slice(0, 80);

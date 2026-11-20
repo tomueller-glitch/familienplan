@@ -2481,6 +2481,33 @@ export function reviewMessages(value: Row | null, persons: Row[], nowMs: number,
   }];
 }
 
+/* ---------- Reste nach dem Kochen ---------- */
+// ep_settings "reste_erwartet": Reste, die laut Packungsgrößen übrig bleiben müssten. Am Kochtag, eine Dreiviertelstunde
+// nach der Essenszeit (bis 21:30), fragen die Eltern per Nachricht nach. Bestätigt wird in der App.
+export function restMessages(value: Row[] | null, plan: Row[], dishes: Row[], persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
+  const list = Array.isArray(value) ? value : [];
+  const { day, min } = berlin(nowMs);
+  const today = list.filter((x) => x && x.day === day);
+  if (!today.length || min >= 21 * 60 + 30) return [];
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return [];
+  const p = (plan || []).find((x) => x.day === day);
+  if (!p || p.skipped || !p.dish_id) return [];
+  const hm = /^(\d{1,2}):(\d{2})/.exec(String(p.dinner_time || '18:30'));
+  const dinner = hm ? Number(hm[1]) * 60 + Number(hm[2]) : 18 * 60 + 30;
+  if (min < dinner + 45) return [];
+  const mine = today.filter((x) => !x.dish_id || x.dish_id === p.dish_id);
+  if (!mine.length) return [];
+  const to = persons.filter((x) => x.adult).map((x) => x.id);
+  if (!to.length) return [];
+  const dish = (dishes || []).find((d) => d.id === p.dish_id);
+  const name = String((dish && dish.name) || mine[0].dish || 'dem Abendessen').split(/ mit | und |,/)[0];
+  return [{
+    key: `reste:${day}:${p.dish_id}`, to, ttl: 3 * 3600,
+    msg: { title: `Reste von ${name}?`, body: `Laut Packungsgrößen müsste übrig sein: ${mine.map((x) => x.text).join(', ')}. Kurz in der App bestätigen, dann steht es auf „Was muss weg?“.`, tag: 'reste', url: './#woche' },
+  }];
+}
+
 /* ---------- Mülleimer in der Küche ---------- */
 // Ampel aus ep_settings "kuechenmuell", gleiche Regeln wie in js/aufgaben.js (kmTask, kmBinOf).
 // Steht ein Eimer auf Rot und hat ihn noch niemand als rausgebracht gemeldet, bekommen die Kinder der Aufgabe
@@ -3033,7 +3060,7 @@ async function runSchedule(nowMs = Date.now()) {
     store.get(`ep_shopping?select=*&due=eq.${today}&checked=is.false`).catch(() => []),
     store.get('ep_dishes?select=*'),
     store.get(`ep_ratings?select=day,person_id&day=eq.${today}`),
-    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell,spuelmaschine,rueckblick,stall)').catch(() => []),
+    store.get('ep_settings?select=key,value&key=in.(urlaub,aufgaben,kuechenmuell,spuelmaschine,rueckblick,stall,reste_erwartet)').catch(() => []),
     store.get(`ep_shopping?select=id,label,added_by,created_at,checked&added_by=not.is.null&created_at=gte.${encodeURIComponent(new Date(nowMs - 12 * 3600000).toISOString())}`).catch(() => []),
   ]);
   const setting = (k: string) => (urlaubRow.find((x: Row) => x.key === k) || {}).value;
@@ -3045,6 +3072,7 @@ async function runSchedule(nowMs = Date.now()) {
   due.push(...spuelMessages(setting('spuelmaschine'), tasks, log, persons, nowMs, urlaub));
   due.push(...stallMessages(setting('stall'), tasks, log, persons, nowMs, urlaub, erinnerung));
   due.push(...reviewMessages(setting('rueckblick'), persons, nowMs, urlaub));
+  due.push(...restMessages(setting('reste_erwartet'), plan, dishes, persons, nowMs, urlaub));
   // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
   try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }
   // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.

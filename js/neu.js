@@ -3,6 +3,14 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20j', datum: '20. November, nachmittags', titel: 'Reste erst nach dem Kochen',
+    punkte: [
+      { text: 'Reste, die sich aus Packungsgrößen ergeben, stehen nicht mehr vorab auf „Was muss weg?“. Nach dem Kochen fragt die App im Wochenplan „Reste von …?“ mit den erwarteten Resten zum Abhaken und Ändern. „Übernehmen“ setzt sie auf „Was muss weg?“, „Nichts übrig“ verwirft sie.', fuer: 'eltern' },
+      { text: 'Am Kochtag kommt eine Dreiviertelstunde nach dem Essen eine Nachricht. Wurde das Gericht nicht gekocht, fällt die Frage weg, nach drei Tagen auch.', fuer: 'eltern' },
+      { text: 'Bisher vorab eingetragene Reste sind in diese Nachfrage gewandert.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20i', datum: '20. November, nachmittags', titel: 'Küchen-Display holt Updates selbst',
     punkte: [
       { text: 'Fehler behoben: Das Küchen-Display hat neue Fassungen der App nicht bemerkt, weil es nie in den Hintergrund geht. Jetzt schaut es alle zehn Minuten nach und lädt sie von allein, auch im geführten Zugriff, aber nie, während jemand seine PIN eingibt.', fuer: 'eltern' },

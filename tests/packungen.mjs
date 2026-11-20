@@ -56,10 +56,25 @@ console.log('Erbsen Schritt 2:', (await sheet()).slice(0, 500));
 await page.locator('#sheet-root input[name=wahl][value=c]').check();
 await page.locator('#sheet-root form[data-form="packung-wahl"] button').click(); await page.waitForTimeout(500);
 console.log('Erbsen auf der Liste:', await page.locator('.posten li:has([data-action="haken"])', { hasText: 'Erbsen' }).first().innerText().catch(() => 'nicht sichtbar'));
-console.log('Reste:', JSON.stringify(await page.evaluate(() => { const r = window.calls.filter((c) => c[1] === 'ep_settings' && c[2][0].key === 'reste').pop(); return r ? r[2][0].value.map((x) => [x.text, x.ab]) : null; })));
+const setting = (k) => page.evaluate((key) => { const r = window.calls.filter((c) => c[1] === 'ep_settings' && c[2][0].key === key).pop(); return r ? r[2][0].value : null; }, k);
+console.log('Reste sofort (sollte leer sein):', JSON.stringify(((await setting('reste')) || []).map((x) => x.text)));
+console.log('Erwartet nach dem Kochen:', JSON.stringify(((await setting('reste_erwartet')) || []).map((x) => [x.text, x.day, x.dish])));
 await page.locator('.modus-leiste [data-action="einkaufsmodus"]').click(); await page.waitForTimeout(300);
 // Packungsliste
 await page.locator('[data-action="packungen"]').click(); await page.waitForTimeout(300);
 console.log('Liste:', (await sheet()).slice(0, 400));
 await page.screenshot({ path: 'p_liste.png' });
+// Nach dem Kochen: Nachfrage im Wochenplan
+await page.locator('#sheet-root [data-action="zu"]').click().catch(() => {}); await page.waitForTimeout(200);
+await page.locator('[data-tab="woche"]').click(); await page.waitForTimeout(400);
+const frage = page.locator('.reste-frage');
+console.log('Nachfrage:', await frage.count() ? (await frage.first().innerText()).replace(/\n+/g, ' | ') : 'keine');
+if (await frage.count()) {
+  await frage.first().screenshot({ path: '/tmp/reste_frage.png' });
+  const boxes = frage.first().locator('input[name=nimm]');
+  if (await boxes.count() > 1) await boxes.nth(1).uncheck();
+  await frage.first().locator('input[name=sonst]').fill('halbe Gurke');
+  await frage.first().locator('button.knopf').first().click(); await page.waitForTimeout(400);
+  console.log('Übernommen:', JSON.stringify(((await setting('reste')) || []).map((x) => x.text)), '| erwartet noch:', JSON.stringify(((await setting('reste_erwartet')) || []).length), '|', await page.locator('#toast').innerText(), '| Karte weg:', await page.locator('.reste-frage').count() === 0);
+}
 console.log('Fehler:', errs); await b.close(); srv.close();

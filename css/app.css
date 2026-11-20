@@ -1151,3 +1151,8 @@ html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { backgrou
 .preis-maerkte b { font-weight: 600; }
 .beleg-menge .feld { min-width: 0; width: 100%; box-sizing: border-box; }
 .beleg-menge { grid-template-columns: 64px minmax(0, 1fr) minmax(64px, auto); }
+/* Nachfrage nach dem Kochen: Reste übernehmen */
+.reste-frage .reste-liste { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.reste-frage .schalter { display: flex; align-items: center; gap: 8px; }
+.reste-frage .schalter .feld { flex: 1; min-width: 0; }
+.reste-frage > .feld { width: 100%; box-sizing: border-box; }
