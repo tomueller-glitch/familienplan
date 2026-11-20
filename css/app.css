@@ -1117,3 +1117,7 @@ html.anzeige-modus body::before { display: none; }
 }
 .anz-ia-kachel { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
 @media (max-height: 800px) and (orientation: landscape) { .anz-zeilen div { grid-template-columns: 7.8em 1fr; } }
+.anz-wer { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
+.anz-wer-person { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; border-radius: 14px; border: 1px solid var(--linie, #d5dfe2); background: var(--blatt, #fff); font: 600 17px/1.2 var(--text, inherit); color: inherit; cursor: pointer; }
+.anz-wer-person[disabled] { opacity: .5; cursor: default; }
+.anz-wer-person small { font-weight: 400; font-size: 12px; }

@@ -208,7 +208,9 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
 }
 // G: Vorschau morgens, nachmittags und nach dem Essen, „Ist alle“ und „Wie war's?“
 {
+  globalThis.__crypto = await import('node:crypto');
   const NAMES = { p1: 'Papa', p2: 'Mama', p3: 'Philip', p4: 'Julia' };
+  const tippe = async (page, pin) => { for (const z of pin) await page.locator(`#sheet-root [data-action="anz-ziffer"][data-z="${z}"]`).click(); await page.waitForTimeout(400); };
   const KAL4 = { ...KAL, feeds: [{ id: 'k1', ok: true, anzahl: 3 }, { id: 'k2', ok: true, anzahl: 1 }, { id: 'k3', ok: true, anzahl: 3 }, { id: 'k5', ok: true, anzahl: 2 }, { id: 'k6', ok: true, anzahl: 2 }], tage: {
     '2026-11-19': [
       { titel: 'Englisch Ex', von: null, bis: null, ganztags: true, kalender: 'k3' },
@@ -221,7 +223,9 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   const feeds4 = [{ id: 'k1', name: 'Papa', url: 'webcal://x/1', person_id: 'p1' }, { id: 'k2', name: 'Familie', url: 'webcal://x/2', person_id: null }, { id: 'k3', name: 'Philip', url: 'webcal://x/3', person_id: 'p3' }, { id: 'k5', name: 'Mama', url: 'webcal://x/5', person_id: 'p2' }, { id: 'k6', name: 'Julia', url: 'webcal://x/6', person_id: 'p4' }];
   const mk = () => {
     const db = base();
-    db.ep_persons = db.ep_persons.map((p) => ({ ...p, name: NAMES[p.id] || p.name })); db.ep_staples = JSON.parse(JSON.stringify(SEED.staples)); db.ep_shopping = db.ep_shopping.filter((i) => !/milch|joghurt|butter|käse/i.test(i.label));
+    const { createHash } = globalThis.__crypto;
+    const PINS = { p1: '2468', p3: '1357', p4: '1122' };
+    db.ep_persons = db.ep_persons.map((p) => ({ ...p, name: NAMES[p.id] || p.name, ...(PINS[p.id] ? { pin_hash: createHash('sha256').update(`essensplan|${p.id}|${PINS[p.id]}`).digest('hex') } : {}) })); db.ep_staples = JSON.parse(JSON.stringify(SEED.staples)); db.ep_shopping = db.ep_shopping.filter((i) => !/milch|joghurt|butter|käse/i.test(i.label));
     db.ep_settings = [{ key: 'kalender', value: { feeds: feeds4 } }, { key: 'stall', value: { on: true, tage: 5, last: '2026-11-15', by: 'p1' } }];
     db.ep_plan = db.ep_plan.map((p) => (p.day === '2026-11-19' ? { ...p, lunchbox: 'Vollkornbrot mit Käse, Paprikastreifen, Apfel' } : p.day === '2026-11-20' ? { ...p, lunchbox: 'Wrap mit Hähnchen und Gurke', prep: 'Hähnchen aus dem Gefrierfach nehmen.' } : p));
     return db;
@@ -241,16 +245,28 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   const { page, ctx, errs } = await openDisplay(mk(), 1133, 744, KAL4, { stunde: 19, minute: 40, tag: '2026-11-19' });
   console.log('G Wetter-Abruf:', (ctx.wetterUrl || '-').replace(/&.*/, ''));
   await page.locator('.anz-ia', { hasText: 'Milch' }).click(); await page.waitForTimeout(300);
+  console.log('G wer:', (await page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | '));
+  await page.screenshot({ path: '/tmp/vorschau_wer.png' });
+  await page.locator('#sheet-root [data-action="anz-wer"][data-id="p4"]').click(); await page.waitForTimeout(300);
+  await tippe(page, '1122');
   const added = (await calls(page, 'ep_shopping')).flat().pop();
+  console.log('G gemeldet von:', added && added.added_by);
   console.log('G Ist alle:', added && `${added.label} ${added.trip} ${added.week_start} manual=${added.manual}`, '|', await toastText(page), '| Knopf:', await page.locator('.anz-ia', { hasText: 'Milch' }).innerText());
   await page.locator('.anz-ia', { hasText: 'Milch' }).click(); await page.waitForTimeout(200);
   console.log('G zweimal:', await toastText(page));
   await page.locator('[data-action="anz-ist-alle-mehr"]').click(); await page.waitForTimeout(300);
   await page.screenshot({ path: '/tmp/vorschau_istalle.png' });
   await page.fill('#sheet-root [name=was]', 'Backpapier'); await page.locator('#sheet-root form[data-form="anz-ist-alle"] button').click(); await page.waitForTimeout(300);
-  console.log('G anderes:', (await calls(page, 'ep_shopping')).flat().pop().label, '|', await toastText(page));
-  await page.locator('#sheet-root [data-action="zu"]').click(); await page.waitForTimeout(200);
+  await page.locator('#sheet-root [data-action="anz-wer"][data-id="p1"]').click(); await page.waitForTimeout(300);
+  await tippe(page, '2468');
+  console.log('G anderes:', (await calls(page, 'ep_shopping')).flat().pop().added_by, (await calls(page, 'ep_shopping')).flat().pop().label, '|', await toastText(page));
+  if (await page.locator('#sheet-root [data-action="zu"]').count()) { await page.locator('#sheet-root [data-action="zu"]').click(); await page.waitForTimeout(200); }
+  await page.locator('[data-action="anz-wie"][data-id="p2"]').click(); await page.waitForTimeout(300);
+  console.log('G Mama ohne PIN:', await toastText(page));
   await page.locator('[data-action="anz-wie"][data-id="p4"]').click(); await page.waitForTimeout(300);
+  await tippe(page, '1357');
+  console.log('G falsche PIN:', await page.locator('#sheet-root .fehler').innerText().catch(() => '-'));
+  await tippe(page, '1122');
   await page.screenshot({ path: '/tmp/vorschau_sterne.png' });
   await page.locator('#sheet-root [data-action="anz-stern"][data-n="4"]').click(); await page.waitForTimeout(300);
   const rt = (await calls(page, 'ep_ratings')).flat().pop();

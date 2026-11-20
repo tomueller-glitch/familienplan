@@ -5,9 +5,9 @@ export const NEUES = [
   {
     id: '2026-11-20a', datum: '20. November', titel: 'Küchen-Display: morgens anders als abends',
     punkte: [
-      { text: 'Morgens zeigt das Küchen-Display, was ihr anziehen sollt, das Wetter, die Brotbox, wem man Glück wünscht und was mitmuss. Nachmittags kommen Abendessen, Vorbereitung für morgen und die Brotbox für morgen.' },
-      { text: 'Nach dem Essen fragt das Display „Wie war’s?“. Tipp auf dich und vergib Sterne, auch ohne Handy.' },
-      { text: '„Ist alle?“: Unten am Display Milch, Butter und Co. antippen, dann stehen sie auf der Einkaufsliste. Unter „Mehr“ gibt es alles aus „Immer wieder“ und ein Feld für anderes.' },
+      { text: 'Morgens zeigt das Küchen-Display, was ihr anziehen sollt, das Wetter, die Brotbox und wem man Glück wünscht. Nachmittags kommen Abendessen, Vorbereitung für morgen und die Brotbox für morgen.' },
+      { text: 'Nach dem Essen fragt das Display „Wie war’s?“. Tipp auf dich, gib deine PIN ein und vergib Sterne, auch ohne Handy.' },
+      { text: '„Ist alle?“: Unten am Display Milch, Butter und Co. antippen, auf dich tippen und deine PIN eingeben, dann stehen sie auf der Einkaufsliste, mit deinem Namen. Unter „Mehr“ gibt es alles aus „Immer wieder“ und ein Feld für anderes.' },
     ],
   },
   {
