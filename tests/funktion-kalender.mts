@@ -82,6 +82,18 @@ console.log('Adressen:', feedUrl('webcal://p52-caldav.icloud.com/published/2/abc
   const t2 = mk();
   await addWays(store, t2, feeds, { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' }, cache as never);
   console.log('Weg 2 aus dem Speicher:', t2['2026-11-19'].map((x) => x.weg ?? '-').join(' '), '| Abrufe:', log.length, '| gespeichert:', saved.length);
+  // Abruf schlägt fehl: nicht merken, beim nächsten Mal neu. Alte Speicher mit gemerkten Fehlschlägen werden einmal geleert.
+  const ok = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => (String(url).includes('matrix') ? new Response('', { status: 503 }) : ok(url, init))) as typeof fetch;
+  const t3 = mk(); saved.length = 0;
+  const f3 = await addWays(store, t3, feeds, { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' }, { v: 2, heim: (cache as never as { heim: unknown }).heim, orte: (cache as never as { orte: unknown }).orte, zeiten: {} } as never);
+  const c3 = (saved.pop() as { value: { zeiten: Record<string, unknown> } } | undefined);
+  console.log('Ausfall:', t3['2026-11-19'].map((x) => x.weg ?? '-').join(' '), '| gemerkt:', c3 ? Object.keys(c3.value.zeiten).length : 0, '|', f3);
+  globalThis.fetch = ok;
+  const t4 = mk();
+  const alt = { heim: (cache as never as { heim: unknown }).heim, orte: (cache as never as { orte: unknown }).orte, zeiten: Object.fromEntries(Object.keys((cache as never as { zeiten: Record<string, unknown> }).zeiten).map((k) => [k, null])) };
+  const f4 = await addWays(store, t4, feeds, { adresse: 'Am Hang 3, 96450 Coburg', schluessel: 'abc' }, alt as never);
+  console.log('Alter Speicher mit Lücken:', t4['2026-11-19'].map((x) => x.weg ?? '-').join(' '), '|', f4 || '-');
   console.log('Falscher Schlüssel:', await addWays(store, mk(), feeds, { adresse: 'Neu 1', schluessel: 'falsch' }, {}).catch((e) => e.message));
   console.log('Ohne Schlüssel:', JSON.stringify(await addWays(store, mk(), feeds, { adresse: 'Am Hang 3' }, {})), '| Orte:', ['Hallenbad Coburg', 'Microsoft Teams', 'zu Hause', ''].map((o) => ortOk(o)).join(' '));
   globalThis.fetch = real;

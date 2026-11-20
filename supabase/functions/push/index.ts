@@ -1794,7 +1794,7 @@ const ORS_ROUTE = 'https://api.heigit.org/openrouteservice/v2';
 const ORS_GEO = 'https://api.heigit.org/pelias/v1';
 export const WEG_PROFIL: Record<string, string> = { auto: 'driving-car', rad: 'cycling-regular', fuss: 'foot-walking' };
 type Geo = [number, number];
-type WegeCache = { heim?: { adresse: string; geo: Geo | null }; orte: Record<string, Geo | null>; zeiten: Record<string, number | null> };
+type WegeCache = { v?: number; heim?: { adresse: string; geo: Geo | null }; orte: Record<string, Geo | null>; zeiten: Record<string, number | null> };
 const ortKey = (o: string) => o.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 160);
 // Online-Termine und Termine zu Hause haben keinen Weg.
 export const ortOk = (o?: string) => !!o && o.length >= 4 && !/https?:\/\/|www\.|zoom|teams|webex|meet\.google|online|telefon|zuhause|zu hause|daheim/i.test(o);
@@ -1815,30 +1815,44 @@ async function orsCall(url: string, init: RequestInit = {}) {
     return null;
   } finally { clearTimeout(timer); }
 }
-async function orsGeocode(key: string, text: string, focus: Geo | null): Promise<Geo | null> {
+// Ergebnis null: Ort nicht gefunden. undefined: Abruf hat nicht geklappt, beim nächsten Mal noch einmal versuchen.
+async function orsGeocode(key: string, text: string, focus: Geo | null): Promise<Geo | null | undefined> {
   const q = new URLSearchParams({ api_key: key, text, size: '1', 'boundary.country': 'DE' });
   if (focus) { q.set('focus.point.lat', String(focus[0])); q.set('focus.point.lon', String(focus[1])); }
   const r = await orsCall(`${ORS_GEO}/search?${q}`);
-  const c = r && r.features && r.features[0] && r.features[0].geometry && r.features[0].geometry.coordinates;
+  if (!r) return undefined;
+  const c = r.features && r.features[0] && r.features[0].geometry && r.features[0].geometry.coordinates;
   return Array.isArray(c) && c.length >= 2 ? [Number(c[1]), Number(c[0])] : null;
 }
-async function orsMatrix(key: string, profil: string, heim: Geo, ziele: Geo[]): Promise<(number | null)[]> {
+// Minuten je Ziel. null: keine Route. undefined: Abruf hat nicht geklappt (nicht merken, später noch einmal).
+async function orsMatrix(key: string, profil: string, heim: Geo, ziele: Geo[]): Promise<(number | null | undefined)[]> {
   const r = await orsCall(`${ORS_ROUTE}/matrix/${profil}?${new URLSearchParams({ api_key: key })}`, {
     method: 'POST', headers: { Authorization: key, 'Content-Type': 'application/json' },
     body: JSON.stringify({ locations: [[heim[1], heim[0]], ...ziele.map((g) => [g[1], g[0]])], sources: ziele.map((_, i) => i + 1), destinations: [0], metrics: ['duration'] }),
   });
-  const d = r && Array.isArray(r.durations) ? r.durations : null;
-  return ziele.map((_, i) => (d && d[i] && typeof d[i][0] === 'number' ? Math.round(d[i][0] / 60) : null));
+  if (!r || !Array.isArray(r.durations)) return ziele.map(() => undefined);
+  const d = r.durations;
+  return ziele.map((_, i) => (d[i] && typeof d[i][0] === 'number' ? Math.round(d[i][0] / 60) : null));
 }
 // Trägt bei den Terminen "weg" (Minuten nach Hause) ein. Gibt einen Fehlertext zurück oder ''.
 export async function addWays(store: Store | null, tage: Record<string, CalItem[]>, feeds: Row[], heimweg: Row, cacheIn: Row): Promise<string> {
   const key = String((heimweg && heimweg.schluessel) || env('ORS_KEY') || '').trim();
   const adresse = String((heimweg && heimweg.adresse) || '').trim();
   if (!key || !adresse) return '';
-  const cache: WegeCache = { heim: cacheIn && cacheIn.heim, orte: { ...((cacheIn && cacheIn.orte) || {}) }, zeiten: { ...((cacheIn && cacheIn.zeiten) || {}) } };
+  const cache: WegeCache = { v: 2, heim: cacheIn && cacheIn.heim, orte: { ...((cacheIn && cacheIn.orte) || {}) }, zeiten: { ...((cacheIn && cacheIn.zeiten) || {}) } };
   let changed = false;
+  // Früher wurde auch ein fehlgeschlagener Abruf als „kein Ergebnis“ gemerkt und nie wiederholt. Einmal alles
+  // Leere vergessen, damit es neu berechnet wird.
+  if (!cacheIn || cacheIn.v !== 2) {
+    for (const k of Object.keys(cache.orte)) if (cache.orte[k] == null) delete cache.orte[k];
+    for (const k of Object.keys(cache.zeiten)) if (cache.zeiten[k] == null) delete cache.zeiten[k];
+    if (cache.heim && !cache.heim.geo) cache.heim = undefined;
+    changed = true;
+  }
   if (!cache.heim || cache.heim.adresse !== adresse) {
-    cache.heim = { adresse, geo: await orsGeocode(key, adresse, null) };
+    const geo = await orsGeocode(key, adresse, null);
+    if (geo === undefined) return 'OpenRouteService war gerade nicht erreichbar. Die Fahrzeiten kommen beim nächsten Abruf.';
+    cache.heim = { adresse, geo };
     cache.zeiten = {};
     changed = true;
   }
@@ -1853,13 +1867,16 @@ export async function addWays(store: Store | null, tage: Record<string, CalItem[
   }
   // Orte suchen, höchstens 20 neue pro Abruf.
   let neu = 0;
+  let failed = false;
   for (const it of items) {
     if (it.x.geo || !it.x.ort) continue;
     const k = ortKey(it.x.ort);
     if (!(k in cache.orte)) {
       if (neu >= 20) continue;
       neu += 1;
-      cache.orte[k] = await orsGeocode(key, it.x.ort, heim);
+      const g = await orsGeocode(key, it.x.ort, heim);
+      if (g === undefined) { failed = true; continue; }
+      cache.orte[k] = g;
       changed = true;
     }
     if (cache.orte[k]) it.x.geo = cache.orte[k];
@@ -1878,8 +1895,8 @@ export async function addWays(store: Store | null, tage: Record<string, CalItem[
     for (let i = 0; i < ziele.length; i += 25) {
       const part = ziele.slice(i, i + 25);
       const min = await orsMatrix(key, profil, heim, part);
-      part.forEach((g, n) => { cache.zeiten[`${geoKey(g)}|${profil}`] = min[n]; });
-      changed = true;
+      if (min.some((m) => m === undefined)) failed = true;
+      part.forEach((g, n) => { if (min[n] !== undefined) { cache.zeiten[`${geoKey(g)}|${profil}`] = min[n] as number | null; changed = true; } });
     }
   }
   for (const it of items) {
@@ -1896,7 +1913,7 @@ export async function addWays(store: Store | null, tage: Record<string, CalItem[
     if (zeiten.length > 600) cache.zeiten = Object.fromEntries(zeiten.slice(-600));
     await store.upsert('ep_settings', [{ key: 'wege', value: cache, updated_at: nowIso() }]);
   }
-  return '';
+  return failed ? 'OpenRouteService hat nicht für alle Termine geantwortet. Die fehlenden Fahrzeiten kommen beim nächsten Abruf.' : '';
 }
 
 // tage: wie viele Tage ab heute (das Display braucht zwei, die Essensplanung drei Wochen).
