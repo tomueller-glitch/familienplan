@@ -1134,3 +1134,12 @@ html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { backgrou
 .anzeige.hell .anz-k-knopf:focus-visible, .anzeige.hell .anz-ia:focus-visible, .anzeige.hell .anz-wie-person:focus-visible { outline-color: #14323C; }
 .anz-farbwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .anz-farbwahl .knopf.aktiv { background: var(--tinte, #14323C); color: #fff; border-color: var(--tinte, #14323C); }
+/* Schule: Heimkommen auf dem Display, Einstellungen */
+.anz-heim .anz-zeit::before { content: "~"; opacity: .6; margin-right: 1px; }
+.schul-tabelle { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+.schul-tabelle th, .schul-tabelle td { text-align: left; padding: 4px 6px 4px 0; font-weight: 400; }
+.schul-tabelle thead th { font-size: 13px; color: var(--tinte-2, #4F6972); }
+.schul-tabelle tbody th { font-weight: 600; white-space: nowrap; }
+.schul-tabelle .feld.zeit { width: 100%; min-width: 0; }
+.schul-kind { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--linie, #d5dfe2); }
+.form .reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
