@@ -974,14 +974,22 @@ function displayDay(d, isToday) {
     const x = schoolOf(k.id, d);
     return x ? { von: x.heim, bis: null, ganztags: false, titel: `${k.name} kommt heim`, people: [k], quelle: '', heim: SCH.dayText(x).replace(/^heute /, d === L.todayISO() ? 'heute ' : '') } : null;
   }).filter(Boolean);
-  const all = [...dayItems(d), ...home].sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
+  // Heute fällt weg, was seit einer halben Stunde vorbei ist: Termine 30 Minuten nach ihrem Ende (ohne Ende nach
+  // ihrem Beginn), „kommt heim“ 30 Minuten nach der Uhrzeit. Ganztägiges und was über Mitternacht läuft, bleibt.
+  const nowMin = dispHour() * 60 + dispMinute();
+  const over = (x) => {
+    if (!isToday || x.ganztags) return false;
+    const end = T.toMin(x.bis) ?? (x.weiter ? null : T.toMin(x.von));
+    return end != null && end + 30 <= nowMin;
+  };
+  const all = [...dayItems(d), ...home].filter((x) => !over(x)).sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
   const bin = isToday ? A.trashTomorrow(d) : '';
   const dot = (list) => list.map((p) => `<i class="anz-punkt" style="background:${esc(p.color || '#4F6972')}" title="${esc(p.name)}"></i>`).join('');
   const time = (x) => (x.ganztags ? 'ganztags' : x.von ? x.von : x.bis ? `bis ${x.bis}` : '');
   const rows = all.map((x) => `<li${x.heim ? ' class="anz-heim"' : ''}><span class="anz-zeit${x.ganztags ? ' ganz' : ''}">${esc(time(x))}</span><span>${dot(x.people)}${esc(x.titel)}${x.heim ? `<small>${esc(x.heim)}</small>` : x.people.length || x.quelle ? `<small>${esc([x.people.map((p) => p.name).join(', '), x.quelle && !x.people.some((p) => p.name === x.quelle) ? x.quelle : '', homeOfItem(x) ? `zu Hause etwa ${homeOfItem(x)}` : ''].filter(Boolean).join(', '))}</small>` : ''}</span></li>`);
   if (bin) rows.push(`<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>`);
   const head = isToday ? 'Heute' : `Morgen, ${L.fmtLong(d).split(',')[0]}`;
-  return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : '<p class="anz-leer">Keine Termine.</p>'}`;
+  return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : `<p class="anz-leer">${isToday ? 'Heute steht nichts mehr an.' : 'Keine Termine.'}</p>`}`;
 }
 // Abonnierte Kalender: Einstellung "kalender" ({ feeds }) und die Termine von heute und morgen aus der Funktion push.
 const calFeeds = () => { const v = KI.settingOf(state.data.settings, 'kalender'); return v && Array.isArray(v.feeds) ? v.feeds : []; };

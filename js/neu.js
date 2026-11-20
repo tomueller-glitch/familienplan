@@ -3,6 +3,12 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20h', datum: '20. November, nachmittags', titel: 'Küchen-Display räumt auf',
+    punkte: [
+      { text: 'Auf dem Küchen-Display verschwinden Termine von heute eine halbe Stunde nach ihrem Ende, „kommt heim“ eine halbe Stunde nach der Uhrzeit. Ganztägiges und Nachtdienste bleiben stehen.' },
+    ],
+  },
+  {
     id: '2026-11-20g', datum: '20. November, nachmittags', titel: 'Preisgedächtnis mit Grundpreisen',
     punkte: [
       { text: 'Das Preisgedächtnis zeigt jetzt, wo die Größe bekannt ist, den Preis je kg, je Liter oder je Stück. So lassen sich 1 l Milch bei Aldi und 0,5 l bei Lidl vergleichen. „Günstiger“ steht nur noch dort, wo der Vergleich wirklich stimmt.', fuer: 'eltern' },

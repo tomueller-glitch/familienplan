@@ -329,6 +329,19 @@ if (fs.existsSync('/tmp/gross48mp.jpg')) {
   await d2.page.waitForTimeout(600);
   console.log('I früher aus:', (await d2.page.locator('.anz-heim').allInnerTexts()).join(' | ').replace(/\n+/g, ' / '));
   await d2.ctx.close();
+  // Vorbei ist vorbei: um 17:10 fehlen Werkstatt, Turnen und die Heimkehr, Ganztägiges und Späteres bleibt
+  const KALJ = { ...KAL, tage: { '2026-11-19': [
+    { titel: 'Englisch Ex', von: null, bis: null, ganztags: true, kalender: 'k3' },
+    { titel: 'Werkstatt', von: '10:30', bis: '10:30', ganztags: false, zeit: true, kalender: 'k1' },
+    { titel: 'Turnen', von: '15:30', bis: '17:00', ganztags: false, zeit: true, kalender: 'k1' },
+    { titel: 'Training D1', von: '17:00', bis: '18:30', ganztags: false, zeit: true, kalender: 'k3' },
+    { titel: 'Nachtdienst', von: '16:00', bis: null, ganztags: false, zeit: true, weiter: true, kalender: 'k1' }] } };
+  for (const [hh, mm] of [[7, 10], [16, 20], [17, 10], [23, 30]]) {
+    const dj = await openDisplay(mkI(null), 1133, 744, KALJ, { stunde: hh, minute: mm, tag: '2026-11-19' });
+    await dj.page.waitForTimeout(600);
+    console.log(`J ${hh}:${mm}:`, (await dj.page.locator('.anz-heute').innerText()).split('Morgen,')[0].replace(/\n+/g, ' | '));
+    await dj.ctx.close();
+  }
   // Einstellungen am Handy
   const ph = await open(mkI(null), 0);
   await ph.page.locator('[data-tab="woche"]').click(); await ph.page.waitForTimeout(400);
