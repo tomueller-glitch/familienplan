@@ -1674,11 +1674,12 @@ function viewEinkauf() {
     ${shopTools(hasPlan, done)}`;
 }
 // Gleiche Sachen aus zwei Wochen am selben Einkaufstag als eine Zeile: Mengen zusammengezählt, der Haken gilt für beide.
-// Nur erzeugte, offene Posten, wie beim Zusammenfassen innerhalb einer Woche.
+// Nur erzeugte Posten, wie beim Zusammenfassen innerhalb einer Woche.
 function joinGuests(rows) {
   if (!rows.some((i) => i.gast)) return rows;
-  const ok = (i) => !i.manual && !i.checked && !i.missing;
-  const norm = rows.map((i) => (ok(i) ? { ...i, week_start: 'x' } : i));
+  // Abgehakte mit abgehakten, offene mit offenen, damit nach dem Haken eine Zeile bleibt.
+  const ok = (i) => !i.manual && !i.missing;
+  const norm = rows.map((i) => (ok(i) ? { ...i, week_start: i.checked ? 'xh' : 'xo' } : i));
   const { changed, removed } = L.mergeDuplicates(norm, ok);
   if (!removed.length) return rows;
   const key = (i) => `${L.itemKey(i.label)}|${i.shop || ''}`;
