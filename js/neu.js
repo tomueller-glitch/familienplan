@@ -3,6 +3,19 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20e', datum: '20. November', titel: 'Wann die Kinder von der Schule kommen',
+    punkte: [
+      { text: 'Das Küchen-Display zeigt bei den Terminen, wann die Kinder etwa von der Schule heimkommen: Schulschluss, an OGTS-Tagen deren Ende, plus Heimweg.' },
+      { text: 'Unter Planen, „Schule“ stellt ihr pro Kind Unterrichtsende und OGTS je Wochentag ein, dazu den Heimweg in Minuten (Standard 30). Für Philip gilt auf Wunsch der Stundenplan aus dem Lernplaner. Fällt Unterricht aus, tragt ihr dort „Früher aus“ mit Tag und Uhrzeit ein.', fuer: 'eltern' },
+    ],
+  },
+  {
+    id: '2026-11-20d', datum: '20. November', titel: 'Große Fotos von Kassenzetteln',
+    punkte: [
+      { text: 'Fehler behoben: Fotos mit sehr vielen Megapixeln kamen beim Kassenzettel manchmal leer an und galten als „zu groß“. Die App verkleinert jetzt jedes Foto einzeln und speicherschonend, die Grenze ist höher.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20c', datum: '20. November, morgens', titel: 'Zwei Einkäufe an einem Tag sind eine Liste',
     punkte: [
       { text: 'Legst du zwei Einkäufe auf denselben Einkaufstag, werden sie eine Liste. Doppelte Posten wie zweimal Zwiebeln werden dabei zusammengezählt.', fuer: 'eltern' },

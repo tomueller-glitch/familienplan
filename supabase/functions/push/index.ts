@@ -1274,7 +1274,10 @@ export function parseReceipt(res: Row, cats: string[]) {
 function checkPhotos(photos: Photo[]) {
   if (!photos.length || photos.length > 4) throw new Error('Bitte ein bis vier Fotos schicken.');
   if (photos.some((p) => !MEDIA.includes(p.media))) throw new Error('Bitte Fotos als JPEG, PNG oder WebP schicken.');
-  if (photos.some((p) => !p.data) || photos.reduce((a, p) => a + p.data.length, 0) > 12_000_000) throw new Error('Die Fotos sind zu groß.');
+  // Grenzen von Claude: ein Bild höchstens 5 MB, eine Anfrage höchstens 32 MB. Hier: je Foto 5 MB, zusammen 20 MB (als Base64).
+  if (photos.some((p) => !p.data || p.data.length < 1000)) throw new Error('Ein Foto kam leer an. Bitte die App neu laden und noch einmal versuchen.');
+  if (photos.some((p) => p.data.length > 5_000_000)) throw new Error('Ein Foto ist zu groß (höchstens 5 MB). Bitte die App neu laden, sie verkleinert die Fotos dann selbst.');
+  if (photos.reduce((a, p) => a + p.data.length, 0) > 20_000_000) throw new Error('Die Fotos sind zusammen zu groß. Bitte weniger Fotos auf einmal schicken.');
 }
 
 export async function readReceipt(store: Store, photos: Photo[]) {

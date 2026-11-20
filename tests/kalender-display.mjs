@@ -11,7 +11,7 @@ const base = () => ({ ep_persons: SEED.persons.map(p => p.adult ? { ...p, pin_ha
 const INIT = (db) => {
   globalThis.ESSENSPLAN_HEUTE = '2026-11-18';
   window.calls = []; window.__db = db;
-  const q = (table) => { const api = { select() { return api; }, order() { return api; }, range() { return Promise.resolve({ data: window.__db[table] || [], error: null }); },
+  const q = (table) => { const api = { select() { return api; }, order() { return api; }, eq() { return api; }, in() { return api; }, maybeSingle() { return Promise.resolve({ data: (window.__db[table] || [])[0] || null, error: null }); }, then(ok, bad) { return Promise.resolve({ data: window.__db[table] || [], error: null }).then(ok, bad); }, range() { return Promise.resolve({ data: window.__db[table] || [], error: null }); },
     upsert(rows) { window.calls.push(['upsert', table, JSON.parse(JSON.stringify(rows))]); return Promise.resolve({ error: null }); },
     delete() { const d = { eq() { return Object.assign(Promise.resolve({ error: null }), d); }, in(c, v) { window.calls.push(['delete', table, v.length]); return Promise.resolve({ error: null }); } }; return d; } }; return api; };
   window.supabase = { createClient: () => ({ auth: { getSession: async () => ({ data: { session: { user: {} } }, error: null }), signOut: async () => {} }, from: q,
@@ -296,5 +296,57 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   console.log('G Bewertung:', rt && `${rt.person_id} ${rt.stars} ${rt.day} ${rt.dish_id}`, '|', await toastText(page), '|', (await page.locator('.anz-wie').innerText()).replace(/\n+/g, ' '));
   await page.screenshot({ path: '/tmp/vorschau_bewertet.png' });
   console.log('G Fehler:', errs); await ctx.close();
+}
+// H: Kassenzettel mit vier 48-Megapixel-Fotos: werden einzeln verkleinert und kommen nicht leer an.
+if (fs.existsSync('/tmp/gross48mp.jpg')) {
+  const { page, ctx, errs } = await open(base(), 0);
+  await page.locator('[data-tab="ausgaben"]').click(); await page.waitForTimeout(300);
+  const t0 = Date.now();
+  await page.setInputFiles('#beleg-foto', ['/tmp/gross48mp.jpg', '/tmp/gross48mp.jpg', '/tmp/gross48mp.jpg', '/tmp/gross48mp.jpg']);
+  await page.waitForFunction(() => window.calls.some((c) => c[0] === 'invoke' && c[2].action === 'kassenzettel'), null, { timeout: 60000 });
+  const inv = await page.evaluate(() => window.calls.filter((c) => c[0] === 'invoke' && c[2].action === 'kassenzettel').pop()[2]);
+  console.log('H Fotos:', inv.n, '| Base64-Längen:', inv.len.join(', '), '| alle unter 5 MB:', inv.len.every((x) => x > 2000 && x < 5e6), '| Zeit', Math.round((Date.now() - t0) / 1000), 's');
+  console.log('H Fehler:', errs); await ctx.close();
+}
+// I: Schule: Philip aus dem Stundenplan im Lernplaner, Julia mit OGTS, früher aus, Display
+{
+  const TT = { times: [['08:00','08:45'],['08:45','09:30'],['09:45','10:30'],['10:30','11:15'],['11:30','12:15'],['12:15','13:00'],['13:00','13:45'],['13:45','14:30'],['14:30','15:15'],['15:15','16:00']], ab: true, refWeek: '2026-11-16', refType: 'B', A: {}, B: { 1: ['G','D','D','L','NuT','G'], 2: ['L','M','I','E','Sp','Sp','','Bl','Bl'], 4: ['L','L','M','NuT','E','Mu','','Ku','Ku'], 5: ['D','Geo','Mu','E','M'] } };
+  const mkI = (frueher) => {
+    const db = base();
+    db.ep_persons = db.ep_persons.map((p) => ({ ...p, name: { p1: 'Papa', p2: 'Mama', p3: 'Philip', p4: 'Julia' }[p.id] }));
+    db.lp_stand = [{ kind_id: 'p3', siege_woche: 0, siegziel: 4 }]; db.lp_erledigt_heute = [];
+    db.lp_data = [{ coll: 'timetable', data: TT }, { coll: 'schoolEnd', data: { 1: '13:00', 2: '15:30', 3: '13:00', 4: '13:00', 5: '12:15' } }];
+    db.ep_settings = [{ key: 'kalender', value: { feeds } }, { key: 'schule', value: { kinder: { p4: { quelle: 'eigen', weg: 20, tage: { 1: { bis: '11:20', ogts: '' }, 2: { bis: '12:15', ogts: '16:00' }, 3: { bis: '11:20', ogts: '' }, 4: { bis: '12:15', ogts: '16:00' }, 5: { bis: '11:20', ogts: '' } } } }, ...(frueher ? { frueher } : {}) } }];
+    return db;
+  };
+  // Display am Do 19.11.: Philip 9 Stunden (bis 14:30) plus 30, Julia OGTS bis 16:00 plus 20
+  const d1 = await openDisplay(mkI(null), 1133, 744, { ...KAL, tage: {} }, { stunde: 7, minute: 10, tag: '2026-11-19' });
+  await d1.page.waitForTimeout(600);
+  console.log('I Display Do:', (await d1.page.locator('.anz-heute').innerText()).replace(/\n+/g, ' | '), '| Höhe', await d1.page.evaluate(() => document.documentElement.scrollHeight));
+  await d1.page.screenshot({ path: '/tmp/schule_display.png' });
+  console.log('I Fehler:', d1.errs); await d1.ctx.close();
+  const d2 = await openDisplay(mkI({ '2026-11-19': { p4: '11:20' } }), 1133, 744, { ...KAL, tage: {} }, { stunde: 7, minute: 10, tag: '2026-11-19' });
+  await d2.page.waitForTimeout(600);
+  console.log('I früher aus:', (await d2.page.locator('.anz-heim').allInnerTexts()).join(' | ').replace(/\n+/g, ' / '));
+  await d2.ctx.close();
+  // Einstellungen am Handy
+  const ph = await open(mkI(null), 0);
+  await ph.page.locator('[data-tab="woche"]').click(); await ph.page.waitForTimeout(400);
+  console.log('I Kachel:', (await ph.page.locator('.plan-kachel[data-action="schule"]').innerText()).replace(/\n+/g, ' / '));
+  await ph.page.locator('.plan-kachel[data-action="schule"]').click(); await ph.page.waitForTimeout(400);
+  console.log('I Kachel/Bogen:', (await ph.page.locator('#sheet-root .bogen').innerText()).replace(/\n+/g, ' | ').slice(0, 500));
+  await ph.page.screenshot({ path: '/tmp/schule_bogen.png', fullPage: true });
+  await ph.page.selectOption('#sheet-root form[data-form=frueher] [name=kind]', 'p3');
+  await ph.page.fill('#sheet-root form[data-form=frueher] [name=tag]', '2026-11-20');
+  await ph.page.fill('#sheet-root form[data-form=frueher] [name=zeit]', '11:15');
+  await ph.page.locator('#sheet-root form[data-form=frueher] button').click(); await ph.page.waitForTimeout(400);
+  console.log('I eingetragen:', await toastText(ph.page));
+  const st = (await calls(ph.page, 'ep_settings')).flat().filter((r) => r.key === 'schule').pop();
+  console.log('I gespeichert:', JSON.stringify(st && st.value.frueher));
+  const f4 = ph.page.locator('#sheet-root form[data-form=schule][data-id=p4]');
+  await f4.locator('[name="ogts-5"]').fill('14:00'); await f4.locator('button').click(); await ph.page.waitForTimeout(300);
+  const st2 = (await calls(ph.page, 'ep_settings')).flat().filter((r) => r.key === 'schule').pop();
+  console.log('I Julia Fr:', JSON.stringify(st2.value.kinder.p4.tage[5]), JSON.stringify(st2.value.frueher));
+  console.log('I Fehler Handy:', ph.errs); await ph.ctx.close();
 }
 await b.close(); srv.close();

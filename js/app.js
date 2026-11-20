@@ -14,6 +14,7 @@ import * as P from './packungen.js';
 import * as NEU from './neu.js';
 import * as RB from './rueckblick.js';
 import * as W from './wetter.js';
+import * as SCH from './schule.js';
 
 const store = createStore(window.ESSENSPLAN_CONFIG);
 const ME_KEY = 'essensplan.ich';
@@ -99,8 +100,8 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
-const ADULT_FORMS = new Set(['kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
+const ADULT_ACTIONS = new Set(['frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_FORMS = new Set(['schule', 'frueher', 'kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
 // Brotbox: bewerten dürfen die Kinder. Gibt es keine Erwachsenen, alle.
@@ -967,13 +968,17 @@ function dayItems(d) {
   }
   return [...merged.values()].map((x) => ({ ...x, quelle: x.people.length > 1 ? '' : x.quelle })).sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
 }
-// Ein Tag in der Terminspalte des Displays.
+// Ein Tag in der Terminspalte des Displays. Dazu: wann die Kinder von der Schule kommen.
 function displayDay(d, isToday) {
-  const all = dayItems(d);
+  const home = kids().map((k) => {
+    const x = schoolOf(k.id, d);
+    return x ? { von: x.heim, bis: null, ganztags: false, titel: `${k.name} kommt heim`, people: [k], quelle: '', heim: SCH.dayText(x).replace(/^heute /, d === L.todayISO() ? 'heute ' : '') } : null;
+  }).filter(Boolean);
+  const all = [...dayItems(d), ...home].sort((a, b) => (a.ganztags === b.ganztags ? String(a.von || '00:00').localeCompare(String(b.von || '00:00')) : a.ganztags ? -1 : 1));
   const bin = isToday ? A.trashTomorrow(d) : '';
   const dot = (list) => list.map((p) => `<i class="anz-punkt" style="background:${esc(p.color || '#4F6972')}" title="${esc(p.name)}"></i>`).join('');
   const time = (x) => (x.ganztags ? 'ganztags' : x.von ? x.von : x.bis ? `bis ${x.bis}` : '');
-  const rows = all.map((x) => `<li><span class="anz-zeit${x.ganztags ? ' ganz' : ''}">${esc(time(x))}</span><span>${dot(x.people)}${esc(x.titel)}${x.people.length || x.quelle ? `<small>${esc([x.people.map((p) => p.name).join(', '), x.quelle && !x.people.some((p) => p.name === x.quelle) ? x.quelle : '', homeOfItem(x) ? `zu Hause etwa ${homeOfItem(x)}` : ''].filter(Boolean).join(', '))}</small>` : ''}</span></li>`);
+  const rows = all.map((x) => `<li${x.heim ? ' class="anz-heim"' : ''}><span class="anz-zeit${x.ganztags ? ' ganz' : ''}">${esc(time(x))}</span><span>${dot(x.people)}${esc(x.titel)}${x.heim ? `<small>${esc(x.heim)}</small>` : x.people.length || x.quelle ? `<small>${esc([x.people.map((p) => p.name).join(', '), x.quelle && !x.people.some((p) => p.name === x.quelle) ? x.quelle : '', homeOfItem(x) ? `zu Hause etwa ${homeOfItem(x)}` : ''].filter(Boolean).join(', '))}</small>` : ''}</span></li>`);
   if (bin) rows.push(`<li class="anz-tonne"><span class="anz-zeit">Abend</span><span>${esc(bin)} raus<small>wird morgen abgeholt</small></span></li>`);
   const head = isToday ? 'Heute' : `Morgen, ${L.fmtLong(d).split(',')[0]}`;
   return `<h2${isToday ? '' : ' class="anz-morgen-kopf"'}>${esc(head)}</h2>${rows.length ? `<ul class="anz-termine">${rows.join('')}</ul>` : '<p class="anz-leer">Keine Termine.</p>'}`;
@@ -1274,6 +1279,7 @@ function planTiles() {
   const tile = (action, title, meta) => `<button class="plan-kachel" data-action="${action}"><span class="pk-titel">${title}</span><span class="pk-meta">${esc(meta)}</span></button>`;
   return `<h2 class="abschnitt" style="margin-top:26px">Planen</h2><div class="plan-kacheln">
     ${tile('kalender-abos', 'Kalender', kals ? `${kals} iPhone-${kals === 1 ? 'Kalender' : 'Kalender'}` : 'iPhone-Kalender verbinden')}
+    ${tile('schule', 'Schule', (() => { const t = kids().map((k) => { const x = schoolOf(k.id, today); return x ? `${k.name} ${x.heim}` : ''; }).filter(Boolean); return t.length ? `Heute zu Hause: ${t.join(', ')}` : 'Schulschluss, OGTS, früher aus'; })())}
     ${tile('urlaub', 'Urlaub und auswärts', away ? `${away.name || 'Urlaub'} ab ${L.fmtShort(away.von)}` : 'Nichts eingetragen')}
     ${tile('reste', 'Was muss weg?', rest ? `${rest} ${rest === 1 ? 'Eintrag' : 'Einträge'}` : 'Reste und Gartenernte')}
     ${canPlan() ? tile('feste', 'Festtage', feast ? `${feast.anlass}, ${L.fmtShort(feast.datum)}` : 'Fondue, Geburtstag und Co.') : ''}
@@ -2118,7 +2124,7 @@ async function readIngredientPhotos(files) {
   if (files.length > 4) toast('Es werden die ersten vier Fotos gelesen.');
   openSheet({ type: 'zutaten-laden', n: list.length });
   try {
-    const photos = await Promise.all(list.map(shrinkImage));
+    const photos = await shrinkAll(list);
     const res = await store.readIngredients(photos);
     state.ingredientDraft = ingredientDraft('foto', res.gericht, res.hinweis, res.posten);
     openSheet({ type: 'zutaten' });
@@ -2180,7 +2186,7 @@ async function readRecipePhotos(files) {
   if (files.length > 4) toast('Es werden die ersten vier Fotos gelesen.');
   openSheet({ type: 'rezept-laden', n: list.length });
   try {
-    const photos = await Promise.all(list.map(shrinkImage));
+    const photos = await shrinkAll(list);
     state.recipeDraft = await store.readRecipe(photos);
     openSheet({ type: 'rezept-neu' });
   } catch (err) {
@@ -2313,18 +2319,50 @@ function viewAusgaben() {
 }
 
 // Foto verkleinern: Claude rechnet ohnehin mit höchstens etwa 1568 Pixeln an der langen Kante.
-async function shrinkImage(file, max = 1568, quality = 0.85) {
+// Große Handyfotos (48 Megapixel) brauchen beim Verkleinern viel Speicher. Reicht er nicht, liefert Safari still ein
+// leeres Bild. Deshalb: beim Dekodieren verkleinern, wo das geht, ein Foto nach dem anderen, leeres Ergebnis erkennen
+// und kleiner noch einmal versuchen.
+async function shrinkOnce(file, max, quality) {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
-    await new Promise((ok, fail) => { img.onload = ok; img.onerror = () => fail(new Error('Das Foto ließ sich nicht öffnen.')); img.src = url; });
-    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    img.decoding = 'async';
+    await new Promise((ok, fail) => { img.onload = ok; img.onerror = () => fail(new Error('Das Foto ließ sich nicht öffnen. Bitte als JPEG oder HEIC aus der Kamera schicken.')); img.src = url; });
+    const w0 = img.naturalWidth;
+    const h0 = img.naturalHeight;
+    if (!w0 || !h0) return null;
+    const k = Math.min(1, max / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * k));
+    const h = Math.max(1, Math.round(h0 * k));
+    let src = img;
+    if (k < 1 && typeof createImageBitmap === 'function') {
+      try { src = await createImageBitmap(file, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }); } catch (e) { src = img; }
+    }
     const c = document.createElement('canvas');
-    c.width = Math.round(img.naturalWidth * k);
-    c.height = Math.round(img.naturalHeight * k);
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    return { data: c.toDataURL('image/jpeg', quality).split(',')[1], media: 'image/jpeg' };
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(src, 0, 0, w, h);
+    if (src !== img && src.close) src.close();
+    const data = c.toDataURL('image/jpeg', quality).split(',')[1] || '';
+    c.width = 0;
+    c.height = 0;
+    return { data, media: 'image/jpeg' };
   } finally { URL.revokeObjectURL(url); }
+}
+async function shrinkImage(file, max = 1568, quality = 0.85) {
+  for (const size of [max, Math.round(max * 0.7)]) {
+    const out = await shrinkOnce(file, size, quality);
+    if (out && out.data.length > 2000) return out;
+  }
+  throw new Error('Ein Foto ließ sich auf dem Handy nicht verkleinern. Bitte noch einmal versuchen, notfalls mit weniger Fotos auf einmal.');
+}
+// Mehrere Fotos nacheinander, nicht gleichzeitig, damit der Speicher reicht.
+async function shrinkAll(files, max, quality) {
+  const out = [];
+  for (const f of files) out.push(await shrinkImage(f, max, quality));
+  return out;
 }
 
 function draftFromResult(res) {
@@ -2346,7 +2384,7 @@ async function readPhotos(files) {
   if (files.length > 4) toast('Es werden die ersten vier Fotos gelesen.');
   openSheet({ type: 'beleg-laden', n: list.length });
   try {
-    const photos = await Promise.all(list.map(shrinkImage));
+    const photos = await shrinkAll(list);
     const res = await store.readReceipt(photos);
     state.receiptDraft = draftFromResult(res);
     openSheet({ type: 'beleg' });
@@ -3152,10 +3190,68 @@ function viewAufgaben() {
   return html;
 }
 
+/* ---------- Schule: Schulschluss, OGTS, Heimkommen ---------- */
+const schoolCfg = () => KI.settingOf(state.data.settings, 'schule') || {};
+const lpKid = () => (state.lp && state.lp.kind_id) || null;
+const kids = () => state.data.persons.filter((p) => !isAdult(p));
+const schoolOf = (pid, day) => SCH.schoolDay(pid, day, schoolCfg(), state.lpPlan || null, lpKid());
+function saveSchoolCfg(value) {
+  const row = { key: 'schule', value, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'schule'), row]; }, () => store.saveSettings([row]));
+}
+function sheetSchool() {
+  const cfg = schoolCfg();
+  const today = L.todayISO();
+  const early = SCH.pruneEarly(cfg.frueher, today);
+  const kidForms = kids().map((k) => {
+    const c = SCH.childCfg(cfg, k.id, lpKid());
+    const fromLp = c.quelle === 'lernplaner' && k.id === lpKid();
+    const rows = SCH.SCHULTAGE.map((w) => {
+      const t = c.tage[w] || {};
+      const lpEnd = k.id === lpKid() ? (() => { for (let i = 0; i < 14; i += 1) { const d = L.addDays(today, i); if (new Date(`${d}T12:00:00`).getDay() === w) return SCH.lernplanerEnd(d, state.lpPlan); } return null; })() : null;
+      return `<tr><th scope="row">${SCH.TAG_NAMEN[w]}</th>
+        <td>${fromLp ? `<span class="meta">${esc(lpEnd || 'unbekannt')}</span>` : `<input class="feld zeit" type="time" name="bis-${w}" value="${esc(t.bis || '')}" aria-label="${SCH.TAG_NAMEN[w]}: Unterricht bis">`}</td>
+        <td><input class="feld zeit" type="time" name="ogts-${w}" value="${esc(t.ogts || '')}" aria-label="${SCH.TAG_NAMEN[w]}: OGTS bis (leer: keine OGTS)"></td></tr>`;
+    }).join('');
+    return `<form class="form schul-kind" data-form="schule" data-id="${esc(k.id)}">
+      <h3 class="abteilung">${avatar(k, true)} ${esc(k.name)}</h3>
+      ${k.id === lpKid() ? `<label>Unterricht bis<select class="feld" name="quelle"><option value="lernplaner"${fromLp ? ' selected' : ''}>aus dem Stundenplan im Lernplaner</option><option value="eigen"${fromLp ? '' : ' selected'}>hier eintragen</option></select></label>` : ''}
+      <table class="schul-tabelle"><thead><tr><th></th><th>Unterricht bis</th><th>OGTS bis</th></tr></thead><tbody>${rows}</tbody></table>
+      <label>Heimweg in Minuten<input class="feld" name="weg" type="number" min="0" max="120" inputmode="numeric" value="${esc(String(c.weg))}"></label>
+      <button class="knopf zweit">Für ${esc(k.name)} speichern</button></form>`;
+  }).join('');
+  const earlyList = Object.entries(early).sort().flatMap(([d, v]) => Object.entries(v).map(([pid, t]) => {
+    const k = personById(pid);
+    return `<li class="pin-zeile"><span>${esc(k ? k.name : '?')}: ${esc(L.WD_SHORT[L.wdIndex(d)])} ${esc(L.fmtShort(d))} aus um ${esc(t)}</span><button class="textknopf" data-action="frueher-weg" data-day="${d}" data-id="${esc(pid)}">Löschen</button></li>`;
+  })).join('');
+  return {
+    over: 'Familie',
+    title: 'Schule und Heimkommen',
+    body: `<p class="meta">Aus dem Schulschluss plus Heimweg rechnet die App, wann die Kinder etwa zu Hause sind, und zeigt das auf dem Küchen-Display. Gibt es an einem Tag OGTS, zählt deren Ende. Ferien und Feiertage zählen nicht.</p>
+      <h3 class="abteilung">Früher aus</h3>
+      <form class="form" data-form="frueher"><div class="reihe">
+        <label>Kind<select class="feld" name="kind">${kids().map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('')}</select></label>
+        <label>Tag<input class="feld" type="date" name="tag" value="${today}" min="${today}"></label>
+        <label>Aus um<input class="feld zeit" type="time" name="zeit" required></label></div>
+        <button class="knopf">Früheren Schulschluss eintragen</button></form>
+      ${earlyList ? `<ul class="zutaten">${earlyList}</ul>` : ''}
+      ${kidForms || '<p class="meta">Noch keine Kinder angelegt.</p>'}`,
+  };
+}
+
 /* ---------- Lernplaner (lernen.html) ---------- */
 // Der Lernplaner speichert in der Tabelle lp_data. Hier wird nur der Stand gelesen und als Karte gezeigt.
 async function loadSchool() {
   if (store.mode !== 'supabase' || !store.sb || store.offline) return false;
+  // Stundenplan und Schulschluss aus dem Lernplaner, fürs Heimkommen auf dem Küchen-Display.
+  try {
+    Promise.resolve(store.sb.from('lp_data').select('coll,data').eq('deleted', false).in('coll', ['timetable', 'schoolEnd'])).then(({ data, error }) => {
+      if (error || !Array.isArray(data)) return;
+      const get = (c) => (data.find((r) => r.coll === c) || {}).data || null;
+      state.lpPlan = { timetable: get('timetable'), schoolEnd: get('schoolEnd') };
+      if (state.phase === 'anzeige' && !state.sheet) render();
+    }, () => {});
+  } catch (e) { /* Lernplaner noch nicht eingerichtet */ }
   try {
     const [st, list] = await Promise.all([
       store.sb.from('lp_stand').select('*').maybeSingle(),
@@ -3648,7 +3744,7 @@ function renderSheet() {
   const same = root.dataset.key === key;
   const old = $('.bogen', root);
   const scroll = old ? old.scrollTop : 0;
-  const makers = { 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
+  const makers = { schule: sheetSchool, 'anz-wer': sheetDispWho, 'anz-ist-alle': sheetIstAlle, 'anz-sterne': sheetRateDisplay, 'anz-pin': sheetDispPin, 'anz-aufgaben': sheetDispTasks, vorrat: sheetPantry, immer: sheetStaples, urlaub: sheetHolidays, regeln: sheetRules, entwurf: sheetDraft, einloesen: sheetRedeem, kalender: sheetCalendars, shop: sheetShop, 'shop-admin': sheetShopAdmin, 'aufgaben-liste': sheetTaskList, 'aufgabe-form': sheetTaskForm, frage: (sh) => ({ over: '', title: 'Bist du sicher?', body: `<p>${esc(sh.text)}</p><div class="knopfreihe"><button class="knopf" data-action="ja">${esc(sh.ok)}</button><button class="knopf zweit" data-action="nein">Abbrechen</button></div>` }), pin: sheetPin, export: sheetExport, tag: sheetDay, gericht: sheetDish, tauschen: sheetSwap, 'neu-gericht': sheetNewDish, 'tag-tausch': sheetDayTrade, mittag: sheetLunch, 'mittag-laden': sheetLunchLoading, 'mittag-ergebnis': sheetLunchResult, 'app-wuensche': sheetAppWishes, moegen: sheetReport, feste: sheetFeasts, fest: sheetFeast, 'fest-laden': feastLoading, hilfe: sheetHelp, neu: sheetNews, rueckblick: sheetReview, foto: sheetFoto, 'foto-gross': sheetFotoBig, packung: sheetPack, packungen: sheetPacks, vorschau: sheetPreview, zurueckholen: sheetRestore, ersatz: sheetSubst, 'ersatz-laden': sheetSubstLoading, reste: sheetLeftovers, laufweg: sheetRoute, kochen: sheetCook, zutaten: sheetIngredients, 'zutaten-laden': sheetIngredientsLoading, 'rezept-laden': sheetRecipeLoading, 'rezept-neu': sheetRecipeNew, beleg: sheetReceipt, preise: sheetPrices, jahr: sheetYear, siri: sheetSiri, 'beleg-laden': sheetReceiptLoading, haushalt: sheetHousehold, 'gericht-form': sheetDishForm, import: sheetImport, familie: sheetFamily };
   const { over, title, body } = makers[state.sheet.type](state.sheet);
   root.innerHTML = `<div class="schleier"><section class="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-titel" tabindex="-1"${same ? ' style="animation:none"' : ''}>
     <div class="bogen-kopf"><div>${over ? `<p class="ueber">${esc(over)}</p>` : ''}<h2 id="bogen-titel">${esc(title)}</h2></div>
@@ -4281,7 +4377,7 @@ const HELP_ADULTS = [
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
   ['Stall-Ampel', 'Unter „Aufgaben“ im Abschnitt „Meerschweinchen-Stall“ stellt ihr ein, alle wie viele Tage der Stall sauber gemacht wird und wann es zuletzt war. Grün: noch Zeit. Gelb: morgen dran. Rot: heute dran oder überfällig, dann kommt zur ersten Erinnerungszeit der Kinder eine Nachricht. Ab Gelb können die Kinder „Sauber gemacht“ melden, eure Bestätigung oder „Heute sauber gemacht“ startet den Rhythmus neu. Solange die Ampel an ist, steht die Stall-Aufgabe nicht in der Wochenliste.'],
   ['Minuten-Shop', 'Unter „Aufgaben“ öffnet „Minuten-Shop“ die Liste der Belohnungen mit Preis in Minuten. Erst nach dem Speichern sehen die Kinder den Shop. Ein Kauf hält die Minuten fest und landet bei „Zu bestätigen“: „Erledigt“ löst ihn ein, „Zurückbuchen“ gibt die Minuten zurück. Ihr bekommt beim Kauf eine Nachricht, das Kind bei eurer Entscheidung.'],
-  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an. Die Farbe stellt ihr im Familie-Fenster ein: automatisch (tagsüber hell, ab 18 Uhr dunkel), immer hell oder immer dunkel. Nachts ab 22 Uhr wird es zusätzlich gedimmt. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Morgens (bis 12 Uhr) steht oben, was die Kinder anziehen sollen, das Wetter, die Brotbox und wer heute eine Probe schreibt. Nachmittags und abends steht dort das Abendessen, was für morgen vorzubereiten ist und die Brotbox für morgen. Eine halbe Stunde nach dem Essen fragt das Display „Wie war’s?“: Jeder tippt auf sich, gibt seine PIN ein und vergibt Sterne. Unten stehen „Ist alle?“-Knöpfe aus „Immer wieder“ (die ersten fünf in der dort eingestellten Reihenfolge, die übrigen unter „Mehr“). Antippen, auf sich tippen und die PIN eingeben setzt die Sache auf die Einkaufsliste. Dort steht dann „ist alle, gemeldet von …“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
+  ['Küchen-Display', 'Ein Tablet in der Küche zeigt groß Uhr, Abendessen, Ampeln, Termine, die Aufgaben der Kinder und die Einkaufsliste. Einschalten im Familie-Fenster unter „Küchen-Display“ oder mit der Adresse …/?anzeige=kueche. Der Bildschirm bleibt an. Die Farbe stellt ihr im Familie-Fenster ein: automatisch (tagsüber hell, ab 18 Uhr dunkel), immer hell oder immer dunkel. Nachts ab 22 Uhr wird es zusätzlich gedimmt. Einen Knopf zum Beenden gibt es nicht: Fünfmal schnell aufs Kalenderblatt tippen und die PIN von Mama oder Papa eingeben. Die Kinder tippen auf ihren Namen und haken mit ihrer eigenen PIN ihre Aufgaben von heute ab, etwa wenn das Handy gerade nicht da ist. Die PIN legen sie am Handy unter „Aufgaben“ fest. Morgens (bis 12 Uhr) steht oben, was die Kinder anziehen sollen, das Wetter, die Brotbox und wer heute eine Probe schreibt. Nachmittags und abends steht dort das Abendessen, was für morgen vorzubereiten ist und die Brotbox für morgen. Eine halbe Stunde nach dem Essen fragt das Display „Wie war’s?“: Jeder tippt auf sich, gibt seine PIN ein und vergibt Sterne. Bei den Terminen steht, wann die Kinder etwa von der Schule heimkommen (Planen, „Schule“: Unterrichtsende, OGTS, Heimweg und „Früher aus“). Unten stehen „Ist alle?“-Knöpfe aus „Immer wieder“ (die ersten fünf in der dort eingestellten Reihenfolge, die übrigen unter „Mehr“). Antippen, auf sich tippen und die PIN eingeben setzt die Sache auf die Einkaufsliste. Dort steht dann „ist alle, gemeldet von …“. Unter „iPhone-Kalender“ lassen sich öffentliche iPhone-Kalender eintragen, etwa einer pro Person und der Dienstplan. Das Display zeigt ihre Termine von heute und morgen. Gehört ein Kalender zu einer Person, zählen seine Termine fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später, wer über Nacht weg ist, isst nicht mit. Das gilt auch für Claudes Wochenplan. Steht beim Termin ein Ort, rechnet die App den Heimweg dazu (unter „Heimweg“ Adresse und Schlüssel von OpenRouteService eintragen). Eigene Termine im Familienplan gibt es nicht mehr, der iPhone-Kalender ist die einzige Quelle.'],
   ['Tagessieg im Lernplaner', 'Gewinnt das Schulkind im Lernplaner einen Tag, schreibt der Lernplaner Minuten auf sein Konto (voreingestellt 10, einstellbar im Lernplaner unter Eltern, Einstellungen). Sie zählen nicht zum Tageslimit und stehen im Wochenrückblick.'],
   ['Foto als Nachweis', 'Unter „Aufgaben verwalten“ lässt sich bei jeder Aufgabe „Foto als Nachweis“ anhaken. Das Kind macht dann beim Melden ein Foto, ihr seht es unter „Zu bestätigen“ als kleines Bild und könnt es antippen, um es groß anzusehen und dort zu bestätigen. Solche Aufgaben bestätigt ihr immer selbst, auch Grundaufgaben. Die Fotos liegen privat bei Supabase und werden nach 14 Tagen gelöscht.'],
   ['Wochenrückblick', 'Unter „Woche“ bei „Planen“ und sonntags und montags oben in der Woche: Essen mit den Sternen, Herz der Woche, Aufgaben und Minuten der Kinder, Müll, Lernen aus dem Lernplaner, Ausgaben und ob die nächste Woche schon geplant ist. Mit „Woche davor“ blättert ihr zurück. Sonntags um 18:30 Uhr kommt eine Nachricht, die sich im Rückblick abschalten lässt.'],
@@ -5995,6 +6091,14 @@ const actions = {
     scheduleDinnerSync();
     scheduleContextSync();
   },
+  schule: () => openSheet({ type: 'schule' }),
+  'frueher-weg': ({ day, id }) => {
+    const cfg = schoolCfg();
+    const fr = SCH.pruneEarly(cfg.frueher, L.todayISO());
+    if (fr[day]) { const v = { ...fr[day] }; delete v[id]; if (Object.keys(v).length) fr[day] = v; else delete fr[day]; }
+    saveSchoolCfg({ ...cfg, frueher: fr });
+    renderSheet();
+  },
   'anzeige-farbe': ({ v }) => {
     if (!DISP_FARBEN.some(([x]) => x === v)) return;
     const row = { key: 'anzeige', value: { ...(KI.settingOf(state.data.settings, 'anzeige') || {}), farbe: v }, updated_at: new Date().toISOString() };
@@ -6887,6 +6991,37 @@ const forms = {
     renderSheet();
     toast('Gespeichert. Die App rechnet die Fahrzeiten jetzt.');
     await loadCalendars(true);
+  },
+  schule: (fd, form) => {
+    const id = form.dataset.id;
+    if (!personById(id)) return;
+    const cfg = schoolCfg();
+    const ok = (t) => (/^\d{2}:\d{2}$/.test(String(t || '')) ? String(t) : '');
+    const old = (cfg.kinder && cfg.kinder[id]) || {};
+    const tage = {};
+    for (const w of SCH.SCHULTAGE) {
+      const bis = fd.has(`bis-${w}`) ? ok(fd.get(`bis-${w}`)) : ((old.tage || {})[w] || {}).bis || '';
+      const ogts = ok(fd.get(`ogts-${w}`));
+      if (bis || ogts) tage[w] = { bis, ogts };
+    }
+    const weg = Math.max(0, Math.min(120, parseInt(fd.get('weg'), 10) || 0));
+    const quelle = fd.get('quelle') === 'lernplaner' ? 'lernplaner' : 'eigen';
+    saveSchoolCfg({ ...cfg, kinder: { ...(cfg.kinder || {}), [id]: { quelle, weg, tage } } });
+    renderSheet();
+    toast(`Gespeichert für ${personById(id).name}.`);
+  },
+  frueher: (fd) => {
+    const pid = String(fd.get('kind') || '');
+    const day = String(fd.get('tag') || '');
+    const time = String(fd.get('zeit') || '');
+    if (!personById(pid) || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(time)) { toast('Bitte Kind, Tag und Uhrzeit eintragen.'); return; }
+    const cfg = schoolCfg();
+    const fr = SCH.pruneEarly(cfg.frueher, L.todayISO());
+    fr[day] = { ...(fr[day] || {}), [pid]: time };
+    saveSchoolCfg({ ...cfg, frueher: fr });
+    renderSheet();
+    const s = schoolOf(pid, day);
+    toast(s ? `${personById(pid).name} ist ${day === L.todayISO() ? 'heute' : `am ${L.fmtShort(day)}`} etwa um ${s.heim} zu Hause.` : 'Eingetragen. An dem Tag ist allerdings keine Schule.');
   },
   kalender: async (fd) => {
     const name = String(fd.get('name') || '').trim().slice(0, 30);
