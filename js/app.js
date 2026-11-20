@@ -100,7 +100,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['reste-nichts', 'frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['vorabend-weg', 'reste-nichts', 'frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['reste-frage', 'schule', 'frueher', 'kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -5219,17 +5219,40 @@ function ampelDots(dish) {
 }
 
 // Was am Vorabend für einen Tag vorzubereiten ist: aus dem Gericht und aus der Notiz zum Tag.
-function prepFor(day) {
+// Vorbereitung für einen Tag (aus dem Gericht und der Notiz im Plan). Abgehakt oder gelöscht wird je Tag in
+// ep_settings "vorabend": { [Tag]: { erledigt: [Text], weg: [Text] } }. Das Gericht selbst bleibt unverändert.
+const prepState = (day) => ((KI.settingOf(state.data.settings, 'vorabend') || {})[day]) || { erledigt: [], weg: [] };
+function prepAll(day) {
   const p = planOf(day);
   if (!p) return [];
   const dish = !p.skipped && dishById(p.dish_id);
-  return [dish && dish.prep, p.prep].filter(Boolean);
+  return [...new Set([dish && dish.prep, p.prep].filter(Boolean).map((t) => String(t).trim()))];
+}
+// Offene Punkte: nicht abgehakt, nicht gelöscht. Das zeigen Wochenplan und Küchen-Display.
+function prepFor(day) {
+  const st = prepState(day);
+  return prepAll(day).filter((t) => !(st.erledigt || []).includes(t) && !(st.weg || []).includes(t));
+}
+function savePrepState(day, next) {
+  const today = L.todayISO();
+  const all = { ...(KI.settingOf(state.data.settings, 'vorabend') || {}) };
+  for (const d of Object.keys(all)) if (d < L.addDays(today, -3)) delete all[d];
+  all[day] = next;
+  const row = { key: 'vorabend', value: all, updated_at: new Date().toISOString() };
+  commit(() => { state.data.settings = [...state.data.settings.filter((x) => x.key !== 'vorabend'), row]; }, () => store.saveSettings([row]));
 }
 function prepBox() {
   const today = L.todayISO();
-  const list = prepFor(L.addDays(today, 1));
-  if (!list.length || !L.weekDays(state.week).includes(today)) return '';
-  return `<div class="kasten-text vorabend"><strong>Heute Abend für morgen</strong>${list.map(esc).join(' ')}</div>`;
+  const day = L.addDays(today, 1);
+  const st = prepState(day);
+  const items = prepAll(day).filter((t) => !(st.weg || []).includes(t));
+  if (!items.length || !L.weekDays(state.week).includes(today)) return '';
+  const done = (t) => (st.erledigt || []).includes(t);
+  const allDone = items.every(done);
+  return `<div class="kasten-text vorabend${allDone ? ' fertig' : ''}"><strong>Heute Abend für morgen${allDone ? ': alles erledigt' : ''}</strong>
+    <ul class="vorabend-liste">${items.map((t, n) => `<li class="${done(t) ? 'erledigt' : ''}">
+      <button class="haken-knopf" data-action="vorabend-haken" data-day="${day}" data-n="${n}" aria-pressed="${done(t)}"><span class="kasten">${CHECK}</span><span class="vorabend-text">${esc(t)}</span></button>
+      ${canPlan() ? `<button class="weg" data-action="vorabend-weg" data-day="${day}" data-n="${n}" aria-label="${esc(t)} löschen">${CROSS}</button>` : ''}</li>`).join('')}</ul></div>`;
 }
 
 function runImport(text) {
@@ -5606,6 +5629,24 @@ const actions = {
   },
   'laufweg-oeffnen': () => openSheet({ type: 'laufweg' }),
   reste: () => openSheet({ type: 'reste' }),
+  'vorabend-haken': ({ day, n }) => {
+    const st = prepState(day);
+    const items = prepAll(day).filter((t) => !(st.weg || []).includes(t));
+    const t = items[Number(n)];
+    if (!t) return;
+    const erledigt = (st.erledigt || []).includes(t) ? st.erledigt.filter((x) => x !== t) : [...(st.erledigt || []), t];
+    savePrepState(day, { ...st, erledigt });
+    render();
+  },
+  'vorabend-weg': ({ day, n }) => {
+    const st = prepState(day);
+    const items = prepAll(day).filter((t) => !(st.weg || []).includes(t));
+    const t = items[Number(n)];
+    if (!t) return;
+    savePrepState(day, { ...st, weg: [...(st.weg || []), t] });
+    render();
+    toast('Gelöscht, nur für morgen. Beim Gericht bleibt der Hinweis.', () => { savePrepState(day, st); render(); });
+  },
   'reste-nichts': ({ ids }) => {
     const set = new Set(String(ids || '').split(','));
     saveExpected(expectedLeft().filter((x) => !set.has(x.id)));

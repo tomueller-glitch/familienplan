@@ -1159,3 +1159,9 @@ html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { backgrou
 /* Küchen-Display: Hintergrund bis unter die Statusleiste des iPads, Inhalt beginnt darunter */
 html.anzeige-modus .anzeige { padding-top: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-top, 0px)); padding-left: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-left, 0px)); padding-right: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-right, 0px)); padding-bottom: calc(clamp(16px, 2.4vw, 32px) + env(safe-area-inset-bottom, 0px)); }
 @media (max-height: 800px) and (orientation: landscape) { html.anzeige-modus .anzeige { padding: calc(10px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) calc(18px + env(safe-area-inset-left, 0px)); } }
+/* Heute Abend für morgen: abhaken oder löschen */
+.vorabend-liste { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.vorabend-liste li { display: flex; align-items: center; gap: 4px; }
+.vorabend-liste .haken-knopf { padding: 6px 4px; min-height: 44px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.vorabend-liste li.erledigt .vorabend-text { text-decoration: line-through; opacity: .6; }
+.vorabend.fertig { opacity: .75; }

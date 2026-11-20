@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20l', datum: '20. November, abends', titel: 'Heute Abend für morgen: abhaken und löschen',
+    punkte: [
+      { text: 'Was heute Abend für morgen vorzubereiten ist, lässt sich jetzt abhaken. Ist alles erledigt, steht „alles erledigt“ da, und auf dem Küchen-Display verschwindet der Punkt.' },
+      { text: 'Mit dem Kreuz löscht ihr einen Punkt nur für diesen Tag, mit „Rückgängig“ im Hinweis kommt er zurück. Beim Gericht bleibt der Hinweis für das nächste Mal stehen.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20k', datum: '20. November, nachmittags', titel: 'Statusleiste unauffälliger',
     punkte: [
       { text: 'Die App reicht jetzt bis unter die Statusleiste mit Uhrzeit und Akku. Auf dem Küchen-Display fällt die Leiste dadurch kaum noch auf. Ausblenden lässt sie sich auf dem iPad nicht.', fuer: 'eltern' },

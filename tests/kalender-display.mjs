@@ -378,4 +378,23 @@ if (fs.existsSync('/tmp/gross48mp.jpg')) {
   console.log('K ohne Eingabe neu geladen:', loads, '| alte Seite weg:', await page.evaluate(() => window.__vorher === undefined));
   console.log('K Fehler:', errs); await ctx.close();
 }
+// L: „Heute Abend für morgen“ abhaken und löschen, Display zeigt nur Offenes
+{
+  const db = base();
+  db.ep_plan = db.ep_plan.map((p) => (p.day === '2026-11-19' ? { ...p, prep: 'Hähnchen aus dem Gefrierfach nehmen.' } : p));
+  const d19 = db.ep_plan.find((p) => p.day === '2026-11-19');
+  db.ep_dishes = db.ep_dishes.map((d) => (d.id === d19.dish_id ? { ...d, prep: 'Linsen über Nacht einweichen.' } : d));
+  const { page, ctx, errs } = await open(db, 0);
+  await page.locator('[data-tab="woche"]').click(); await page.waitForTimeout(300);
+  const box = () => page.locator('.vorabend').first().innerText().then((t) => t.replace(/\n+/g, ' | '));
+  console.log('L vorher:', await box());
+  await page.locator('[data-action="vorabend-haken"]').first().click(); await page.waitForTimeout(300);
+  console.log('L abgehakt:', await box(), '| an:', await page.locator('.vorabend-liste li.erledigt').count());
+  await page.locator('[data-action="vorabend-weg"]').nth(1).click(); await page.waitForTimeout(300);
+  console.log('L gelöscht:', await box(), '|', await toastText(page));
+  const st = (await calls(page, 'ep_settings')).flat().filter((r) => r.key === 'vorabend').pop();
+  console.log('L gespeichert:', JSON.stringify(st && st.value));
+  await page.locator('.vorabend').first().screenshot({ path: '/tmp/vorabend.png' });
+  console.log('L Fehler:', errs); await ctx.close();
+}
 await b.close(); srv.close();
