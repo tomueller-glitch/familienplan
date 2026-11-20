@@ -1,4 +1,4 @@
-import { FERIEN, FERIEN_BIS } from './ferien.js';
+import { FERIEN } from './ferien.js';
 import { packFor, needOf, packText } from './packungen.js';
 
 // Reine Rechenlogik ohne Zugriff auf Seite oder Datenbank.
@@ -113,7 +113,6 @@ export function schoolFree(iso) {
   return holidaysBY(Number(iso.slice(0, 4)))[iso] || null;
 }
 export const isSchoolDay = (iso) => !schoolFree(iso);
-export const ferienKnown = (iso) => iso <= FERIEN_BIS;
 
 /* ---------- Zahlen und Zutaten ---------- */
 
@@ -744,7 +743,6 @@ export function isDinnerUse(use) {
   const m = USE_RE.exec(use);
   return !!m && !EXTRA_USE.test(m[1]);
 }
-export const dinnerNamesOf = (dishes, more = []) => new Set([...dishes.filter(isDinner).map((d) => d.name), ...more].filter(Boolean).map((n) => shortDish(String(n)).toLowerCase()));
 // Touren einer Liste nach Datum: [{ trip, due }].
 export function tripsOf(items) {
   const seen = new Map();

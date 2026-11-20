@@ -70,7 +70,7 @@ const iso = new Date(appNow()).toISOString();
   const db = base(); db.ep_shopping = [];
   const { page, ctx, errs } = await open(db, 0);
   await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
-  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(2200);
+  await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(2200);
   console.log('B Toast:', await toastText(page));
   const vor = await page.evaluate(() => [...document.querySelectorAll('.posten li')].map((l) => l.textContent.replace(/\s+/g, ' ').trim()).filter((t) => /Vorrat/.test(t)));
   console.log('B Vorrat-Posten:', JSON.stringify(vor.slice(0, 4)));

@@ -88,7 +88,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)]; db.ep_ai_runs = [run('r1', 'freigegeben')];
   db.ep_shopping = draftShop.map((s, n) => ({ id: 'claude-' + n, week_start: W, ...s, shop: s.shop || null, sort: n, missing: false, checked: n === 0, checked_by: n === 0 ? 'p1' : null, checked_at: null, manual: false }));
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   console.log('B Frage:', (await page.locator('#sheet-root, .dialog, [role=dialog]').first().innerText().catch(() => '-')).replace(/\n+/g, ' | ').slice(0, 200));
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(800);
   const rows = await listOf(page);
@@ -136,7 +136,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)];
   db.ep_shopping = [{ id: 'e1', week_start: W, trip: 'Einkauf', due: null, category: 'obst', label: 'Feldsalat', qty: '150 g', purpose: 'Pizza (Fr)', sort: 1, missing: false, checked: false, manual: false }];
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   if (await page.locator('#sheet-root [data-action="ja"]').count()) await page.locator('#sheet-root [data-action="ja"]').click();
   await page.waitForTimeout(800);
   const rows = (await listOf(page)).filter((r) => r.week_start === W);
@@ -157,7 +157,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   ];
   db.ep_shopping = short.map((x, n) => ({ id: 'kurz-' + n, week_start: W, ...x, shop: null, sort: n, missing: false, checked: false, checked_by: null, checked_at: null, manual: false }));
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1200);
   // Was auf der Seite steht, nach Touren
   const rows = await page.evaluate(() => [...document.querySelectorAll('.ek-jetzt, .ek-tour:not(.ek-vorbei)')].flatMap((sec) => {
@@ -186,7 +186,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   await row('Vollkornbrot').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
   await row('Snackmöhren').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
   console.log('G Kasten Claude-Plan:', await page.locator('.vorrat-frage', { hasText: 'passt nicht' }).count());
-  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1000);
   console.log('G nach Neuberechnen da:', await row('Vollkornbrot').count(), await row('Snackmöhren').count(), '| Äpfel:', await row('Äpfel').count());
   await page.locator('[data-action="einkaufen"], [data-action="einkaufsmodus"]').first().click().catch(() => {}); await page.waitForTimeout(300);

@@ -176,8 +176,6 @@ export function minutesLeftToday(log, personId, cap, day) {
   return Math.max(0, cap - sum);
 }
 
-export const isSeasonless = (task) => !(task.months || []).length;
-
 /* ---------- Mülleimer in der Küche ---------- */
 // Ampel für Plastik- und Restmüll, gespeichert in ep_settings unter "kuechenmuell":
 // { plastik: { stufe: 'gruen'|'gelb'|'rot', at, by }, rest: { ... } }. Die Stufen schalten die Eltern.

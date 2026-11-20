@@ -194,9 +194,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 /* ---------- Einkaufsliste ---------- */
 
-.fortschritt { background: var(--blatt); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
-.fortschritt .zeile { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.fortschritt .gross { font: 700 26px/1 var(--anzeige); }
 .balken { height: 8px; border-radius: 4px; background: var(--wand); margin-top: 10px; overflow: hidden; }
 .balken span { display: block; height: 100%; background: var(--gruen); border-radius: 4px; }
 .schalter { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
@@ -205,7 +202,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .tour { font: 700 22px/1.15 var(--anzeige); margin: 22px 2px 4px; }
 .tour:first-of-type { margin-top: 4px; }
 .einkaufstag { margin: 4px 2px 2px; }
-.einkaeufer { margin: 6px 2px 2px; font-weight: 600; }
 .einkauf-hinweis { margin-bottom: 14px; }
 .einkaufstag summary { cursor: pointer; list-style: none; }
 .einkaufstag summary::-webkit-details-marker { display: none; }
@@ -660,7 +656,6 @@ table.mengen th { font-weight: 600; color: var(--tinte-2); font-size: 13px; }
 .kosten-stand { margin: -4px 2px 12px; }
 .kosten-zeile { margin-bottom: 8px; }
 /* Einkaufsmodus */
-.modus-start { margin-top: 10px; }
 .modus-leiste { position: sticky; top: calc(var(--kopf-h) + env(safe-area-inset-top, 0px)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--fuell); color: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 17px; }
 .modus-leiste .knopf { background: #fff; color: var(--dunkel); }
 .einkaufsmodus .haken-knopf { min-height: 68px; }
@@ -670,6 +665,8 @@ table.mengen th { font-weight: 600; color: var(--tinte-2); font-size: 13px; }
 .einkaufsmodus .kasten svg { width: 26px; height: 26px; }
 .einkaufsmodus .fehlt-knopf { min-height: 44px; font-size: 15px; }
 .einkaufsmodus .abteilung { font-size: 18px; }
+/* Im Laden zählt, was und wie viel. Wofür steht im Kasten „nicht bekommen“. */
+.einkaufsmodus .posten .p-wofuer { display: none; }
 .sortierung { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .sortierung button { font-size: 14px; padding-inline: 2px; }
 .einkaufsmodus .inhalt > .balken { margin: 0 0 14px; }
@@ -693,6 +690,8 @@ table.mengen th { font-weight: 600; color: var(--tinte-2); font-size: 13px; }
 .w-gruppe h3 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin: 0 0 8px; }
 .w-gruppe .meta { margin-top: 8px; }
 .w-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
+.w-mehr > summary { color: var(--tinte-2); font-weight: 600; text-decoration: none; padding: 6px 2px; }
+.w-mehr > .w-knoepfe { margin-top: 6px; }
 
 .kasten-warn { box-shadow: inset 4px 0 0 var(--rot); }
 .marke.saison { background: color-mix(in srgb, var(--gruen) 16%, var(--blatt)); color: var(--gruen); }
@@ -956,8 +955,6 @@ html.anzeige-modus body::before { display: none; }
 .anz-k-name { display: inline-flex; align-items: center; gap: .5em; font-weight: 700; }
 .anz-k-min { color: var(--a-leise); font-variant-numeric: tabular-nums; }
 .anz-fuss { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 20px; color: var(--a-leise); font-size: .85em; }
-.anz-aus { font: inherit; color: var(--a-leise); background: none; border: 1px solid var(--a-linie); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
-.anz-aus:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 @media (orientation: portrait), (max-width: 760px) {
   .anz-raster { grid-template-columns: 1fr; grid-template-areas: "essen" "ampeln" "heute" "kinder"; }
 }
@@ -1217,11 +1214,11 @@ html.anzeige-modus #sheet-root .koch-nav .knopf { min-height: 64px; font-size: 2
 .ek-jetzt .balken { margin: 8px 2px 4px; }
 .ek-leer { margin: 12px 2px; }
 .ek-abgehakt { margin-top: 16px; }
-.ek-abgehakt > summary, .ek-tour > summary { cursor: pointer; list-style: none; }
-.ek-abgehakt > summary::-webkit-details-marker, .ek-tour > summary::-webkit-details-marker { display: none; }
+.ek-abgehakt > summary, .ek-tour > summary, .w-mehr > summary { cursor: pointer; list-style: none; }
+.ek-abgehakt > summary::-webkit-details-marker, .ek-tour > summary::-webkit-details-marker, .w-mehr > summary::-webkit-details-marker { display: none; }
 .ek-abgehakt > summary { color: var(--tinte-2); font-weight: 600; padding: 8px 2px; text-decoration: none; }
-.ek-abgehakt > summary::before, .ek-tour > summary::before { content: '›'; display: inline-block; width: 1em; font-weight: 700; transition: transform .15s; }
-.ek-abgehakt[open] > summary::before, .ek-tour[open] > summary::before { transform: rotate(90deg); }
+.ek-abgehakt > summary::before, .ek-tour > summary::before, .w-mehr > summary::before { content: '›'; display: inline-block; width: 1em; font-weight: 700; transition: transform .15s; }
+.ek-abgehakt[open] > summary::before, .ek-tour[open] > summary::before, .w-mehr[open] > summary::before { transform: rotate(90deg); }
 .ek-abschnitt { font-size: 14px; font-weight: 600; color: var(--tinte-2); margin: 26px 2px 6px; }
 .ek-tour { background: var(--blatt); border-radius: 8px; margin-bottom: 8px; }
 .ek-tour > summary { display: flex; align-items: baseline; gap: 4px; padding: 12px 14px; min-height: 48px; text-decoration: none; font-weight: 400; }

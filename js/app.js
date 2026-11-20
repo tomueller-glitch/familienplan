@@ -63,7 +63,6 @@ const state = {
   tab: 'woche',
   week: L.mondayOf(L.todayISO()),
   sheet: null,
-  hideDone: false,
   sort: 'beliebt',
   draft: '',
   stale: false,
@@ -1002,7 +1001,7 @@ function viewDisplay() {
   }).join('')}</ul></section>` : '';
 
   // Einkauf
-  const open = currentTrip().items.filter((i) => !i.checked && i.category !== 'vorhanden').length;
+  const open = shopOpenCount();
 
   const light = dispLight(hour);
   document.documentElement.classList.toggle('anzeige-hell', light);
@@ -1175,7 +1174,7 @@ function viewWho() {
 
 function viewApp() {
   const me = personById(state.me);
-  const openCount = currentTrip().items.filter((i) => !i.checked).length;
+  const openCount = shopOpenCount();
   const views = { woche: viewWoche, aufgaben: viewAufgaben, einkauf: viewEinkauf, gerichte: viewGerichte, ausgaben: viewAusgaben };
   const body = (views[state.tab] || viewWoche)();
   const tabs = [['woche', 'Woche'], ['aufgaben', 'Aufgaben'], ['einkauf', 'Einkauf'], ['gerichte', 'Gerichte'], ['ausgaben', 'Ausgaben']];
@@ -1719,7 +1718,7 @@ function viewEinkauf() {
   const rows = open.length || state.justChecked ? tripRows(curItems, week, { open: true }) : '<p class="meta ek-leer">Noch nichts drauf. Alles, was ihr ergänzt, kommt auf diesen Einkauf.</p>';
   if (state.shopMode) {
     return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${open.length} offen</span><button class="knopf klein" data-action="einkaufsmodus">Fertig</button></div>${bar}
-      ${pantryBox(week)}<h2 class="tour">${esc(tripHead(cur))}</h2>${missingBox(cur, curItems)}${rows}${addForm}`;
+      <h2 class="tour">${esc(tripHead(cur))}</h2>${missingBox(cur, curItems)}${rows}${addForm}`;
   }
   const build = hasPlan && !listed && canPlan()
     ? `<div class="kasten-text einkauf-hinweis"><strong>Liste aus dem Wochenplan fehlt noch</strong>Für die Woche vom ${esc(L.fmtShort(week))} bis ${esc(L.fmtShort(L.addDays(week, 6)))} sind Gerichte geplant. Die Zutaten werden zusammengerechnet und auf die Einkäufe verteilt.
@@ -1734,7 +1733,7 @@ function viewEinkauf() {
   const past = all.filter((t) => t.due < cur.due && t.due >= L.addDays(today, -10) && t.items.some((i) => i.checked && i.category !== 'vorhanden')).reverse();
   const laterHtml = later.length ? `<h3 class="ek-abschnitt">Danach</h3>${later.map((t) => {
     const n = t.items.filter((i) => !i.checked).length;
-    return `<details class="ek-tour"><summary><span class="ek-name">${esc(tripHead(t))}</span><span class="ek-zahl">${n === 1 ? '1 Posten' : `${n} Posten`}</span></summary>
+    return `<details class="ek-tour"><summary><span class="ek-name">${esc(tripHead(t))}</span><span class="ek-zahl">${!n ? 'alles abgehakt' : n === 1 ? '1 Posten' : `${n} Posten`}</span></summary>
       ${tripMeta(t, n)}${tripRows(t.items, t.week, { open: true })}</details>`;
   }).join('')}` : '';
   const pastHtml = past.length ? `<h3 class="ek-abschnitt">Erledigt</h3>${past.map((t) => {
@@ -1745,7 +1744,7 @@ function viewEinkauf() {
   const planned = (w) => L.weekDays(w).some((d) => { const p = planOf(d); return p && p.dish_id; });
   const rebuild = [...new Set([...(listed ? [week] : []), ...[cur, ...later].flatMap((t) => t.items.filter((i) => !i.manual).map((i) => i.week_start))])]
     .filter((w) => w >= L.addDays(L.mondayOf(today), -7) && planned(w)).sort();
-  return `${draftBox(week)}${pantryBox(week)}${build}${head}${laterHtml}${pastHtml}${shopTools(rebuild, pool.some((i) => i.checked))}`;
+  return `${draftBox(week)}${pantryBox(week)}${build}${head}${laterHtml}${pastHtml}${shopTools(rebuild)}`;
 }
 // Überschrift eines Einkaufs: „Großeinkauf, Samstag 21.11.“
 const tripHead = (t) => `${tripName(t)}, ${L.WEEKDAYS[L.wdIndex(t.due)]} ${L.fmtShort(t.due)}`;
@@ -1792,15 +1791,16 @@ function joinGuests(rows) {
   });
 }
 // Werkzeuge unter der Einkaufsliste, in zwei Gruppen.
-function shopTools(rebuild, done) {
+// Werkzeuge unter der Einkaufsliste: was man oft braucht sichtbar, Einstellungen zur Liste zugeklappt.
+function shopTools(rebuild) {
   const chip = (action, label) => `<button class="knopf zweit klein" data-action="${action}">${label}</button>`;
-  const add = [canPlan() ? '<label class="knopf zweit klein foto-knopf"><input type="file" id="zutaten-foto" accept="image/*" multiple>Zutaten aus Foto</label>' : '',
-    chip('immer', 'Immer wieder'), canPlan() ? chip('siri', 'Per Siri') : ''].join('');
+  const often = [canPlan() ? '<label class="knopf zweit klein foto-knopf"><input type="file" id="zutaten-foto" accept="image/*" multiple>Zutaten aus Foto</label>' : '',
+    chip('immer', 'Immer wieder'), chip('vorrat', pantryHint())].join('');
   const weeks = canPlan() ? rebuild : [];
-  const list = [weeks.map((w) => `<button class="knopf zweit klein" data-action="liste-bauen" data-week="${w}">${weeks.length > 1 ? `KW ${L.isoWeek(w)} neu aus dem Plan` : 'Aus dem Plan neu erstellen'}</button>`).join(''), chip('vorrat', pantryHint()), chip('laufweg-oeffnen', 'Reihenfolge im Laden'), chip('packungen', 'Packungsgrößen'),
-    done ? chip('erledigte-loeschen', 'Erledigte löschen') : ''].join('');
-  return `<div class="werkzeuge"><div class="w-gruppe"><h3>Mehr ergänzen</h3><div class="w-knoepfe">${add}</div></div>
-    <div class="w-gruppe"><h3>Liste</h3><div class="w-knoepfe">${list}</div></div></div>`;
+  const more = [weeks.map((w) => `<button class="knopf zweit klein" data-action="liste-bauen" data-week="${w}">${weeks.length > 1 ? `KW ${L.isoWeek(w)} neu aus dem Plan` : 'Aus dem Plan neu erstellen'}</button>`).join(''),
+    chip('laufweg-oeffnen', 'Reihenfolge im Laden'), chip('packungen', 'Packungsgrößen'), canPlan() ? chip('siri', 'Per Siri einrichten') : ''].join('');
+  return `<div class="werkzeuge"><div class="w-knoepfe">${often}</div>
+    <details class="w-mehr"><summary>Einstellungen zur Liste</summary><div class="w-knoepfe">${more}</div></details></div>`;
 }
 // Kleine Marke „Saison“ bei Obst und Gemüse aus der Region, solange die Regel eingeschaltet ist.
 function seasonMark(item) {
@@ -1940,7 +1940,7 @@ function tripMeta(t, open) {
     <button class="textknopf" data-action="einkauf-uebernehmen" data-due="${esc(t.due)}">${mine ? 'Austragen' : buyer ? 'Stattdessen ich' : 'Ich gehe einkaufen'}</button>
     <details class="einkaufstag"><summary class="textknopf">Tag ändern</summary>
       <form class="dazu" data-form="einkaufstag"><input type="hidden" name="von" value="${esc(t.due)}">
-        <input class="feld" type="date" name="due" value="${esc(t.due)}" aria-label="Einkaufstag für ${esc(tripName(t))}">
+        <input class="feld" type="date" name="due" value="${esc(t.due)}" min="${today}" aria-label="Einkaufstag für ${esc(tripName(t))}">
         <button class="knopf">Ändern</button></form>
       <p class="meta">Am Einkaufstag kommt um 7 Uhr eine Erinnerung an Mama und Papa, solange noch etwas offen ist.</p></details></div>${est}`;
 }
@@ -2457,9 +2457,10 @@ function draftFromResult(res) {
   const H = hbSettings();
   const day = /^\d{4}-\d{2}-\d{2}$/.test(res.datum || '') ? res.datum : L.todayISO();
   const items = HB.applyLearned(res.posten || [], H.merken, H.kategorien).map((p) => ({ ...p, preis: HB.money(p.preis) }));
-  // Offene Posten der Woche des Einkaufs und der Woche danach (der Großeinkauf am Samstag gilt schon für die nächste Woche).
+  // Posten der Einkäufe rund um den Tag (drei Tage davor bis eine Woche danach), egal aus welcher Woche,
+  // dazu die der Woche des Einkaufs und der danach (der Großeinkauf am Samstag gilt schon für die nächste Woche).
   const weeks = [L.mondayOf(day), L.addDays(L.mondayOf(day), 7)];
-  const week = state.data.shopping.filter((i) => weeks.includes(i.week_start));
+  const week = state.data.shopping.filter((i) => weeks.includes(i.week_start) || (i.due && i.due >= L.addDays(day, -3) && i.due <= L.addDays(day, 7)));
   return {
     isNew: true, id: L.uid(), day, shop: res.markt || '', total: HB.money(res.summe) || HB.itemsSum(items), note: res.hinweis || '',
     items, before: items.map((p) => ({ kategorie: p.kategorie })), matches: HB.matchShopping(items, week),
@@ -2890,6 +2891,13 @@ function currentTrip(pool = shopPool()) {
 function tripAfter(day, pool = shopPool()) {
   return shopTripsAll(pool).find((t) => t.due > day && t.due >= L.todayISO()) || freeTripAfter(day);
 }
+// Offene Posten des aktuellen Einkaufs, wie die Liste sie zeigt (mit Liegengebliebenem, das noch wandert).
+function shopOpenCount() {
+  const today = L.todayISO();
+  const pool = shopPool();
+  const cur = currentTrip(pool);
+  return pool.filter((i) => !i.checked && i.category !== 'vorhanden' && (i.due === cur.due || !i.due || (i.due < today && stillNeeded(i, today)))).length;
+}
 // Felder für einen neuen Posten auf dem aktuellen Einkauf.
 function tripFields(t) {
   const week = state.data.shopping.filter((i) => i.week_start === t.week);
@@ -2922,8 +2930,10 @@ function moveItems(list, target, note) {
     const twin = [...there, ...moved].find((x) => x.id !== i.id && key(x.label) === key(i.label) && (!bare(qty) || bare(x.qty) === bare(qty)));
     if (twin && !i.missing) { gone.push(i.id); continue; }
     const purpose = i.purpose || L.purposeOf(i, state.data.plan, state.data.dishes) || '';
-    const n = /nicht bekommen/.test(qty) ? '' : note(i);
-    moved.push({ ...i, trip: f.trip, due: f.due, buyer: f.buyer, missing: false, purpose, qty: [qty, n].filter(Boolean).join(', ') });
+    // Schon einmal nicht bekommen: nur das Datum erneuern.
+    const n = note(i);
+    const base = n ? qty.replace(/(,\s*)?am \d+\.\d+\. (bei \S+ )?nicht bekommen/g, '').replace(/^,\s*/, '').trim() : qty;
+    moved.push({ ...i, trip: f.trip, due: f.due, buyer: f.buyer, missing: false, purpose, qty: [base, n].filter(Boolean).join(', ') });
   }
   return { moved, gone };
 }
@@ -5609,7 +5619,12 @@ function acceptDraft(run, d, obj, result, changed, wish) {
 
 const actions = {
   tab: ({ tab }) => {
-    if (state.shopMode && tab !== 'einkauf') { state.shopMode = false; document.documentElement.classList.remove('einkaufsmodus'); keepAwake(false); }
+    if (state.shopMode && tab !== 'einkauf') {
+      // Wie „Fertig“: Was gefehlt hat, kommt auf den nächsten Einkauf.
+      const moved = moveMissing(currentTrip().due);
+      state.shopMode = false; document.documentElement.classList.remove('einkaufsmodus'); keepAwake(false);
+      if (moved) setTimeout(() => toast(`${moved.n === 1 ? '1 Posten, der gefehlt hat, steht' : `${moved.n} Posten, die gefehlt haben, stehen`} jetzt auf dem ${tripLabel(moved.target)}`), 50);
+    }
     state.tab = tab; render();
   },
   woche: ({ dir }) => { state.week = L.addDays(state.week, 7 * Number(dir)); render(); },
@@ -6047,11 +6062,6 @@ const actions = {
     commit(() => { state.data.shopping = state.data.shopping.map((i) => moved.find((m) => m.id === i.id) || i); }, () => store.saveItems(moved));
     toast(`${moved.length === 1 ? '1 Posten steht' : `${moved.length} Posten stehen`} jetzt bei ${KI.SHOPS[to]}.`);
   },
-  // Ältere Knöpfe: Nicht Bekommenes sofort auf den nächsten Einkauf.
-  'fehlt-verschieben': ({ due }) => {
-    const r = moveMissing(due || currentTrip().due);
-    toast(r ? `${r.n === 1 ? '1 Posten steht' : `${r.n} Posten stehen`} jetzt auf dem ${tripLabel(r.target)}` : 'Hier ist gerade nichts als „nicht bekommen“ markiert.');
-  },
   'posten-weg': ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
     if (!item) return;
@@ -6091,12 +6101,6 @@ const actions = {
     clearTimeout(toastTimer);
     $('#toast').classList.remove('sichtbar', 'mit-knopf');
     if (fn) fn();
-  },
-  erledigte: (_, el) => { state.hideDone = el.checked; render(); },
-  'erledigte-loeschen': async () => {
-    const gone = shopPool().filter((i) => i.checked);
-    if (!gone.length || !(await ask(`${gone.length} erledigte Einträge werden endgültig von der Liste gelöscht.`, 'Löschen'))) return;
-    commit(() => { state.data.shopping = state.data.shopping.filter((i) => !gone.includes(i)); }, () => store.deleteItems(gone.map((i) => i.id)));
   },
   sortieren: ({ sort }) => { state.sort = sort; render(); },
   'gericht-neu': () => openSheet({ type: 'gericht-form', id: '' }),
@@ -6693,7 +6697,6 @@ const actions = {
     setBuyer(d.due, take ? state.me : null);
     toast(take ? 'Eingetragen: Du gehst einkaufen.' : 'Du bist ausgetragen.');
   },
-  'zur-woche': (d) => { state.week = d.week; render(); window.scrollTo(0, 0); },
   'push-test': async (d, el) => {
     if (el) el.disabled = true;
     try {
@@ -6739,6 +6742,7 @@ const forms = {
     const raw = String(fd.get('due') || '');
     const due = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
     if (!due || due === from) return;
+    if (due < L.todayISO()) { toast('Der Einkaufstag kann nicht in der Vergangenheit liegen.'); return; }
     const pool = shopPool();
     const moving = pool.filter((i) => i.due === from);
     if (!moving.length) return;
@@ -7194,7 +7198,7 @@ const forms = {
     state.sheet = { type: 'urlaub' };
     renderSheet();
     const weeks = [...new Set(clear.map((p) => L.mondayOf(p.day)))].filter((w) => state.data.shopping.some((i) => i.week_start === w && !i.manual));
-    toast(`${entry.name} eingetragen.${weeks.length ? ' Die Einkaufsliste der Woche enthält noch die Zutaten, unter „Einkauf“ lässt sie sich neu berechnen.' : ''}`);
+    toast(`${entry.name} eingetragen.${weeks.length ? ' Die Einkaufsliste enthält noch die Zutaten, unter „Einkauf“ lässt sie sich neu aus dem Plan erstellen.' : ''}`);
   },
   regeln: (fd) => {
     const int = (k, min, max, def) => { const v = parseInt(fd.get(k), 10); return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : def; };

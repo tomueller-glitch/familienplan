@@ -70,7 +70,7 @@ await page.screenshot({ path: 'w_vorrat.png' });
 const ja = page.locator('[data-action="vorrat-ja"]').first(); if (await ja.count()) { await page.evaluate(() => window.calls.splice(0)); await ja.click(); await page.waitForTimeout(300); console.log('Ja:', JSON.stringify((await page.evaluate(() => window.calls.splice(0))).filter(c => c[1] === 'ep_pantry').map(c => c[2].map(r => r.label + ':' + r.seen_at)))); }
 await page.keyboard.press('Escape'); await page.waitForTimeout(200);
 // Siri
-await page.locator('[data-action="siri"]').first().click(); await page.waitForTimeout(300);
+await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator('[data-action="siri"]').first().click(); await page.waitForTimeout(300);
 await page.locator('[data-action="siri-schluessel"]').click(); await page.waitForTimeout(400);
 console.log('Siri:', (await page.locator('#sheet-root').innerText()).replace(/\n/g, ' | ').slice(0, 300));
 await page.screenshot({ path: 'w_siri.png', fullPage: false });

@@ -71,7 +71,7 @@ let page; const errs = [];
 async function open(heute, data) {
   if (page) await page.close();
   page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
-  await page.addInitScript(([h, d]) => { window.__heute = h; if (d) window.__db.ep_shopping = d; }, [heute, data || null]);
+  await page.addInitScript(([h, d]) => { window.__heute = h; globalThis.ESSENSPLAN_HEUTE = h; if (d) window.__db.ep_shopping = d; }, [heute, data || null]);
   await page.goto('http://localhost:8834/#einkauf'); await page.waitForTimeout(1200);
   if (await page.locator('[data-action="ich"]').count()) {
     await page.locator('[data-action="ich"]').first().click(); await page.waitForTimeout(400);
@@ -126,6 +126,24 @@ await open('2026-11-19', [
 console.log('E Liste:', (await text()).slice(0, 260));
 console.log('E gewandert:', (await saved()).map(short).join('; '), '| Toast:', await toastText());
 
-// 6) Ist alle am Display und Siri-Logik: auf den aktuellen Einkauf.
+// 6) Einkaufsmodus durch Bereichswechsel verlassen: Fehlendes wandert auch, der Hinweis bekommt das neue Datum.
+await open('2026-11-25', [
+  P2('y1', 'Frischeeinkauf am Mi 25.11.', '2026-11-25', 'Rinderhackfleisch', '800 g, am 20.11. nicht bekommen', 'Bolognese (Mi)', { week_start: '2026-11-23', category: 'fleisch' }),
+  P2('y2', 'Frischeeinkauf am Mi 25.11.', '2026-11-25', 'Milch', '1 l', '', { week_start: '2026-11-23' }),
+]);
+await page.click('.ek-kopf [data-action="einkaufsmodus"]'); await page.waitForTimeout(400);
+await page.screenshot({ path: 'ek_modus.png' });
+console.log('F Wofür im Laden sichtbar:', await page.locator('.posten .p-wofuer:visible').count());
+await page.locator('li:has-text("Rinderhackfleisch") [data-action="fehlt"]').click(); await page.waitForTimeout(300);
+await page.locator('[data-tab="woche"]').click(); await page.waitForTimeout(600);
+console.log('F Toast:', await toastText(), '| gespeichert:', (await saved()).filter((i) => i.id === 'y1').map(short).pop());
+// 7) Einkaufstag in der Vergangenheit geht nicht.
+await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(400);
+await page.locator('.ek-jetzt summary.textknopf').click(); await page.waitForTimeout(200);
+console.log('G min:', await page.locator('.ek-jetzt input[name=due]').getAttribute('min'));
+await page.evaluate(() => { const f = document.querySelector('.ek-jetzt form[data-form="einkaufstag"]'); f.querySelector('input[name=due]').removeAttribute('min'); f.querySelector('input[name=due]').value = '2026-11-20'; f.requestSubmit(); });
+await page.waitForTimeout(400);
+console.log('G Toast:', await toastText());
+
 console.log('Fehler:', errs);
 await b.close(); srv.close();

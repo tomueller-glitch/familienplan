@@ -34,7 +34,7 @@ await page.locator('[data-action="ich"]').first().click(); await page.waitForTim
 await page.fill('[name=pin1]', '1234'); await page.fill('[name=pin2]', '1234'); await page.click('#sheet-root button.knopf'); await page.waitForTimeout(1200);
 await page.evaluate(() => { location.hash = '#einkauf'; }); await page.waitForTimeout(500);
 // Zu Hause: über „Packungsgrößen“ einen Posten wählen
-await page.locator('[data-action="packungen"]').click(); await page.waitForTimeout(300);
+await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator('[data-action="packungen"]').click(); await page.waitForTimeout(300);
 await page.locator('#sheet-root details.pack-auswahl > summary').click(); await page.waitForTimeout(200);
 await page.locator('#sheet-root [data-action="packung"]', { hasText: 'Seelachs' }).first().click(); await page.waitForTimeout(300);
 console.log('Schritt 1:', (await sheet()).slice(0, 200));
@@ -61,7 +61,7 @@ console.log('Reste sofort (sollte leer sein):', JSON.stringify(((await setting('
 console.log('Erwartet nach dem Kochen:', JSON.stringify(((await setting('reste_erwartet')) || []).map((x) => [x.text, x.day, x.dish])));
 await page.locator('.modus-leiste [data-action="einkaufsmodus"]').click(); await page.waitForTimeout(300);
 // Packungsliste
-await page.locator('[data-action="packungen"]').click(); await page.waitForTimeout(300);
+await page.evaluate(() => document.querySelectorAll('details.w-mehr').forEach((d) => { d.open = true; })); await page.locator('[data-action="packungen"]').click(); await page.waitForTimeout(300);
 console.log('Liste:', (await sheet()).slice(0, 400));
 await page.screenshot({ path: 'p_liste.png' });
 // Nach dem Kochen: Nachfrage im Wochenplan

@@ -108,10 +108,5 @@ export function learnFromReceipt(packs, items, shop, at) {
 }
 
 // Text für Claude: eine Zeile pro Produkt.
-export function packLines(packs) {
-  return Object.values(packs || {}).sort((a, b) => a.name.localeCompare(b.name, 'de'))
-    .map((p) => `${p.name}: ${fmtSize(p.q, p.u)}${p.markt === 'lidl' ? ' (Lidl)' : ''}`);
-}
-
 // Portionen nach dem Umrechnen. Ab 5 Portionen bleibt für den nächsten Tag etwas übrig.
 export const servingsFor = (factor) => Math.max(1, Math.round(4 * factor));
