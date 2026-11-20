@@ -6,6 +6,7 @@ export const NEUES = [
     id: '2026-11-20c', datum: '20. November, morgens', titel: 'Zwei Einkäufe an einem Tag sind eine Liste',
     punkte: [
       { text: 'Legst du zwei Einkäufe auf denselben Einkaufstag, werden sie eine Liste. Doppelte Posten wie zweimal Zwiebeln werden dabei zusammengezählt.', fuer: 'eltern' },
+      { text: 'Das gilt jetzt auch über die Woche hinaus: Liegt der Einkauf dieser Woche am selben Tag wie der Großeinkauf für die nächste, stehen beide in einer Liste, gleiche Sachen in einer Zeile mit einem Haken.', fuer: 'eltern' },
     ],
   },
   {

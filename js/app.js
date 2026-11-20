@@ -1448,10 +1448,10 @@ function setBuyer(week, trip, buyer) {
 }
 
 // Hinweis auf Listen aus anderen Wochen, deren Einkaufstag heute ist.
-function dueElsewhere() {
+function dueElsewhere(shown = []) {
   const today = L.todayISO();
   const other = [...new Set(state.data.shopping
-    .filter((i) => i.due === today && !i.checked && i.week_start !== state.week)
+    .filter((i) => i.due === today && !i.checked && i.week_start !== state.week && !shown.includes(i.week_start))
     .map((i) => i.week_start))];
   return other.map((w) => {
     const trip = state.data.shopping.find((i) => i.week_start === w && i.due === today).trip || 'Einkauf';
@@ -1622,6 +1622,16 @@ function viewEinkauf() {
         : hasPlan ? '<p>Mama oder Papa erstellen die Liste aus dem Wochenplan.</p>' : '<p>Plant zuerst die Woche, dann entsteht die Liste daraus.</p><div class="knopfreihe"><button class="knopf" data-action="tab" data-tab="woche">Zum Wochenplan</button></div>'}
       </div>${addForm}${shopTools(false, 0)}${dueElsewhere()}`;
   }
+  // Liegt eine Tour dieser Woche am selben Tag wie eine Tour einer anderen Woche (etwa der Großeinkauf am Samstag für
+  // die nächste Woche), ist das ein Einkauf: deren Posten stehen hier mit, gleiche Sachen in einer Zeile.
+  const ownTrip = new Map();
+  for (const i of items) if (i.due && !ownTrip.has(i.due)) ownTrip.set(i.due, i.trip || 'Einkauf');
+  const near = (w) => Math.abs(Date.parse(w) - Date.parse(state.week)) <= 14 * 86400000;
+  const guests = state.data.shopping.filter((i) => i.week_start !== state.week && i.due && ownTrip.has(i.due) && near(i.week_start))
+    .map((i) => ({ ...i, trip: ownTrip.get(i.due), gast: i.week_start }));
+  const guestWeeks = [...new Set(guests.map((i) => i.gast))];
+  if (guests.length) items.push(...guests);
+  state.twins = new Map();
   const done = items.filter((i) => i.checked).length;
   // Touren nach Einkaufstag, ohne Tag zum Schluss.
   const tripDue = (t) => items.filter((i) => (i.trip || 'Einkauf') === t && i.due).map((i) => i.due).sort()[0] || '9999';
@@ -1636,7 +1646,7 @@ function viewEinkauf() {
       const inShop = inTrip.filter((i) => KI.shopOf(i) === shop);
       let part = '';
       for (const cat of catOrder(shop)) {
-        const rows = inShop.filter((i) => (L.SHOP_CATS[i.category] ? i.category : 'sonst') === cat && !((state.hideDone || state.shopMode) && i.checked && i.id !== state.justChecked));
+        const rows = joinGuests(inShop.filter((i) => (L.SHOP_CATS[i.category] ? i.category : 'sonst') === cat && !((state.hideDone || state.shopMode) && i.checked && i.id !== state.justChecked)));
         if (!rows.length) continue;
         part += `<h3 class="abteilung">${L.SHOP_CATS[cat]}</h3><ul class="posten">${rows.map(itemRow).join('')}</ul>`;
       }
@@ -1645,7 +1655,9 @@ function viewEinkauf() {
         block += `<div class="markt markt-${shop || 'aldi'}"><h3 class="markt-kopf"><span class="markt-name">${KI.SHOPS[shop]}</span> <span class="markt-ort">${KI.SHOP_PLACES[shop]}</span><span class="markt-zahl">${open ? `${open} offen` : 'erledigt'}</span></h3>${part}</div>`;
       } else block += part;
     }
-    if (block) list += `${trips.length > 1 ? `<h2 class="tour">${esc(trip)}</h2>` : ''}${dueLine(trip, inTrip)}${missingBox(trip, inTrip, trips)}${block}`;
+    const gw = [...new Set(inTrip.filter((i) => i.gast).map((i) => i.gast))];
+    const guestNote = gw.length ? `<p class="meta tour-gast">Am selben Tag: dazu die Posten aus der Liste der KW ${gw.map((w) => L.isoWeek(w)).join(' und ')}, gleiche Sachen in einer Zeile.</p>` : '';
+    if (block) list += `${trips.length > 1 ? `<h2 class="tour">${esc(trip)}</h2>` : ''}${dueLine(trip, inTrip.filter((i) => !i.gast))}${guestNote}${missingBox(trip, inTrip, trips)}${block}`;
   }
   if (!list) list = '<div class="leer"><h2 class="abschnitt">Alles erledigt</h2><p>Jeder Eintrag ist abgehakt.</p></div>';
   if (state.shopMode) {
@@ -1653,13 +1665,30 @@ function viewEinkauf() {
       <div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${done}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done / items.length) * 100)}%"></span></div>
       ${pantryBox(state.week)}${list}${addForm}`;
   }
-  return `${dueElsewhere()}${draftBox(state.week)}${pantryBox(state.week)}<div class="fortschritt">
+  return `${dueElsewhere(guestWeeks)}${draftBox(state.week)}${pantryBox(state.week)}<div class="fortschritt">
       <div class="zeile"><span class="gross">${done} von ${items.length} erledigt</span>
       <label class="schalter"><input type="checkbox" data-action="erledigte"${state.hideDone ? ' checked' : ''}> Erledigte ausblenden</label></div>
       <button class="knopf klein modus-start" data-action="einkaufsmodus">Einkaufsmodus</button>
       <div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${done}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done / items.length) * 100)}%"></span></div>
     </div>${list}${addForm}
     ${shopTools(hasPlan, done)}`;
+}
+// Gleiche Sachen aus zwei Wochen am selben Einkaufstag als eine Zeile: Mengen zusammengezählt, der Haken gilt für beide.
+// Nur erzeugte, offene Posten, wie beim Zusammenfassen innerhalb einer Woche.
+function joinGuests(rows) {
+  if (!rows.some((i) => i.gast)) return rows;
+  const ok = (i) => !i.manual && !i.checked && !i.missing;
+  const norm = rows.map((i) => (ok(i) ? { ...i, week_start: 'x' } : i));
+  const { changed, removed } = L.mergeDuplicates(norm, ok);
+  if (!removed.length) return rows;
+  const key = (i) => `${L.itemKey(i.label)}|${i.shop || ''}`;
+  const gone = new Set(removed);
+  return rows.filter((i) => !gone.has(i.id)).map((i) => {
+    const c = changed.find((x) => x.id === i.id);
+    if (!c) return i;
+    state.twins.set(i.id, rows.filter((r) => gone.has(r.id) && key(r) === key(i)).map((r) => r.id));
+    return { ...i, label: c.label, qty: c.qty, purpose: c.purpose };
+  });
 }
 // Werkzeuge unter der Einkaufsliste, in zwei Gruppen.
 function shopTools(hasPlan, done) {
@@ -4910,14 +4939,18 @@ function haptic() {
   } catch (e) { /* ohne Rückmeldung weiter */ }
 }
 
+// Ein Posten kann für mehrere stehen: gleiche Sachen aus den Listen zweier Wochen am selben Einkaufstag (twinsOf).
+const twinsOf = (id) => [id, ...((state.twins && state.twins.get(id)) || [])];
 function toggleItem(id) {
   const item = state.data.shopping.find((i) => i.id === id);
   if (!item) return;
   const checked = !item.checked;
-  const next = { ...item, checked, missing: checked ? false : !!item.missing, checked_by: checked ? state.me : null, checked_at: checked ? new Date().toISOString() : null };
+  const now = new Date().toISOString();
+  const all = state.data.shopping.filter((i) => twinsOf(id).includes(i.id));
+  const next = all.map((x) => ({ ...x, checked, missing: checked ? false : !!x.missing, checked_by: checked ? state.me : null, checked_at: checked ? now : null }));
   commit(() => {
-    state.data.shopping = state.data.shopping.map((i) => (i === item ? next : i));
-  }, () => store.saveItems([next]));
+    state.data.shopping = state.data.shopping.map((i) => next.find((n) => n.id === i.id) || i);
+  }, () => store.saveItems(next));
 }
 
 function normalizeDish(raw, existing) {
@@ -5543,8 +5576,8 @@ const actions = {
   fehlt: ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
     if (!item) return;
-    const next = { ...item, missing: !item.missing };
-    commit(() => { state.data.shopping = state.data.shopping.map((i) => (i === item ? next : i)); }, () => store.saveItems([next]));
+    const next = state.data.shopping.filter((i) => twinsOf(id).includes(i.id)).map((x) => ({ ...x, missing: !item.missing }));
+    commit(() => { state.data.shopping = state.data.shopping.map((i) => next.find((n) => n.id === i.id) || i); }, () => store.saveItems(next));
   },
   ersatz: async ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
@@ -5617,6 +5650,22 @@ const actions = {
   'posten-weg': ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
     if (!item) return;
+    // Steht der Posten für mehrere (zwei Wochen am selben Tag), gehen alle von der Liste.
+    const twins = twinsOf(id).slice(1).map((t) => state.data.shopping.find((i) => i.id === t)).filter(Boolean);
+    if (twins.length) {
+      const rows = [...new Set([item, ...twins].filter((x) => !x.manual).map((x) => x.week_start))];
+      let settings = state.data.settings;
+      for (const w of rows) {
+        const r = removedRow(w, L.itemKey(item.label), true);
+        settings = [...settings.filter((x) => x.key !== 'liste_weg'), r];
+        state.data.settings = settings;
+      }
+      const ids = [item, ...twins].map((x) => x.id);
+      const last = settings.find((x) => x.key === 'liste_weg');
+      commit(() => { state.data.shopping = state.data.shopping.filter((i) => !ids.includes(i.id)); }, async () => { await store.deleteItems(ids); if (last) await store.saveSettings([last]); });
+      toast(`${L.plainName(item.label)} ist von der Liste.`);
+      return;
+    }
     // Erzeugte Posten merkt sich die Liste, damit Neuberechnen und Claudes Plan sie nicht wieder draufsetzen.
     const row = item.manual ? null : removedRow(item.week_start, L.itemKey(item.label), true);
     commit(() => {
@@ -6308,7 +6357,9 @@ const forms = {
     commit(() => {
       state.data.shopping = state.data.shopping.map((i) => changed.find((c) => c.id === i.id) || i);
     }, () => store.saveItems(changed));
-    toast(due ? `Einkaufstag gespeichert: ${L.fmtShort(due)}.${warn}` : 'Einkaufstag entfernt.');
+    const otherWeek = due && state.data.shopping.find((i) => i.week_start !== state.week && i.due === due && Math.abs(Date.parse(i.week_start) - Date.parse(state.week)) <= 14 * 86400000);
+    if (otherWeek) { toast(`Einkaufstag gespeichert: ${L.fmtShort(due)} ${otherWeek.trip || 'Der Einkauf'} aus der Liste der KW ${L.isoWeek(otherWeek.week_start)} ist am selben Tag, beide stehen jetzt in einer Liste.${warn}`); return; }
+    toast(due ? `Einkaufstag gespeichert: ${L.fmtShort(due)}${warn}` : 'Einkaufstag entfernt.');
   },
   notiz: (fd) => {
     const id = String(fd.get('dish') || '');

@@ -80,6 +80,28 @@ const liste = () => [
   console.log('Z nachher:', await heads());
   console.log('Z Fehler:', errs); await ctx.close();
 }
+// Zwei Wochen, ein Einkaufstag: eine Liste, gleiche Sachen in einer Zeile, ein Haken für beide.
+{
+  const G = 'Großeinkauf am Sa 21.11.'; const F = 'Frischeeinkauf am Mi 18.11.';
+  const t = (id, label, qty, trip, due, week, extra = {}) => ({ ...it(id, label, qty, '', Number(id.slice(1)), extra), week_start: week, trip, due });
+  const db = base();
+  db.ep_shopping = [t('y1', 'Zwiebeln', '2 Stück', F, '2026-11-18', '2026-11-16'), t('y2', 'Feldsalat', '150 g', F, '2026-11-18', '2026-11-16'),
+    t('y3', 'Zwiebel', '1 Stück', G, '2026-11-21', '2026-11-23'), t('y4', 'Nudeln', '500 g', G, '2026-11-21', '2026-11-23', { category: 'vorrat' })];
+  const { page, ctx, errs } = await open(db, 0);
+  await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
+  const form = page.locator(`form[data-form="einkaufstag"]:has(input[name=trip][value="${F}"])`);
+  await page.evaluate(() => document.querySelectorAll('details.einkaufstag').forEach((d) => { d.open = true; }));
+  await form.locator('input[type=date]').fill('2026-11-21'); await form.locator('button').click(); await page.waitForTimeout(600);
+  console.log('Y Hinweis:', await toastText(page));
+  const rows = async () => (await page.locator('main .posten').allInnerTexts()).join(' | ').replace(/\n+/g, ' / ');
+  console.log('Y KW 47:', await rows(), '|', (await page.locator('.tour-gast').innerText().catch(() => '-')));
+  await page.locator('.posten li', { hasText: 'Zwiebel' }).locator('[data-action="haken"]').click(); await page.waitForTimeout(500);
+  const saved = (await calls(page, 'ep_shopping')).flat().filter((r) => ['y1', 'y3'].includes(r.id)).slice(-2);
+  console.log('Y Haken:', saved.map((r) => `${r.id}:${r.checked}`).join(' '));
+  await page.locator('[data-action="woche"][data-dir="1"]').first().click(); await page.waitForTimeout(400);
+  console.log('Y KW 48:', await rows());
+  console.log('Y Fehler:', errs); await ctx.close();
+}
 // Logik: Touren am selben Tag
 {
   const L = await import(ROOT + '/js/logic.js');
