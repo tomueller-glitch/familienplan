@@ -3,6 +3,15 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20k', datum: '20. November, spät', titel: 'Dienstplan als Kalender: nur fürs Essen',
+    punkte: [
+      { text: 'Kalender haben jetzt drei Arten: Display und Essen, nur Display, nur fürs Essen. „Nur fürs Essen“ passt für einen Dienstplan: Die Dienste stehen nicht am Küchen-Display, zählen aber fürs Abendessen. Umstellen unter Planen > Kalender mit dem Knopf neben dem Kalender.', fuer: 'eltern' },
+      { text: 'Aus einem Dienstplan zeigt das Display nur Rufdienste. Titel gehen weder ans Display noch an Claude, nur die Uhrzeiten.', fuer: 'eltern' },
+      { text: 'An Tagen mit Rufdienst plant Claude Gerichte, die warten können oder sich gut aufwärmen lassen. „Rufdienst ITS“ zählt dafür nicht.', fuer: 'eltern' },
+      { text: 'Die Zeile zum Abendessen am Display nennt nur Abweichungen, etwa „Papa isst später, ab 20:00 Uhr“ oder „Papa muss um 20:00 los“.' },
+    ],
+  },
+  {
     id: '2026-11-20d', datum: '20. November, nachts', titel: 'Wunschessen-Duell und Live beim Einkaufen',
     punkte: [
       { text: 'Wunschessen-Duell: Unter „Woche“ und als blauer Zettel am Küchen-Display stehen zwei Gerichte für die nächste Woche. Alle vier stimmen ab, jede Stimme zählt gleich. Wer wofür gestimmt hat, sieht man erst, wenn alle abgestimmt haben. Der Sieger kommt in Claudes Plan.' },

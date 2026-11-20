@@ -785,6 +785,7 @@ export function weekDays(ctx: Row | null, week: string, urlaub: Row[] = []) {
       esser: k ? k.esser : 4,
       weg: k ? k.weg || [] : [],
       kurz: k ? !!k.kurz : false,
+      rufdienst: k && Array.isArray(k.rufdienst) ? k.rufdienst.map(String) : [],
       gaeste: k ? Math.max(0, Number(k.gaeste) || 0) : 0,
       bekannt: !!k,
     };
@@ -872,6 +873,7 @@ export function planPrompt(o: { rules: Rules; ctx: Row | null; offers: string; w
     '- Tage mit "urlaub" (nicht leer): Dort isst niemand zu Hause. Den Tag trotzdem aufführen, aber "gericht", "brotbox" und "vorabend" leer lassen und dafür nichts einkaufen.',
     `- Für jeden anderen Tag genau ein Abendessen. Kein Gericht doppelt in der Woche, keine gleiche Hauptzutat an zwei Tagen hintereinander, höchstens zweimal rotes Fleisch.`,
     `- Kochzeit werktags höchstens ${rules.kochzeit} Minuten. An Tagen mit "kurz": true höchstens 40 Minuten. Am Wochenende darf es länger dauern.`,
+    '- An Tagen mit "rufdienst" ist die Person zu Hause, kann aber jederzeit zum Einsatz müssen. Plane dann ein Gericht, das warten kann oder sich gut aufwärmen lässt (Eintopf, Auflauf, Schmorgericht, Suppe), nichts, was frisch aus der Pfanne gegessen werden muss (Schnitzel, Pfannkuchen, Spiegelei).',
     '- Jedes Abendessen soll reichlich Eiweiß liefern, als Richtwert mindestens 30 g pro Erwachsenenportion.',
     '- "esser" sagt, wie viele mitessen, "weg" wer an dem Abend fehlt. Bei weniger Essern darf es etwas Einfaches sein.',
     `- Vegane Abendessen pro Woche: ${rules.vegan}.`,

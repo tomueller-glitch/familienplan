@@ -543,7 +543,7 @@ function syncContext() {
   // Ohne die Kalender fehlen Claude Dienste und Termine. Erst laden, danach kommt der Aufruf wieder.
   if (!kalReady()) { loadCalendars(false); return; }
   try {
-    const ctx = KI.buildContext({ ...state.data, events: allEvents() }, stats, exportNutrition);
+    const ctx = KI.buildContext({ ...state.data, events: allEvents(), oncall: allOnCall() }, stats, exportNutrition);
     const old = KI.settingOf(state.data.settings, 'ki_kontext');
     const strip = (c) => JSON.stringify({ ...c, stand: '', auswertung: { ...(c && c.auswertung), erstellt: '' } });
     if (old && old.stand === ctx.stand && strip(old) === strip(ctx)) return;
@@ -625,9 +625,9 @@ function sheetCalendars(sh) {
     const st = status(f.id);
     return `<li class="kal-zeile"><span class="p-text"><span class="p-name">${p ? avatar(p, true) : ''}${esc(f.name)}</span>
       <span class="p-menge">${st ? (st.ok ? `Gelesen, ${st.anzahl === 1 ? '1 Termin' : `${st.anzahl} Termine`} in den nächsten drei Wochen` : `Fehler: ${esc(st.fehler)}`) : esc(String(f.url).replace(/^(webcals?|https):\/\//, '').slice(0, 42) + '…')}</span>
-      ${p ? `<span class="p-menge">${f.essen === false ? 'Nur fürs Display' : `Zählt fürs Abendessen von ${esc(p.name)}`}</span>` : ''}
+      ${p ? `<span class="p-menge">${{ anzeige: 'Nur fürs Display', essen: `Nur fürs Abendessen von ${esc(p.name)}, am Display nur Rufdienste`, beides: `Display und Abendessen von ${esc(p.name)}` }[T.feedArt(f)]}</span>` : ''}
       ${p && f.essen !== false && heimweg().adresse ? `<span class="p-menge">Heimweg ${esc(WEG_ART[f.weg || 'auto'])}</span>` : ''}</span>
-      <span class="kal-knoepfe">${p ? `<button class="knopf zweit klein" data-action="kalender-essen" data-id="${esc(f.id)}">${f.essen === false ? 'Fürs Essen zählen' : 'Nur Display'}</button>` : ''}
+      <span class="kal-knoepfe">${p ? `<button class="knopf zweit klein" data-action="kalender-essen" data-id="${esc(f.id)}" aria-label="Art von ${esc(f.name)} ändern, jetzt: ${{ anzeige: 'nur Display', essen: 'nur fürs Essen', beides: 'Display und Essen' }[T.feedArt(f)]}">${{ anzeige: 'Nur Display', essen: 'Nur fürs Essen', beides: 'Display und Essen' }[T.feedArt(f)]} ändern</button>` : ''}
       ${p && f.essen !== false && heimweg().adresse ? `<button class="knopf zweit klein" data-action="kalender-weg-art" data-id="${esc(f.id)}" aria-label="Heimweg für ${esc(f.name)} ändern">${esc(WEG_KURZ[f.weg || 'auto'])}</button>` : ''}</span>
       <button class="weg" data-action="kalender-weg" data-id="${esc(f.id)}" aria-label="${esc(f.name)} entfernen">${CROSS}</button></li>`;
   };
@@ -636,6 +636,7 @@ function sheetCalendars(sh) {
     title: 'iPhone-Kalender',
     body: `<p class="meta" style="margin-bottom:10px">Das Küchen-Display zeigt die Termine dieser Kalender von heute und morgen. Die App liest nur, sie ändert nichts.</p>
       <p class="meta" style="margin-bottom:10px">Gehört ein Kalender zu einer Person, zählen seine Termine mit Uhrzeit auch fürs Abendessen: Wer zur Essenszeit unterwegs ist, kommt später. Läuft ein Termin über Mitternacht, etwa ein Nachtdienst, isst die Person an dem Abend nicht mit. Ganztägige Einträge wie Geburtstage zählen nicht. Im Tag lässt sich das wie immer von Hand ändern.</p>
+      <p class="meta" style="margin-bottom:10px">Für einen Dienstplan passt „Nur fürs Essen“: Die Dienste stehen nicht am Display, zählen aber fürs Abendessen. Am Display stehen davon nur Rufdienste. Titel gehen weder ans Display noch an Claude, nur die Uhrzeiten. An Tagen mit Rufdienst plant Claude Gerichte, die warten können. „Rufdienst ITS“ zählt fürs Essen nicht.</p>
       <details class="kal-hilfe"><summary>So bekommt ihr den Link eines iPhone-Kalenders</summary><ol>
         <li>In der Kalender-App unten auf „Kalender“ tippen.</li>
         <li>Beim gewünschten iCloud-Kalender auf das (i) tippen und „Öffentlicher Kalender“ einschalten. Das geht nur auf dem Gerät der Person, der der Kalender gehört.</li>
@@ -929,8 +930,10 @@ function viewDisplay() {
   const names = (list) => list.map((x) => x.person.name).join(' und ');
   const dinnerMeta = [
     dish ? `${info.time} Uhr` : '',
-    info.away.length ? `ohne ${names(info.away)}` : info.eaters ? (info.eaters === state.data.persons.length ? 'alle da' : `${info.eaters} am Tisch`) : '',
-    ...info.later.map((x) => `${x.person.name} kommt ${String(Math.floor(x.home / 60)).padStart(2, '0')}:${String(x.home % 60).padStart(2, '0')}`),
+    info.away.length ? `ohne ${names(info.away)}` : info.eaters && !info.later.length ? (info.eaters === state.data.persons.length ? 'alle da' : `${info.eaters} am Tisch`) : '',
+    // Nur Abweichungen: wer später kommt, wer erst nach dem Essen da ist, wer während des Essens los muss.
+    ...info.later.map((x) => (info.afterDinner.includes(x) ? `${x.person.name} isst später, ab ${T.toHM(x.home)} Uhr` : `${x.person.name} kommt ${T.toHM(x.home)}`)),
+    ...info.leaving.map((x) => `${x.person.name} muss um ${T.toHM(x.leaves.at)} los`),
   ].filter(Boolean);
   const pm = planOf(L.addDays(today, 1));
   const tomorrow = pm && !pm.skipped ? dishById(pm.dish_id) : null;
@@ -1037,6 +1040,8 @@ function dayItems(d) {
   const merged = new Map();
   for (const x of raw) {
     const f = feedOf(x);
+    // Dienstpläne („nur fürs Essen“) stehen nicht am Display, außer Rufdiensten.
+    if (T.feedArt(f) === 'essen' && !T.isOnCall(x.titel)) continue;
     const p = f.person_id ? personById(f.person_id) : null;
     const k = `${String(x.titel).trim().toLowerCase()}|${x.von}|${x.bis}|${x.ganztags}`;
     const m = merged.get(k);
@@ -1112,6 +1117,12 @@ function allEvents() {
     kalMemo = { k, feeds, today, list: T.calendarEvents(tage, feeds) };
   }
   return kalMemo.list;
+}
+// Rufdienst-Tage je Person (ganztägig), für Claudes Wochenplan.
+function allOnCall() {
+  const k = kalState();
+  const today = L.todayISO();
+  return k ? T.onCallDays(Object.fromEntries(Object.entries(k.tage || {}).filter(([d]) => d >= today)), calFeeds()) : {};
 }
 async function loadCalendars(force) {
   kalState();
@@ -6555,8 +6566,10 @@ const actions = {
     openSheet({ type: 'kalender' });
     loadCalendars(true);
   },
+  // Reihum: Display und Essen, nur Display, nur fürs Essen (Dienstplan).
   'kalender-essen': ({ id }) => {
-    saveCalFeeds(calFeeds().map((x) => (x.id === id ? { ...x, essen: x.essen === false } : x)));
+    const next = { beides: { essen: false, anzeige: true }, anzeige: { essen: true, anzeige: false }, essen: { essen: true, anzeige: true } };
+    saveCalFeeds(calFeeds().map((x) => (x.id === id ? { ...x, ...next[T.feedArt(x)] } : x)));
     kalMemo = { key: null, list: [] };
     renderSheet();
     scheduleDinnerSync();

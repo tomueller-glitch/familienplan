@@ -67,6 +67,8 @@ export function buildContext(data, stats, nutritionOf, today = L.todayISO()) {
       // Festtage mit eigenem Plan bleiben im Wochenplan von Claude frei, wie Urlaub.
       urlaub: (holidayOn(data.settings || [], day) || {}).name || (feastOn(data.settings || [], day) && feastOn(data.settings || [], day).plan ? `Festessen ${feastOn(data.settings || [], day).anlass || ''}, schon geplant`.trim() : null),
       gaeste: Math.max(0, Number(((data.plan || []).find((p) => p.day === day) || {}).guests) || 0),
+      // Wer Rufdienst hat: zu Hause, kann aber jederzeit weg müssen.
+      rufdienst: ((data.oncall || {})[day] || []).map((id) => (data.persons.find((p) => p.id === id) || {}).name).filter(Boolean),
     });
   }
   return {

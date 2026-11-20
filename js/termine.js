@@ -41,6 +41,25 @@ export function eventsOn(events, day) {
 // Es zählen nur Kalender, die zu einer Person gehören und nicht auf „nur Anzeige“ stehen,
 // und nur Termine mit Uhrzeit. Ganztägige Einträge wie Geburtstage verschieben das Essen nicht.
 // Ein Termin, der über Mitternacht hinaus läuft (weiter), heißt: an dem Abend weg. Termine ohne Dauer zählen nur mit ihrer Uhrzeit.
+// Art eines Kalenders: 'beides' (Display und Essen), 'anzeige' (nur Display), 'essen' (nur fürs Essen, etwa ein
+// Dienstplan). Aus „nur fürs Essen“ gehen keine Titel weiter, nur Uhrzeiten unter „Dienst“.
+export const feedArt = (f) => (f && f.essen === false ? 'anzeige' : f && f.anzeige === false ? 'essen' : 'beides');
+// Rufdienst (ganztägig, die Person ist zu Hause, kann aber weg müssen). „Rufdienst ITS“ zählt fürs Essen nicht.
+export const isOnCall = (title) => /rufdienst|bereitschaft/i.test(String(title || ''));
+export const onCallForDinner = (title) => isOnCall(title) && !/\bITS\b/i.test(String(title || ''));
+// Tage mit Rufdienst je Person aus den Kalendern, die fürs Essen zählen: { tag: [person_id] }.
+export function onCallDays(tage, feeds) {
+  const out = {};
+  for (const [day, items] of Object.entries(tage || {})) {
+    for (const x of items || []) {
+      const f = (feeds || []).find((y) => y.id === x.kalender);
+      if (!f || !f.person_id || feedArt(f) === 'anzeige' || !onCallForDinner(x.titel)) continue;
+      (out[day] = out[day] || []).includes(f.person_id) || out[day].push(f.person_id);
+    }
+  }
+  return out;
+}
+
 export function calendarEvents(tage, feeds) {
   const out = [];
   for (const [day, items] of Object.entries(tage || {})) {
@@ -49,10 +68,12 @@ export function calendarEvents(tage, feeds) {
       if (!f || !f.person_id || f.essen === false || !x.titel) return;
       const timed = x.zeit === true || x.von || x.bis;
       if (!timed) return;
+      // Rufdienst mit Uhrzeit zählt wie ganztägiger: nicht als Abwesenheit.
+      if (isOnCall(x.titel)) return;
       // Mit Heimweg: zu Hause nach Ende plus Fahrzeit, auf fünf Minuten aufgerundet.
       const end = toMin(x.bis);
       const home = end != null && x.weg > 0 ? toHM(Math.min(23 * 60 + 55, Math.ceil((end + x.weg) / 5) * 5)) : null;
-      out.push({ id: `kal-${f.id}-${day}-${i}`, kal: f.id, date: day, title: x.titel, who: [f.person_id], start_time: x.von || null, end_time: x.bis || null, home_time: home, weg: x.weg || 0, nacht: x.weiter === true });
+      out.push({ id: `kal-${f.id}-${day}-${i}`, kal: f.id, date: day, title: feedArt(f) === 'essen' ? 'Dienst' : x.titel, who: [f.person_id], start_time: x.von || null, end_time: x.bis || null, home_time: home, weg: x.weg || 0, nacht: x.weiter === true });
     });
   }
   return out;
