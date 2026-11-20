@@ -683,7 +683,8 @@ export function plainName(label) {
 // Claude schreibt Angebote in die Menge: „2 Packungen, Angebot ab 13.11., nicht Bio“. Die Liste zeigt nur die Menge
 // und merkt sich, ob es ein Bio-Angebot ist.
 export function cleanQty(qty) {
-  const parts = String(qty || '').split(/,\s*/).map((x) => x.trim()).filter(Boolean);
+  // Komma als Trenner, aber nicht in Zahlen wie „1,5 kg“.
+  const parts = String(qty || '').split(/,(?!\d)\s*/).map((x) => x.trim()).filter(Boolean);
   let offer = null;
   let bio = null;
   const keep = [];

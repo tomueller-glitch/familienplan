@@ -72,7 +72,7 @@ const iso = new Date(appNow()).toISOString();
   await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
   await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(2200);
   console.log('B Toast:', await toastText(page));
-  const vor = await page.evaluate(() => [...document.querySelectorAll('.posten li')].map((l) => l.innerText.replace(/\n+/g, ' ')).filter((t) => /Vorrat/.test(t)));
+  const vor = await page.evaluate(() => [...document.querySelectorAll('.posten li')].map((l) => l.textContent.replace(/\s+/g, ' ').trim()).filter((t) => /Vorrat/.test(t)));
   console.log('B Vorrat-Posten:', JSON.stringify(vor.slice(0, 4)));
   await page.locator('.vorrat-frage [data-action="vorrat-fehlt"]').first().click(); await page.waitForTimeout(300);
   const it = (await calls(page, 'ep_shopping')).flat().pop();

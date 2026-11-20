@@ -3,6 +3,16 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20e', datum: '20. November, abends', titel: 'Einkaufsliste: eine Liste, kein Nachkauf mehr',
+    punkte: [
+      { text: 'Unter „Einkauf“ steht oben immer der nächste Einkauf, egal zu welcher Woche er gehört. Was ihr ergänzt, kommt dorthin, auch „Ist alle“ vom Küchen-Display und Siri.' },
+      { text: 'Spätere Einkäufe stehen darunter bei „Danach“, die der letzten Tage bei „Erledigt“. Beide sind zugeklappt. Abgehaktes des aktuellen Einkaufs liegt ganz unten, ebenfalls zugeklappt.' },
+      { text: 'Die Liste „Nachkauf“ gibt es nicht mehr. Was im Laden fehlt, im Einkaufsmodus auf „fehlt“ tippen. Mit „Fertig“ steht es auf dem nächsten Einkauf, mit dem Hinweis „nicht bekommen“. Wer „Fertig“ vergisst, findet es am nächsten Tag dort.' },
+      { text: 'Was nach dem Einkaufstag noch offen ist, wandert von selbst weiter. Zutaten für Abendessen, die schon vorbei sind, bleiben liegen.', fuer: 'eltern' },
+      { text: 'Eigene Einträge landen gleich in der passenden Abteilung, zum Beispiel Joghurt im Kühlregal.' },
+    ],
+  },
+  {
     id: '2026-11-20m', datum: '20. November, abends', titel: 'Küchen-Display: Zettel, Kochen, Essen rufen',
     punkte: [
       { text: 'Zettel fürs Küchen-Display: Unter Planen eine kurze Nachricht aufhängen, etwa „Paket ist beim Nachbarn“. Sie hängt oben am Display, bis heute Abend oder ein paar Tage, und lässt sich dort abnehmen.' },

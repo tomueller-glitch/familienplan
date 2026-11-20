@@ -38,7 +38,7 @@ const iso = new Date(appNow()).toISOString();
 
 
 // Gleiche Posten auf der Einkaufsliste: Einzahl und Mehrzahl, Stk. und Stück, kg und g.
-const it = (id, label, qty, purpose, sort, extra = {}) => ({ id, week_start: '2026-11-16', trip: 'Großeinkauf am Sa 14.11.', due: '2026-11-14', label, qty, purpose, sort, category: 'obst', shop: null, missing: false, checked: false, checked_by: null, checked_at: null, manual: false, ...extra });
+const it = (id, label, qty, purpose, sort, extra = {}) => ({ id, week_start: '2026-11-16', trip: 'Großeinkauf am Sa 21.11.', due: '2026-11-21', label, qty, purpose, sort, category: 'obst', shop: null, missing: false, checked: false, checked_by: null, checked_at: null, manual: false, ...extra });
 const liste = () => [
   it('a', 'Knoblauchzehen', '2 Stück', 'Chili con Carne (Di)', 1), it('b', 'Knoblauchzehe', '2 Stk.', 'Spinat-Lasagne (Sa), Fränkisches Rindergulasch (So)', 2),
   it('c', 'Zwiebel', '2 Stk.', 'Seelachs-Frikadellen (Mo), Spinat-Lasagne (Sa)', 7), it('d', 'Zwiebeln', '2 Stück', 'Chili con Carne (Di), Gemüsefrittata (Mi)', 8),
@@ -65,11 +65,10 @@ const liste = () => [
   db.ep_shopping = [t('x1', 'Zwiebeln', '2 Stück', G, '2026-11-21'), t('x2', 'Feldsalat', '150 g', F, '2026-11-25'), t('x3', 'Zwiebel', '1 Stück', F, '2026-11-25'), t('x4', 'Nudeln', '500 g', G, '2026-11-21', { category: 'vorrat' }), t('x5', 'Milch', '1 l', F, '2026-11-25', { manual: true, category: 'kuehl' })];
   const { page, ctx, errs } = await open(db, 0);
   await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
-  await page.locator('[data-action="woche"][data-dir="1"]').first().click(); await page.waitForTimeout(400);
-  const heads = async () => (await page.locator('main').innerText()).split('\n').filter((l) => /einkauf am|Einkaufstag/i.test(l)).join(' | ');
+  const heads = async () => (await page.locator('main').innerText()).split('\n').filter((l) => /einkauf, /i.test(l)).join(' | ');
   console.log('Z vorher:', await heads());
-  const form = page.locator(`form[data-form="einkaufstag"]:has(input[name=trip][value="${F}"])`);
-  await page.evaluate((f) => { const d = [...document.querySelectorAll('details.einkaufstag')].find((x) => x.querySelector(`input[value="${f}"]`)); if (d) d.open = true; }, F);
+  const form = page.locator('form[data-form="einkaufstag"]:has(input[name=von][value="2026-11-25"])');
+  await page.evaluate(() => document.querySelectorAll('details').forEach((d) => { d.open = true; }));
   await form.locator('input[type=date]').fill('2026-11-21'); await form.locator('button').click(); await page.waitForTimeout(600);
   console.log('Z Hinweis:', await toastText(page));
   const saved = (await calls(page, 'ep_shopping')).flat();
@@ -89,20 +88,19 @@ const liste = () => [
     t('y3', 'Zwiebel', '1 Stück', G, '2026-11-21', '2026-11-23'), t('y4', 'Nudeln', '500 g', G, '2026-11-21', '2026-11-23', { category: 'vorrat' })];
   const { page, ctx, errs } = await open(db, 0);
   await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
-  const form = page.locator(`form[data-form="einkaufstag"]:has(input[name=trip][value="${F}"])`);
+  const form = page.locator('form[data-form="einkaufstag"]:has(input[name=von][value="2026-11-18"])');
   await page.evaluate(() => document.querySelectorAll('details.einkaufstag').forEach((d) => { d.open = true; }));
   await form.locator('input[type=date]').fill('2026-11-21'); await form.locator('button').click(); await page.waitForTimeout(600);
   console.log('Y Hinweis:', await toastText(page));
   const rows = async () => (await page.locator('main .posten').allInnerTexts()).join(' | ').replace(/\n+/g, ' / ');
-  console.log('Y KW 47:', await rows(), '|', (await page.locator('.tour-gast').innerText().catch(() => '-')));
+  console.log('Y Liste:', await rows(), '|', (await page.locator('main h2.tour').allInnerTexts()).join(' / '));
   await page.locator('.posten li', { hasText: 'Zwiebel' }).locator('[data-action="haken"]').click(); await page.waitForTimeout(500);
   const saved = (await calls(page, 'ep_shopping')).flat().filter((r) => ['y1', 'y3'].includes(r.id)).slice(-2);
   console.log('Y Haken:', saved.map((r) => `${r.id}:${r.checked}`).join(' '));
-  await page.locator('[data-action="woche"][data-dir="1"]').first().click(); await page.waitForTimeout(400);
-  console.log('Y KW 48:', await rows());
+  console.log('Y danach:', await rows());
   console.log('Y Fehler:', errs); await ctx.close();
 }
-// X: „Nicht bekommen“ auf die nächste Tour oder „Nachkauf“ setzen, auch wenn zwei Wochen am selben Tag einkaufen
+// X: „Nicht bekommen“ kommt mit „Fertig“ im Einkaufsmodus auf den nächsten Einkauf, auch wenn zwei Wochen am selben Tag einkaufen
 for (const fall of ['eine Woche', 'zwei Wochen']) {
   const G = 'Großeinkauf am Sa 21.11.'; const F = 'Frischeeinkauf am Mi 18.11.';
   const t = (id, label, qty, trip, due, week, extra = {}) => ({ ...it(id, label, qty, '', Number(id.slice(1)), extra), week_start: week, trip, due });
@@ -113,12 +111,12 @@ for (const fall of ['eine Woche', 'zwei Wochen']) {
       t('w3', 'Zwiebel', '1 Stück', G, '2026-11-18', '2026-11-23', { missing: true }), t('w4', 'Nudeln', '500 g', G, '2026-11-18', '2026-11-23')];
   const { page, ctx, errs } = await open(db, 0);
   await page.locator('[data-tab="einkauf"]').click(); await page.waitForTimeout(300);
-  const btn = page.locator('[data-action="fehlt-verschieben"]');
-  console.log(`X ${fall} Knopf:`, await btn.count() ? await btn.first().innerText() : '-');
-  if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(500); }
+  console.log(`X ${fall} Kasten:`, (await page.locator('.fehlt-kasten .meta').innerText().catch(() => '-')));
+  await page.locator('.ek-kopf [data-action="einkaufsmodus"]').click(); await page.waitForTimeout(300);
+  await page.locator('.modus-leiste [data-action="einkaufsmodus"]').click(); await page.waitForTimeout(500);
   console.log(`X ${fall} Hinweis:`, await toastText(page));
   const saved = (await calls(page, 'ep_shopping')).flat(); const last = new Map(); for (const r of saved) last.set(r.id, r);
-  console.log(`X ${fall} Posten:`, [...last.values()].filter((r) => r.id.startsWith('w')).map((r) => `${r.id}:${r.trip}:${r.week_start}:${r.missing}`).join(' | '), '| Kasten noch da:', await page.locator('.fehlt-kasten').count());
+  console.log(`X ${fall} Posten:`, [...last.values()].filter((r) => r.id.startsWith('w')).map((r) => `${r.id}:${r.trip}:${r.due}:${r.week_start}:${r.missing}:${r.qty}`).join(' | '), '| Kasten noch da:', await page.locator('.fehlt-kasten').count());
   console.log(`X ${fall} Fehler:`, errs); await ctx.close();
 }
 // Logik: Touren am selben Tag

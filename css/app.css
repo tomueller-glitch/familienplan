@@ -1201,3 +1201,35 @@ html.anzeige-modus #sheet-root .koch-nav .knopf { min-height: 64px; font-size: 2
 }
 .anz-morgen-zeilen { margin: 0 0 .5em; }
 @media (orientation: portrait) and (max-height: 1050px) { .anz-morgen-zeilen dd { -webkit-line-clamp: 1; } .anz-knopf { min-height: 42px; padding: 6px 12px; } }
+
+/* ---------- Einkaufsliste nach Einkäufen ----------
+   Oben der aktuelle Einkauf, darunter spätere und erledigte Einkäufe als zugeklappte Zeilen. */
+.ek-jetzt { margin-top: 4px; }
+.ek-kopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ek-kopf .tour { margin: 4px 2px 2px; }
+.ek-kopf .knopf { flex: none; margin-top: 2px; }
+.ek-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; margin: 0 2px 2px; }
+.ek-meta .meta { margin: 0; }
+.ek-meta .textknopf { padding: 6px 0; font-size: 15px; }
+.ek-meta .einkaufstag { margin: 0; }
+.ek-meta .einkaufstag[open] { flex-basis: 100%; }
+.ek-meta .einkaufstag summary { display: inline-block; }
+.ek-jetzt .balken { margin: 8px 2px 4px; }
+.ek-leer { margin: 12px 2px; }
+.ek-abgehakt { margin-top: 16px; }
+.ek-abgehakt > summary, .ek-tour > summary { cursor: pointer; list-style: none; }
+.ek-abgehakt > summary::-webkit-details-marker, .ek-tour > summary::-webkit-details-marker { display: none; }
+.ek-abgehakt > summary { color: var(--tinte-2); font-weight: 600; padding: 8px 2px; text-decoration: none; }
+.ek-abgehakt > summary::before, .ek-tour > summary::before { content: '›'; display: inline-block; width: 1em; font-weight: 700; transition: transform .15s; }
+.ek-abgehakt[open] > summary::before, .ek-tour[open] > summary::before { transform: rotate(90deg); }
+.ek-abschnitt { font-size: 14px; font-weight: 600; color: var(--tinte-2); margin: 26px 2px 6px; }
+.ek-tour { background: var(--blatt); border-radius: 8px; margin-bottom: 8px; }
+.ek-tour > summary { display: flex; align-items: baseline; gap: 4px; padding: 12px 14px; min-height: 48px; text-decoration: none; font-weight: 400; }
+.ek-tour .ek-name { flex: 1; font-weight: 600; }
+.ek-tour .ek-zahl { color: var(--tinte-2); font-size: 15px; }
+.ek-tour[open] { padding-bottom: 10px; }
+.ek-tour[open] > :not(summary) { margin-left: 10px; margin-right: 10px; }
+.ek-tour .posten { box-shadow: inset 0 0 0 1px var(--wand); }
+.ek-vorbei > summary { color: var(--tinte-2); }
+.ek-vorbei .ek-name { font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .ek-abgehakt > summary::before, .ek-tour > summary::before { transition: none; } }

@@ -764,7 +764,7 @@ async function loadWeather() {
   } finally { state.wetterBusy = false; }
 }
 // „Ist alle“: die ersten Sachen aus „Immer wieder“ als Knöpfe unten, alle weiteren im Bogen.
-const istAlleOn = (label, week) => state.data.shopping.find((i) => i.week_start === week && !i.checked && L.itemKey(i.label) === L.itemKey(label));
+const istAlleOn = (label) => openOnList(label);
 function istAlleBar() {
   const week = L.mondayOf(L.todayISO());
   const list = [...state.data.staples].sort((a, b) => (a.sort || 0) - (b.sort || 0)).slice(0, 5);
@@ -774,12 +774,8 @@ function istAlleBar() {
   }).join('')}<button class="anz-ia mehr" data-action="anz-ist-alle-mehr">Mehr …</button></div>`;
 }
 function addToCurrentList({ label, qty = '', category, staple_id = null, who = null }) {
-  const week = L.mondayOf(L.todayISO());
-  const t = targetTrip(week);
-  const maxSort = state.data.shopping.filter((i) => i.week_start === week).reduce((m, i) => Math.max(m, i.sort || 0), 0);
   const item = {
-    id: L.uid(), week_start: week, trip: t.trip, due: t.due, buyer: t.buyer, category: category || L.guessCat(label), label, qty,
-    sort: maxSort + 1, checked: false, checked_by: null, checked_at: null, manual: true, added_by: who, created_at: nowStamp(), staple_id, purpose: 'ist alle', missing: false,
+    id: L.uid(), ...tripFields(currentTrip()), category: category || L.guessCat(label), label, qty, checked: false, checked_by: null, checked_at: null, manual: true, added_by: who, created_at: nowStamp(), staple_id, purpose: 'ist alle', missing: false,
   };
   commit(() => { state.data.shopping = [...state.data.shopping, item]; }, () => store.saveItems([item]));
   return item;
@@ -1006,7 +1002,7 @@ function viewDisplay() {
   }).join('')}</ul></section>` : '';
 
   // Einkauf
-  const open = state.data.shopping.filter((i) => i.week_start === L.mondayOf(today) && !i.checked && i.category !== 'vorhanden').length;
+  const open = currentTrip().items.filter((i) => !i.checked && i.category !== 'vorhanden').length;
 
   const light = dispLight(hour);
   document.documentElement.classList.toggle('anzeige-hell', light);
@@ -1179,7 +1175,7 @@ function viewWho() {
 
 function viewApp() {
   const me = personById(state.me);
-  const openCount = state.data.shopping.filter((i) => i.week_start === state.week && !i.checked).length;
+  const openCount = currentTrip().items.filter((i) => !i.checked).length;
   const views = { woche: viewWoche, aufgaben: viewAufgaben, einkauf: viewEinkauf, gerichte: viewGerichte, ausgaben: viewAusgaben };
   const body = (views[state.tab] || viewWoche)();
   const tabs = [['woche', 'Woche'], ['aufgaben', 'Aufgaben'], ['einkauf', 'Einkauf'], ['gerichte', 'Gerichte'], ['ausgaben', 'Ausgaben']];
@@ -1189,7 +1185,7 @@ function viewApp() {
       <div class="kopf-zeile"><h1>Familienplan</h1>
         <span class="kopf-knoepfe"><button class="hilfe-knopf" data-action="hilfe" aria-label="Hilfe: Was kann die App?">?</button>
         <button class="ich" data-action="familie" aria-label="Familie und Einstellungen, angemeldet als ${esc(me ? me.name : '')}">${esc(me ? me.name : '')}${avatar(me)}</button></span></div>
-      ${['gerichte', 'aufgaben', 'ausgaben'].includes(state.tab) ? '' : weekNav()}
+      ${['gerichte', 'aufgaben', 'ausgaben', 'einkauf'].includes(state.tab) ? '' : weekNav()}
     </header>
     ${offlineNote()}
     ${store.mode === 'local' ? `<p class="hinweis-demo">Demo: Die Daten bleiben nur auf diesem Gerät.${globalThis.ESSENSPLAN_HEUTE ? ` Testdatum ${L.fmtShort(L.todayISO())}` : ''} <button class="textknopf" data-action="familie" style="padding:0">${globalThis.ESSENSPLAN_HEUTE ? 'ändern' : 'Testdatum setzen'}</button></p>` : ''}
@@ -1540,30 +1536,16 @@ function claimToday() {
   pendingClaim = false;
   if (!canPlan()) return;
   const today = L.todayISO();
-  const trips = [...new Set(state.data.shopping.filter((i) => i.due === today && !i.checked).map((i) => `${i.week_start}|${i.trip || 'Einkauf'}`))];
-  if (!trips.length) return;
-  for (const t of trips) setBuyer(t.split('|')[0], t.split('|')[1], state.me);
+  if (!shopPool().some((i) => i.due === today && !i.checked)) return;
+  setBuyer(today, state.me);
   toast('Eingetragen: Du gehst heute einkaufen.');
 }
-function setBuyer(week, trip, buyer) {
-  const changed = state.data.shopping.filter((i) => i.week_start === week && (i.trip || 'Einkauf') === trip).map((i) => ({ ...i, buyer }));
+function setBuyer(due, buyer) {
+  const changed = shopPool().filter((i) => i.due === due).map((i) => ({ ...i, buyer }));
   if (!changed.length) return;
   commit(() => {
     state.data.shopping = state.data.shopping.map((i) => changed.find((c) => c.id === i.id) || i);
   }, () => store.saveItems(changed));
-}
-
-// Hinweis auf Listen aus anderen Wochen, deren Einkaufstag heute ist.
-function dueElsewhere(shown = []) {
-  const today = L.todayISO();
-  const other = [...new Set(state.data.shopping
-    .filter((i) => i.due === today && !i.checked && i.week_start !== state.week && !shown.includes(i.week_start))
-    .map((i) => i.week_start))];
-  return other.map((w) => {
-    const trip = state.data.shopping.find((i) => i.week_start === w && i.due === today).trip || 'Einkauf';
-    return `<div class="kasten-text einkauf-hinweis"><strong>Heute ist auch Einkauf</strong>${esc(trip)}, Liste der KW ${L.isoWeek(w)}.
-      <div class="knopfreihe" style="margin-top:10px"><button class="knopf zweit" data-action="zur-woche" data-week="${w}">Diese Liste zeigen</button></div></div>`;
-  }).join('');
 }
 
 /* ---------- Von Hand entfernte Posten ---------- */
@@ -1598,8 +1580,8 @@ function pantryBox(week) {
   return `<div class="kasten-text vorrat-frage"><strong>Aus dem Vorrat: wirklich da?</strong>
     Diese Sachen nimmt der Plan aus dem Vorrat und kauft sie deshalb nicht ein. Kurz nachschauen:
     <ul class="posten">${ask.map((x) => `<li><div class="extra-zeile"><span class="p-text"><span class="p-name">${esc(L.plainName(x.label))}</span><span class="p-menge">${esc(x.qty)} für ${esc(x.purpose)}</span></span>
-      <span class="ja-nein"><button class="knopf zweit klein" data-action="vorrat-da" data-id="${esc(x.key)}" aria-label="${esc(x.label)} ist da">Ist da</button><button class="knopf klein" data-action="vorrat-fehlt" data-id="${esc(x.key)}" aria-label="${esc(x.label)} fehlt, auf die Liste">Fehlt</button></span></div></li>`).join('')}</ul>
-    ${ask.length > 1 ? '<div class="knopfreihe"><button class="knopf zweit klein" data-action="vorrat-alle-da">Alles da</button></div>' : ''}</div>`;
+      <span class="ja-nein"><button class="knopf zweit klein" data-action="vorrat-da" data-id="${esc(x.key)}" data-week="${week}" aria-label="${esc(x.label)} ist da">Ist da</button><button class="knopf klein" data-action="vorrat-fehlt" data-id="${esc(x.key)}" data-week="${week}" aria-label="${esc(x.label)} fehlt, auf die Liste">Fehlt</button></span></div></li>`).join('')}</ul>
+    ${ask.length > 1 ? '<div class="knopfreihe"><button class="knopf zweit klein" data-action="vorrat-alle-da" data-week="${week}">Alles da</button></div>' : ''}</div>`;
 }
 // Hat eine frühere Fassung beim Neuberechnen die Brotbox-Posten aus Claudes Plan verloren, fehlen sie auf der Liste.
 // Der Kasten zeigt sie und stellt sie mit einem Tipp wieder drauf.
@@ -1643,7 +1625,7 @@ function draftBox(week) {
   const label = split.length && miss.length ? 'Aufteilen und ergänzen' : split.length ? 'Aufteilen' : 'Auf die Liste';
   return `<div class="kasten-text vorrat-frage"><strong>Die Liste passt nicht ganz zur Woche</strong>
     ${lines.map((l) => `<p class="kasten-zeile">${l}</p>`).join('')}
-    <div class="knopfreihe"><button class="knopf klein" data-action="entwurf-ergaenzen">${label}</button><button class="knopf zweit klein" data-action="entwurf-nicht">So lassen</button></div></div>`;
+    <div class="knopfreihe"><button class="knopf klein" data-action="entwurf-ergaenzen" data-week="${week}">${label}</button><button class="knopf zweit klein" data-action="entwurf-nicht" data-week="${week}">So lassen</button></div></div>`;
 }
 function splitApply(week) {
   const moves = splitPlan(week);
@@ -1670,8 +1652,7 @@ function draftAdd(week) {
   return items.length;
 }
 
-function pantryConfirm(keys) {
-  const week = state.week;
+function pantryConfirm(keys, week = state.week) {
   const all = pantryChecks();
   const from = L.addDays(L.mondayOf(L.todayISO()), -14);
   const value = Object.fromEntries(Object.entries(all).filter(([w]) => w >= from));
@@ -1687,20 +1668,19 @@ function pantryConfirm(keys) {
     state.data.pantry = state.data.pantry.map((x) => seen.find((y) => y.id === x.id) || x);
   }, async () => { await store.saveSettings([row]); if (seen.length) await store.savePantry(seen); });
 }
-function pantryMissing(key) {
-  const week = state.week;
+function pantryMissing(key, week = state.week) {
   const x = pantryAsk(week).find((y) => y.key === key);
   if (!x) return;
   const today = L.todayISO();
   const inWeek = state.data.shopping.filter((i) => i.week_start === week).sort((a, b) => a.sort - b.sort);
   const old = inWeek.find((i) => i.category === 'vorhanden' && L.itemKey(i.label) === key);
-  // Auf die nächste Tour, die noch kommt. Sind alle Touren vorbei, auf den Nachkauf.
-  const trip = inWeek.find((i) => !i.manual && !i.checked && (!i.due || i.due >= today))
-    || (inWeek.length ? { trip: 'Nachkauf', due: null } : null);
+  // Auf den aktuellen Einkauf, wie alles Neue.
+  const t = currentTrip();
+  const at = { trip: t.trip, due: t.due, buyer: t.buyer || null };
   const item = old
-    ? { ...old, category: L.SHOP_CATS[x.category] ? x.category : L.guessCat(x.label), qty: x.qty, purpose: x.purpose, checked: false, checked_by: null, checked_at: null }
+    ? { ...old, ...at, category: L.SHOP_CATS[x.category] ? x.category : L.guessCat(x.label), qty: x.qty, purpose: x.purpose, checked: false, checked_by: null, checked_at: null }
     : {
-      id: L.uid(), week_start: week, trip: trip ? trip.trip || 'Einkauf' : 'Einkauf', due: trip ? trip.due || null : null,
+      id: L.uid(), week_start: week, ...at,
       category: L.SHOP_CATS[x.category] ? x.category : L.guessCat(x.label), label: x.label, qty: x.qty, purpose: x.purpose,
       missing: false, shop: null, sort: (inWeek.length ? Math.max(...inWeek.map((i) => i.sort || 0)) : 0) + 1,
       checked: false, checked_by: null, checked_at: null, manual: false,
@@ -1711,73 +1691,87 @@ function pantryMissing(key) {
     state.data.shopping = old ? state.data.shopping.map((i) => (i.id === old.id ? item : i)) : [...state.data.shopping, item];
     if (empty) state.data.pantry = state.data.pantry.map((y) => (y.id === empty.id ? empty : y));
   }, async () => { await store.saveItems([item]); if (empty) await store.savePantry([empty]); });
-  toast(`${L.plainName(x.label)} steht jetzt auf der Liste${item.trip && item.trip !== 'Einkauf' ? ` (${item.trip})` : ''}.`);
+  toast(`${L.plainName(x.label)} steht jetzt auf dem ${tripLabel(t)}`);
 }
 
 function viewEinkauf() {
-  const items = state.data.shopping.filter((i) => i.week_start === state.week).sort((a, b) => a.sort - b.sort);
-  const hasPlan = L.weekDays(state.week).some((d) => { const p = planOf(d); return p && p.dish_id; });
+  const today = L.todayISO();
+  const pool = shopPool();
+  const all = shopTripsAll(pool);
+  const cur = currentTrip(pool);
+  // Ohne Einkaufstag (alte Listen) oder offen auf einem vergangenen Einkauf und noch gebraucht: steht mit auf dem
+  // aktuellen Einkauf, bis carryOver es dorthin schreibt.
+  const loose = pool.filter((i) => !i.checked && i.category !== 'vorhanden' && (!i.due || (i.due < today && stillNeeded(i, today))));
+  const curItems = [...cur.items, ...loose.filter((i) => !cur.items.includes(i))];
+  const week = cur.week;
+  state.twins = new Map();
+  const hasPlan = L.weekDays(week).some((d) => { const p = planOf(d); return p && p.dish_id; });
+  // Eine Liste aus dem Plan gibt es, wenn Posten für die Abendessen der Woche da sind (auch weitergewanderte).
+  const listed = state.data.shopping.some((i) => i.week_start === week && (!i.manual || L.usesOf(i.purpose).some(L.isDinnerUse)));
   const addForm = `<form class="dazu" data-form="posten">
       <input class="feld" id="neu-posten" name="label" aria-label="Eigenen Eintrag ergänzen" placeholder="Etwas ergänzen, z. B. Spülmittel" value="${esc(state.draft)}" autocomplete="off" enterkeyhint="done">
       ${lidlOn() ? `<select class="feld markt-wahl" name="shop" aria-label="Markt"><option value="">Aldi</option><option value="lidl"${state.draftShop === 'lidl' ? ' selected' : ''}>Lidl</option></select>` : ''}
       <button class="knopf">Dazu</button></form>`;
-  if (!items.length) {
-    return `<div class="leer"><h2 class="abschnitt">Für diese Woche gibt es noch keine Einkaufsliste</h2>
-      ${hasPlan && canPlan()
-        ? '<p>Die Zutaten aller geplanten Gerichte werden zusammengerechnet.</p><div class="knopfreihe"><button class="knopf" data-action="liste-bauen">Aus dem Wochenplan erstellen</button></div>'
-        : hasPlan ? '<p>Mama oder Papa erstellen die Liste aus dem Wochenplan.</p>' : '<p>Plant zuerst die Woche, dann entsteht die Liste daraus.</p><div class="knopfreihe"><button class="knopf" data-action="tab" data-tab="woche">Zum Wochenplan</button></div>'}
-      </div>${addForm}${shopTools(false, 0)}${dueElsewhere()}`;
-  }
-  // Liegt eine Tour dieser Woche am selben Tag wie eine Tour einer anderen Woche (etwa der Großeinkauf am Samstag für
-  // die nächste Woche), ist das ein Einkauf: deren Posten stehen hier mit, gleiche Sachen in einer Zeile.
-  const ownTrip = new Map();
-  for (const i of items) if (i.due && !ownTrip.has(i.due)) ownTrip.set(i.due, i.trip || 'Einkauf');
-  const near = (w) => Math.abs(Date.parse(w) - Date.parse(state.week)) <= 14 * 86400000;
-  const guests = state.data.shopping.filter((i) => i.week_start !== state.week && i.due && ownTrip.has(i.due) && near(i.week_start))
-    .map((i) => ({ ...i, trip: ownTrip.get(i.due), gast: i.week_start }));
-  const guestWeeks = [...new Set(guests.map((i) => i.gast))];
-  if (guests.length) items.push(...guests);
-  state.twins = new Map();
-  const done = items.filter((i) => i.checked).length;
-  // Touren nach Einkaufstag, ohne Tag zum Schluss.
-  const tripDue = (t) => items.filter((i) => (i.trip || 'Einkauf') === t && i.due).map((i) => i.due).sort()[0] || '9999';
-  const trips = [...new Set(items.map((i) => i.trip || 'Einkauf'))].sort((a, b) => tripDue(a).localeCompare(tripDue(b)));
-  let list = '';
-  for (const trip of trips) {
-    const inTrip = items.filter((i) => (i.trip || 'Einkauf') === trip);
-    // Zwei Märkte: Was bei Lidl gekauft wird, steht in einem eigenen Block unter Aldi.
-    const shops = inTrip.some((i) => KI.shopOf(i) === 'lidl') ? ['', 'lidl'] : [''];
-    let block = '';
-    for (const shop of shops) {
-      const inShop = inTrip.filter((i) => KI.shopOf(i) === shop);
-      let part = '';
-      for (const cat of catOrder(shop)) {
-        const rows = joinGuests(inShop.filter((i) => (L.SHOP_CATS[i.category] ? i.category : 'sonst') === cat && !((state.hideDone || state.shopMode) && i.checked && i.id !== state.justChecked)));
-        if (!rows.length) continue;
-        part += `<h3 class="abteilung">${L.SHOP_CATS[cat]}</h3><ul class="posten">${rows.map(itemRow).join('')}</ul>`;
-      }
-      if (shops.length > 1) {
-        const open = inShop.filter((i) => !i.checked).length;
-        block += `<div class="markt markt-${shop || 'aldi'}"><h3 class="markt-kopf"><span class="markt-name">${KI.SHOPS[shop]}</span> <span class="markt-ort">${KI.SHOP_PLACES[shop]}</span><span class="markt-zahl">${open ? `${open} offen` : 'erledigt'}</span></h3>${part}</div>`;
-      } else block += part;
-    }
-    const gw = [...new Set(inTrip.filter((i) => i.gast).map((i) => i.gast))];
-    const guestNote = gw.length ? `<p class="meta tour-gast">Am selben Tag: dazu die Posten aus der Liste der KW ${gw.map((w) => L.isoWeek(w)).join(' und ')}, gleiche Sachen in einer Zeile.</p>` : '';
-    if (block) list += `${trips.length > 1 ? `<h2 class="tour">${esc(trip)}</h2>` : ''}${dueLine(trip, inTrip.filter((i) => !i.gast))}${guestNote}${missingBox(trip, inTrip, trips)}${block}`;
-  }
-  if (!list) list = '<div class="leer"><h2 class="abschnitt">Alles erledigt</h2><p>Jeder Eintrag ist abgehakt.</p></div>';
+  const open = curItems.filter((i) => !i.checked);
+  const done = curItems.filter((i) => i.checked);
+  const total = open.length + done.length;
+  const bar = total ? `<div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done.length}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done.length / total) * 100)}%"></span></div>` : '';
+  const rows = open.length || state.justChecked ? tripRows(curItems, week, { open: true }) : '<p class="meta ek-leer">Noch nichts drauf. Alles, was ihr ergänzt, kommt auf diesen Einkauf.</p>';
   if (state.shopMode) {
-    return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${items.length - done} offen</span><button class="knopf klein" data-action="einkaufsmodus">Beenden</button></div>
-      <div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${done}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done / items.length) * 100)}%"></span></div>
-      ${pantryBox(state.week)}${list}${addForm}`;
+    return `<div class="modus-leiste"><span><b>Einkaufsmodus</b> ${open.length} offen</span><button class="knopf klein" data-action="einkaufsmodus">Fertig</button></div>${bar}
+      ${pantryBox(week)}<h2 class="tour">${esc(tripHead(cur))}</h2>${missingBox(cur, curItems)}${rows}${addForm}`;
   }
-  return `${dueElsewhere(guestWeeks)}${draftBox(state.week)}${pantryBox(state.week)}<div class="fortschritt">
-      <div class="zeile"><span class="gross">${done} von ${items.length} erledigt</span>
-      <label class="schalter"><input type="checkbox" data-action="erledigte"${state.hideDone ? ' checked' : ''}> Erledigte ausblenden</label></div>
-      <button class="knopf klein modus-start" data-action="einkaufsmodus">Einkaufsmodus</button>
-      <div class="balken" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${done}" aria-label="Einkauf erledigt"><span style="width:${Math.round((done / items.length) * 100)}%"></span></div>
-    </div>${list}${addForm}
-    ${shopTools(hasPlan, done)}`;
+  const build = hasPlan && !listed && canPlan()
+    ? `<div class="kasten-text einkauf-hinweis"><strong>Liste aus dem Wochenplan fehlt noch</strong>Für die Woche vom ${esc(L.fmtShort(week))} bis ${esc(L.fmtShort(L.addDays(week, 6)))} sind Gerichte geplant. Die Zutaten werden zusammengerechnet und auf die Einkäufe verteilt.
+      <div class="knopfreihe" style="margin-top:10px"><button class="knopf" data-action="liste-bauen" data-week="${week}">Aus dem Wochenplan erstellen</button></div></div>`
+    : !hasPlan && !pool.some((i) => !i.checked) ? '<p class="meta ek-leer">Plant zuerst die Woche, dann entsteht die Liste daraus. Eigene Sachen könnt ihr jederzeit ergänzen.</p>' : '';
+  const checkedPart = done.length ? `<details class="ek-abgehakt"><summary>${done.length === 1 ? '1 Posten abgehakt' : `${done.length} Posten abgehakt`}</summary>${tripRows(curItems, week, { done: true, haus: true })}</details>` : '';
+  const head = `<section class="ek-jetzt"><div class="ek-kopf"><h2 class="tour">${esc(tripHead(cur))}</h2>
+      ${total ? `<button class="knopf klein" data-action="einkaufsmodus">Einkaufsmodus</button>` : ''}</div>
+    ${tripMeta(cur, open.length)}${bar}${missingBox(cur, curItems)}${rows}${addForm}${checkedPart}</section>`;
+  // Spätere Einkäufe zugeklappt, Erledigtes der letzten Tage ganz unten.
+  const later = all.filter((t) => t.due > cur.due);
+  const past = all.filter((t) => t.due < cur.due && t.due >= L.addDays(today, -10) && t.items.some((i) => i.checked && i.category !== 'vorhanden')).reverse();
+  const laterHtml = later.length ? `<h3 class="ek-abschnitt">Danach</h3>${later.map((t) => {
+    const n = t.items.filter((i) => !i.checked).length;
+    return `<details class="ek-tour"><summary><span class="ek-name">${esc(tripHead(t))}</span><span class="ek-zahl">${n === 1 ? '1 Posten' : `${n} Posten`}</span></summary>
+      ${tripMeta(t, n)}${tripRows(t.items, t.week, { open: true })}</details>`;
+  }).join('')}` : '';
+  const pastHtml = past.length ? `<h3 class="ek-abschnitt">Erledigt</h3>${past.map((t) => {
+    const n = t.items.filter((i) => i.checked && i.category !== 'vorhanden').length;
+    return `<details class="ek-tour ek-vorbei"><summary><span class="ek-name">${esc(tripHead(t))}</span><span class="ek-zahl">${n} gekauft</span></summary>${tripRows(t.items, t.week, { done: true })}</details>`;
+  }).join('')}` : '';
+  // Neu aus dem Plan erstellen: für jede Woche, deren Posten auf einem kommenden Einkauf stehen und die geplant ist.
+  const planned = (w) => L.weekDays(w).some((d) => { const p = planOf(d); return p && p.dish_id; });
+  const rebuild = [...new Set([...(listed ? [week] : []), ...[cur, ...later].flatMap((t) => t.items.filter((i) => !i.manual).map((i) => i.week_start))])]
+    .filter((w) => w >= L.addDays(L.mondayOf(today), -7) && planned(w)).sort();
+  return `${draftBox(week)}${pantryBox(week)}${build}${head}${laterHtml}${pastHtml}${shopTools(rebuild, pool.some((i) => i.checked))}`;
+}
+// Überschrift eines Einkaufs: „Großeinkauf, Samstag 21.11.“
+const tripHead = (t) => `${tripName(t)}, ${L.WEEKDAYS[L.wdIndex(t.due)]} ${L.fmtShort(t.due)}`;
+// Posten eines Einkaufs nach Abteilungen, Lidl als eigener Block. Posten aus einer anderen Woche am selben Tag stehen
+// mit drin, gleiche Sachen in einer Zeile.
+function tripRows(items, week, { open = false, done = false, haus = false } = {}) {
+  const show = items.filter((i) => (done ? i.checked && (haus || i.category !== 'vorhanden') : !i.checked || i.id === state.justChecked))
+    .map((i) => (i.week_start !== week ? { ...i, gast: i.week_start } : i))
+    .sort((a, b) => (a.sort || 0) - (b.sort || 0));
+  const shops = show.some((i) => KI.shopOf(i) === 'lidl') ? ['', 'lidl'] : [''];
+  let html = '';
+  for (const shop of shops) {
+    const inShop = show.filter((i) => KI.shopOf(i) === shop);
+    let part = '';
+    for (const cat of catOrder(shop)) {
+      const rows = joinGuests(inShop.filter((i) => (L.SHOP_CATS[i.category] ? i.category : 'sonst') === cat));
+      if (!rows.length) continue;
+      part += `${done ? '' : `<h3 class="abteilung">${L.SHOP_CATS[cat]}</h3>`}<ul class="posten">${rows.map(itemRow).join('')}</ul>`;
+    }
+    if (!part) continue;
+    if (shops.length > 1) {
+      const n = inShop.length;
+      html += `<div class="markt markt-${shop || 'aldi'}"><h3 class="markt-kopf"><span class="markt-name">${KI.SHOPS[shop]}</span> <span class="markt-ort">${KI.SHOP_PLACES[shop]}</span>${open ? `<span class="markt-zahl">${n} offen</span>` : ''}</h3>${part}</div>`;
+    } else html += part;
+  }
+  return html;
 }
 // Gleiche Sachen aus zwei Wochen am selben Einkaufstag als eine Zeile: Mengen zusammengezählt, der Haken gilt für beide.
 // Nur erzeugte Posten, wie beim Zusammenfassen innerhalb einer Woche.
@@ -1798,11 +1792,12 @@ function joinGuests(rows) {
   });
 }
 // Werkzeuge unter der Einkaufsliste, in zwei Gruppen.
-function shopTools(hasPlan, done) {
+function shopTools(rebuild, done) {
   const chip = (action, label) => `<button class="knopf zweit klein" data-action="${action}">${label}</button>`;
   const add = [canPlan() ? '<label class="knopf zweit klein foto-knopf"><input type="file" id="zutaten-foto" accept="image/*" multiple>Zutaten aus Foto</label>' : '',
     chip('immer', 'Immer wieder'), canPlan() ? chip('siri', 'Per Siri') : ''].join('');
-  const list = [hasPlan && canPlan() ? chip('liste-bauen', 'Aus dem Plan neu erstellen') : '', chip('vorrat', pantryHint()), chip('laufweg-oeffnen', 'Reihenfolge im Laden'), chip('packungen', 'Packungsgrößen'),
+  const weeks = canPlan() ? rebuild : [];
+  const list = [weeks.map((w) => `<button class="knopf zweit klein" data-action="liste-bauen" data-week="${w}">${weeks.length > 1 ? `KW ${L.isoWeek(w)} neu aus dem Plan` : 'Aus dem Plan neu erstellen'}</button>`).join(''), chip('vorrat', pantryHint()), chip('laufweg-oeffnen', 'Reihenfolge im Laden'), chip('packungen', 'Packungsgrößen'),
     done ? chip('erledigte-loeschen', 'Erledigte löschen') : ''].join('');
   return `<div class="werkzeuge"><div class="w-gruppe"><h3>Mehr ergänzen</h3><div class="w-knoepfe">${add}</div></div>
     <div class="w-gruppe"><h3>Liste</h3><div class="w-knoepfe">${list}</div></div></div>`;
@@ -1818,11 +1813,6 @@ function pantryHint() {
   return n ? `Vorrat: ${n === 1 ? '1 Sache prüfen' : `${n} Sachen prüfen`}` : 'Vorrat: Was haben wir noch?';
 }
 
-// Was beim Einkauf nicht zu bekommen war: Übersicht mit betroffenen Gerichten und Knopf zum Verschieben.
-function nextTrip(trip, trips) {
-  const n = trips.indexOf(trip);
-  return n >= 0 && n < trips.length - 1 ? trips[n + 1] : 'Nachkauf';
-}
 const lidlOn = () => KI.rulesOf(state.data.settings).lidl !== false;
 
 /* ---------- Packungsgrößen ---------- */
@@ -1912,17 +1902,18 @@ function sheetPacks() {
   };
 }
 
-function missingBox(trip, inTrip, trips) {
-  const miss = inTrip.filter((i) => i.missing && !i.checked);
+function missingBox(t, items) {
+  const miss = items.filter((i) => i.missing && !i.checked);
   if (!miss.length) return '';
   const rows = miss.map((i) => {
     const p = L.purposeOf(i, state.data.plan, state.data.dishes);
     return `<li><span class="fehlt-text">${esc(L.plainName(i.label))}${p ? `<span class="p-wofuer">betrifft ${esc(p)}</span>` : ''}</span><span class="w-knoepfe"><button class="knopf zweit klein" data-action="packung" data-id="${esc(i.id)}">Andere Größe</button>${canPlan() ? `<button class="knopf zweit klein" data-action="ersatz" data-id="${esc(i.id)}">Ersatz?</button>` : ''}</span></li>`;
   }).join('');
+  const next = tripAfter(t.due);
   return `<div class="kasten-text fehlt-kasten"><strong>${miss.length === 1 ? '1 Posten nicht bekommen' : `${miss.length} Posten nicht bekommen`}</strong>
     <ul>${rows}</ul>
-    <div class="knopfreihe" style="margin-top:10px">${nextTrip(trip, trips) !== trip ? `<button class="knopf zweit" data-action="fehlt-verschieben" data-trip="${esc(trip)}" data-target="${esc(nextTrip(trip, trips))}">Auf „${esc(nextTrip(trip, trips))}“ setzen</button>` : ''}
-    ${lidlOn() && canPlan() ? `<button class="knopf zweit" data-action="fehlt-markt" data-trip="${esc(trip)}">${miss.every((i) => KI.shopOf(i) === 'lidl') ? 'Bei Aldi versuchen' : 'Bei Lidl versuchen'}</button>` : ''}</div></div>`;
+    <p class="meta">${miss.length === 1 ? 'Kommt' : 'Kommen'} nach dem Einkauf von selbst auf den ${esc(tripLabel(next))}</p>
+    ${lidlOn() && canPlan() ? `<div class="knopfreihe" style="margin-top:8px"><button class="knopf zweit" data-action="fehlt-markt" data-due="${esc(t.due)}">${miss.every((i) => KI.shopOf(i) === 'lidl') ? 'Bei Aldi versuchen' : 'Bei Lidl versuchen'}</button></div>` : ''}</div>`;
 }
 
 // Einkaufstag einer Tour: An diesem Tag bekommen die Eltern morgens eine Push-Nachricht.
@@ -1934,25 +1925,24 @@ function tripCost(inTrip) {
   if (e.known < 3 || e.known < e.total * 0.3) return '';
   return `<p class="meta tour-kosten">Etwa ${HB.euroShort(e.sum)}${e.lidl >= 1 ? `, davon Lidl ${HB.euroShort(e.lidl)}` : ''}. Geschätzt mit euren Preisen für ${e.known} von ${e.total} Posten.</p>`;
 }
-function dueLine(trip, inTrip) {
-  const due = inTrip.map((i) => i.due).find(Boolean) || '';
-  const open = inTrip.filter((i) => !i.checked).length;
-  const text = due
-    ? `Einkaufstag ${esc(L.fmtShort(due))}${due === L.todayISO() && open ? ', heute' : ''}`
-    : 'Noch kein Einkaufstag festgelegt';
-  const buyerId = inTrip.map((i) => i.buyer).find(Boolean) || null;
-  const buyer = personById(buyerId);
-  const mine = buyerId && buyerId === state.me;
-  const who = buyer ? `<p class="einkaeufer">${mine ? 'Du gehst einkaufen.' : `${esc(buyer.name)} geht einkaufen.`}</p>` : '';
-  const est = tripCost(inTrip);
-  if (!canPlan()) return (due ? `<p class="meta einkaufstag">${text}</p>` : '') + est + who;
-  const claim = `<label class="schalter einkaeufer"><input type="checkbox" data-action="einkauf-uebernehmen" data-trip="${esc(trip)}"${mine ? ' checked' : ''}>
-      ${buyer && !mine ? `${esc(buyer.name)} geht einkaufen. Stattdessen ich` : 'Ich gehe einkaufen'}</label>`;
-  return claim + est + `<details class="einkaufstag"${due ? '' : ' open'}><summary class="meta">${text}${due ? ' <span class="textknopf">ändern</span>' : ''}</summary>
-    <form class="dazu" data-form="einkaufstag"><input type="hidden" name="trip" value="${esc(trip)}">
-      <input class="feld" type="date" name="due" value="${esc(due)}" aria-label="Einkaufstag für ${esc(trip)}">
-      <button class="knopf">${due ? 'Ändern' : 'Festlegen'}</button></form>
-    <p class="meta">Am Einkaufstag kommt um 7 Uhr eine Erinnerung an Mama und Papa, solange noch etwas offen ist.</p></details>`;
+function tripMeta(t, open) {
+  const today = L.todayISO();
+  const rel = t.due === today ? 'Heute' : t.due === L.addDays(today, 1) ? 'Morgen' : '';
+  const why = (String(t.trip || '').match(/vorgezogen \(([^)]*)\)/) || [])[1];
+  const when = [rel, why ? `vorgezogen, weil ${why}` : '', KI.shortDay(t.due) ? 'Markt schließt mittags' : ''].filter(Boolean).join(', ');
+  const buyer = personById(t.buyer);
+  const mine = !!t.buyer && t.buyer === state.me;
+  const who = buyer ? (mine ? 'Du gehst einkaufen.' : `${buyer.name} geht einkaufen.`) : '';
+  const text = [when ? `${when}.` : '', who].filter(Boolean).join(' ');
+  const est = open ? tripCost(t.items.filter((i) => !i.checked)) : '';
+  if (!canPlan() || !t.items.length) return (text ? `<p class="meta ek-meta">${esc(text)}</p>` : '') + est;
+  return `<div class="ek-meta">${text ? `<span class="meta">${esc(text)}</span>` : ''}
+    <button class="textknopf" data-action="einkauf-uebernehmen" data-due="${esc(t.due)}">${mine ? 'Austragen' : buyer ? 'Stattdessen ich' : 'Ich gehe einkaufen'}</button>
+    <details class="einkaufstag"><summary class="textknopf">Tag ändern</summary>
+      <form class="dazu" data-form="einkaufstag"><input type="hidden" name="von" value="${esc(t.due)}">
+        <input class="feld" type="date" name="due" value="${esc(t.due)}" aria-label="Einkaufstag für ${esc(tripName(t))}">
+        <button class="knopf">Ändern</button></form>
+      <p class="meta">Am Einkaufstag kommt um 7 Uhr eine Erinnerung an Mama und Papa, solange noch etwas offen ist.</p></details></div>${est}`;
 }
 
 // Angebote aus Claudes Wochenlauf für eine Woche, einmal gelesen.
@@ -2259,10 +2249,8 @@ function sheetIngredientsLoading({ n }) {
 function sheetIngredients() {
   const d = state.ingredientDraft;
   if (!d) return { over: '', title: 'Keine Zutaten', body: '' };
-  const items = state.data.shopping.filter((i) => i.week_start === state.week);
-  const trips = [...new Set(items.sort((a, b) => (a.sort || 0) - (b.sort || 0)).map((i) => i.trip || 'Einkauf'))];
-  const target = targetTrip(state.week).trip;
-  if (!trips.includes(target)) trips.push(target);
+  const cur = currentTrip();
+  const trips = [cur, ...shopTripsAll().filter((t) => t.due > cur.due)];
   const rows = d.posten.map((p, n) => `<label class="zutat"><input type="checkbox" name="nimm" value="${n}"${p.on ? ' checked' : ''}>
       <span class="z-text"><span class="z-name">${esc(p.name)}</span>${p.menge ? `<span class="z-menge">${esc(p.menge)}</span>` : ''}${p.why ? `<span class="z-warum">${esc(p.why)}</span>` : ''}</span></label>`).join('');
   return {
@@ -2271,7 +2259,7 @@ function sheetIngredients() {
     body: `<form class="form" data-form="zutaten">
       ${d.hinweis ? `<div class="kasten-text"><strong>Hinweis von Claude</strong>${esc(d.hinweis)}</div>` : ''}
       <div class="zutaten-liste">${rows}</div>
-      <label>Auf welchen Einkauf<select class="feld" name="trip">${trips.map((t) => `<option${t === target ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      <label>Auf welchen Einkauf<select class="feld" name="trip">${trips.map((t) => `<option value="${esc(t.due)}"${t === cur ? ' selected' : ''}>${esc(tripLabel(t))}</option>`).join('')}</select></label>
       <label>Wofür (optional)<input class="feld" name="purpose" value="${esc(d.purpose)}" placeholder="z. B. Linsen-Dal am Donnerstag" autocomplete="off"></label>
       ${lidlOn() ? '<label>Markt<select class="feld" name="shop"><option value="">Aldi Süd</option><option value="lidl">Lidl</option></select></label>' : ''}
       <div class="knopfreihe"><button class="knopf">Auf die Liste</button><button type="button" class="knopf zweit" data-action="zu">Abbrechen</button></div></form>`,
@@ -2856,49 +2844,91 @@ async function startDraft(week, wish, confirmed = false) {
 /* ---------- Immer wieder ---------- */
 
 // Auf welche Einkaufstour kommt ein „Immer wieder“-Posten? Die nächste noch offene Tour der Woche.
-function targetTrip(week) {
-  const items = state.data.shopping.filter((i) => i.week_start === week).sort((a, b) => (a.sort || 0) - (b.sort || 0));
-  const trips = [...new Set(items.map((i) => i.trip || 'Einkauf'))];
+/* ---------- Einkäufe statt Wochen ---------- */
+// Die Einkaufsliste zeigt Einkäufe, nicht Wochen: Alles mit demselben Einkaufstag ist ein Einkauf, egal aus welcher
+// Woche es stammt. Betrachtet werden die Listen ab der Vorwoche, ältere sind abgeschlossen, und alles mit einem
+// Einkaufstag ab heute (weitergewanderte Posten behalten ihre Woche, damit „Lasagne (So)“ der richtige Sonntag bleibt).
+const shopPool = () => {
   const today = L.todayISO();
-  const open = trips.find((t) => items.some((i) => (i.trip || 'Einkauf') === t && !i.checked && (!i.due || i.due >= today)));
-  const trip = open || trips[trips.length - 1] || 'Einkauf';
-  const sample = items.find((i) => (i.trip || 'Einkauf') === trip) || {};
-  return { trip, due: sample.due || null, buyer: sample.buyer || null };
+  const from = L.addDays(L.mondayOf(today), -7);
+  return state.data.shopping.filter((i) => i.week_start >= from || (i.due && i.due >= today));
+};
+// Woche, zu der ein Einkauf gehört: die der meisten Posten aus dem Plan. Ohne solche Posten die Woche, deren übliche
+// Tour an dem Tag liegt (Großeinkauf am Samstag gehört zur Woche danach, Frischeeinkauf am Mittwoch zur eigenen).
+function tripWeek(items, due) {
+  const gen = items.filter((i) => !i.manual);
+  const count = new Map();
+  for (const i of gen.length ? gen : items) count.set(i.week_start, (count.get(i.week_start) || 0) + 1);
+  const best = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  if (best) return best[0];
+  const mon = L.mondayOf(due);
+  return KI.shopTrips(L.addDays(mon, 7)).some((t) => t.due === due) ? L.addDays(mon, 7) : mon;
 }
-// Nicht abgehakte Posten aus vergangenen Wochen wandern in die aktuelle Woche, bis sie abgehakt sind.
-// Sie gelten danach als selbst eingetragen, damit ein neu erstellter Einkaufszettel sie nicht löscht.
-let carrying = false;
-function carryOver() {
-  // Erst mit frisch geladenen Daten, nie mit dem gespeicherten Stand vom letzten Mal.
-  if (!state.fresh) return;
-  if (carrying || store.offline || !state.data || !state.data.persons.length) return;
+// Alle Einkäufe mit Einkaufstag, nach Datum: { due, trip, week, buyer, items }.
+function shopTripsAll(pool = shopPool()) {
+  const byDue = new Map();
+  for (const i of pool) if (i.due) { if (!byDue.has(i.due)) byDue.set(i.due, []); byDue.get(i.due).push(i); }
+  return [...byDue.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([due, items]) => {
+    const named = items.find((i) => !i.manual && i.trip) || items.find((i) => i.trip) || {};
+    return { due, trip: named.trip || `Einkauf am ${L.WEEKDAYS_SHORT[L.wdIndex(due)]} ${L.fmtShort(due)}`, week: tripWeek(items, due), buyer: items.map((i) => i.buyer).find(Boolean) || null, items };
+  });
+}
+// Die übliche Tour nach einem Tag (Samstag und Mittwoch, bei Feiertagen vorgezogen), falls dafür noch keine Liste besteht.
+function freeTripAfter(day) {
   const today = L.todayISO();
-  const week = L.mondayOf(today);
-  // Nur die Vorwoche: ältere Listen sind abgeschlossen. Übernommenes wandert so jede Woche ein Stück weiter.
-  const prev = L.addDays(week, -7);
-  const old = state.data.shopping.filter((i) => !i.checked && i.week_start === prev && i.category !== 'vorhanden' && (!i.due || i.due < today));
-  if (!old.length) return;
+  const mon = L.mondayOf(today);
+  const all = [0, 7, 14, 21].flatMap((n) => KI.shopTrips(L.addDays(mon, n)).map((t) => ({ ...t, week: L.addDays(mon, n) })));
+  const t = all.filter((x) => x.due > day && x.due >= today).sort((a, b) => a.due.localeCompare(b.due))[0];
+  return { due: t.due, trip: t.trip, week: t.week, buyer: null, items: [], frei: true };
+}
+// Der aktuelle Einkauf: der erste ab heute, auf dem noch etwas offen ist. Alles, was jemand einträgt, kommt hierher.
+function currentTrip(pool = shopPool()) {
+  const coming = shopTripsAll(pool).filter((t) => t.due >= L.todayISO());
+  return coming.find((t) => t.items.some((i) => !i.checked)) || coming[0] || freeTripAfter(L.addDays(L.todayISO(), -1));
+}
+// Der Einkauf nach einem bestimmten Tag, für das, was dort nicht zu bekommen war.
+function tripAfter(day, pool = shopPool()) {
+  return shopTripsAll(pool).find((t) => t.due > day && t.due >= L.todayISO()) || freeTripAfter(day);
+}
+// Felder für einen neuen Posten auf dem aktuellen Einkauf.
+function tripFields(t) {
+  const week = state.data.shopping.filter((i) => i.week_start === t.week);
+  return { week_start: t.week, trip: t.trip, due: t.due, buyer: t.buyer || null, sort: week.reduce((m, i) => Math.max(m, i.sort || 0), 0) + 1 };
+}
+const tripName = (t) => String(t.trip || 'Einkauf').replace(/ (am|vom|bis) (Mo|Di|Mi|Do|Fr|Sa|So|\d).*$/, '').replace(/,.*$/, '') || 'Einkauf';
+const tripLabel = (t) => `${tripName(t)} am ${L.WEEKDAYS_SHORT[L.wdIndex(t.due)]} ${L.fmtShort(t.due)}`;
+// Was noch offen ist, obwohl der Einkaufstag vorbei ist (oder ohne Einkaufstag, früher „Nachkauf“), wandert auf den
+// aktuellen Einkauf: Nicht Bekommenes mit Hinweis, eigene Einträge und alles, was noch gebraucht wird. Posten für
+// Abendessen, die schon vorbei sind, bleiben liegen. Wandernde Posten behalten ihre Woche, damit die Tage im Zweck
+// („Lasagne (So)“) stimmen und ein neu erstellter Einkaufszettel der Woche sie ersetzt statt verdoppelt.
+let carrying = false;
+const stillNeeded = (i, today) => {
+  if (i.manual || i.missing || !i.due) return true;
+  const uses = L.usesOf(i.purpose || L.purposeOf(i, state.data.plan, state.data.dishes));
+  if (!uses.length) return true;
+  return uses.some((u) => (L.isDinnerUse(u) ? (L.useDay(u, i.week_start) || '') >= today : i.week_start >= L.mondayOf(today)));
+};
+function moveItems(list, target, note) {
   const key = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  // Zum Vergleich ohne Hinweise, gespeichert bleibt „nicht bekommen“ stehen.
+  const bare = (q) => String(q || '').replace(/(,\s*)?(aus KW \d+|am \d+\.\d+\. (bei \S+ )?nicht bekommen)/g, '').replace(/^,\s*/, '').trim();
   const cleanQty = (q) => String(q || '').replace(/(,\s*)?aus KW \d+/g, '').replace(/^,\s*/, '').trim();
-  const t = targetTrip(week);
-  const inWeek = state.data.shopping.filter((i) => i.week_start === week);
-  let maxSort = inWeek.reduce((m, i) => Math.max(m, i.sort || 0), 0);
+  const there = state.data.shopping.filter((i) => i.due === target.due && !i.checked);
+  const f = tripFields(target);
   const moved = [];
   const gone = [];
-  for (const i of old.sort((a, b) => (a.week_start < b.week_start ? -1 : 1) || (a.sort || 0) - (b.sort || 0))) {
+  for (const i of list) {
     const qty = cleanQty(i.qty);
-    const twin = [...inWeek, ...moved].find((x) => !x.checked && key(x.label) === key(i.label));
-    if (twin && (!qty || cleanQty(twin.qty) === qty)) { gone.push(i.id); continue; }
-    const from = L.isoWeek(i.week_start);
+    const twin = [...there, ...moved].find((x) => x.id !== i.id && key(x.label) === key(i.label) && (!bare(qty) || bare(x.qty) === bare(qty)));
+    if (twin && !i.missing) { gone.push(i.id); continue; }
     const purpose = i.purpose || L.purposeOf(i, state.data.plan, state.data.dishes) || '';
-    moved.push({
-      ...i, week_start: week, trip: t.trip, due: t.due, buyer: t.buyer, manual: true, missing: false, purpose,
-      sort: ++maxSort, qty: [qty, `aus KW ${from}`].filter(Boolean).join(', '),
-    });
+    const n = /nicht bekommen/.test(qty) ? '' : note(i);
+    moved.push({ ...i, trip: f.trip, due: f.due, buyer: f.buyer, missing: false, purpose, qty: [qty, n].filter(Boolean).join(', ') });
   }
+  return { moved, gone };
+}
+function saveMoves({ moved, gone }) {
   if (!moved.length && !gone.length) return;
-  carrying = true;
-  if (moved.length) toast(`${moved.length === 1 ? '1 offener Posten' : `${moved.length} offene Posten`} aus KW ${L.isoWeek(prev)} ${moved.length === 1 ? 'steht' : 'stehen'} jetzt auf der Liste dieser Woche.`);
   commit(() => {
     state.data.shopping = state.data.shopping.filter((i) => !gone.includes(i.id)).map((i) => moved.find((m) => m.id === i.id) || i);
   }, async () => {
@@ -2908,17 +2938,49 @@ function carryOver() {
     } finally { carrying = false; }
   });
 }
-const stapleOnList = (x, week) => state.data.shopping.find((i) => i.week_start === week && !i.checked
-  && (i.staple_id === x.id || i.label.trim().toLowerCase() === x.label.trim().toLowerCase()));
+const missNote = (day) => (i) => (i.missing ? `am ${L.fmtShort(day || i.due || L.todayISO())} nicht bekommen` : '');
+function carryOver() {
+  // Erst mit frisch geladenen Daten, nie mit dem gespeicherten Stand vom letzten Mal.
+  if (!state.fresh) return;
+  if (carrying || store.offline || !state.data || !state.data.persons.length) return;
+  const today = L.todayISO();
+  const pool = shopPool();
+  const stale = pool.filter((i) => !i.checked && i.category !== 'vorhanden' && (!i.due || i.due < today));
+  if (!stale.length) return;
+  const keep = stale.filter((i) => stillNeeded(i, today)).sort((a, b) => String(a.due || '').localeCompare(String(b.due || '')) || (a.sort || 0) - (b.sort || 0));
+  // Posten für vorbei Abendessen bleiben auf ihrem Einkauf, sind aber erledigt: Sie zählen nicht mehr als offen.
+  const target = currentTrip(pool.filter((i) => !stale.includes(i)));
+  const r = moveItems(keep, target, missNote(null));
+  if (!r.moved.length && !r.gone.length) return;
+  carrying = true;
+  const n = r.moved.length;
+  if (n) toast(`${n === 1 ? '1 offener Posten steht' : `${n} offene Posten stehen`} jetzt auf dem ${tripLabel(target)}`);
+  saveMoves(r);
+}
+// Nach dem Einkauf: Was nicht zu bekommen war, kommt auf den nächsten Einkauf.
+function moveMissing(due) {
+  const pool = shopPool();
+  const miss = pool.filter((i) => i.due === due && i.missing && !i.checked);
+  if (!miss.length) return null;
+  const target = tripAfter(due, pool);
+  const r = moveItems(miss, target, missNote(L.todayISO()));
+  carrying = true;
+  saveMoves(r);
+  return { n: miss.length, target };
+}
+// Steht etwas schon offen auf einem Einkauf, der noch kommt?
+const openOnList = (label, staple = null) => shopPool().find((i) => !i.checked && (!i.due || i.due >= L.todayISO())
+  && ((staple && i.staple_id === staple) || L.itemKey(i.label) === L.itemKey(label)));
+const stapleOnList = (x) => openOnList(x.label, x.id);
 
 function sheetStaples() {
   const order = (c) => { const n = L.SHOP_CAT_ORDER.indexOf(c); return n < 0 ? 99 : n; };
   const items = [...state.data.staples].sort((a, b) => order(a.category) - order(b.category) || (a.sort || 0) - (b.sort || 0));
-  const target = targetTrip(state.week);
+  const target = currentTrip();
   const catOptions = L.SHOP_CAT_ORDER.filter((c) => c !== 'vorhanden').map((c) => `<option value="${c}"${c === 'haushalt' ? ' selected' : ''}>${esc(L.SHOP_CATS[c])}</option>`).join('');
   let lastCat = '';
   const rows = items.map((x) => {
-    const on = stapleOnList(x, state.week);
+    const on = stapleOnList(x);
     const head = x.category !== lastCat ? `<li class="abteilung-kopf">${esc(L.SHOP_CATS[x.category] || 'Sonstiges')}</li>` : '';
     lastCat = x.category;
     const meta = on ? 'steht auf der Liste' : x.last_added ? `zuletzt am ${L.fmtShort(x.last_added)} auf der Liste` : (x.qty || '');
@@ -2930,7 +2992,7 @@ function sheetStaples() {
   return {
     over: 'Einkauf',
     title: 'Immer wieder',
-    body: `<p class="meta" style="margin-bottom:12px">Was ihr regelmäßig braucht, unabhängig vom Wochenplan. Ein Tipp setzt es auf „${esc(target.trip)}“ in der KW ${L.isoWeek(state.week)}, ein zweiter nimmt es wieder herunter.</p>
+    body: `<p class="meta" style="margin-bottom:12px">Was ihr regelmäßig braucht, unabhängig vom Wochenplan. Ein Tipp setzt es auf den ${esc(tripLabel(target))}, ein zweiter nimmt es wieder herunter.</p>
       ${items.length ? `<ul class="posten immer">${rows}</ul>`
         : `<p class="meta">Noch nichts eingetragen.</p><div class="knopfreihe"><button class="knopf zweit" data-action="immer-start">Typische Dinge eintragen</button></div>`}
       <form class="dazu immer-dazu" data-form="immer">
@@ -4484,7 +4546,7 @@ const HELP_ADULTS = [
   ['Wochenplan', 'Unter „Woche“ steht für jeden Tag das Abendessen mit Essenszeit, Brotbox und Vorabend-Notiz. Tippt auf einen Tag für Rezept, Kochmodus, „Wer isst mit?“ mit Gästen, Gericht tauschen oder mit einem anderen Tag tauschen. „Woche vorschlagen“ plant von selbst aus euren Bewertungen. Unter dem heutigen Tag gibt es „Schnelles Mittagessen“ für alle, die mittags früher zu Hause sind. Ganz unten: Kalender (die iPhone-Kalender der Familie), Urlaub und Tage auswärts, Was muss weg? und Festtage planen (zum Beispiel Fondue an Heiligabend, mit Mengen pro Person, Dips, Zeitplan und eigener Einkaufsliste).'],
   ['Neues Gericht von Claude', 'Passt ein Abendessen nicht, im Tag auf „Neues Gericht von Claude“ tippen (auch oben bei „Gericht tauschen“). Claude schlägt ein Rezept vor, das noch nicht in der Sammlung steht, passend zur Kochzeit, zu euren Regeln und zum Rest der Woche, mit Wunsch wie „schneller“ oder „mit Fisch“. „Anderer Vorschlag“ holt einen neuen. „Übernehmen“ speichert das Rezept in der Sammlung und passt die Einkaufsliste an: Zutaten nur für das alte Gericht fallen weg, schon Gekauftes wird möglichst weiterverwendet, die neuen Zutaten kommen auf die nächste Tour.'],
   ['Wochenplan mit Claude', 'Freitags um 12 Uhr (einstellbar) schreibt Claude den Plan für die nächste Woche: mit den Angeboten von Aldi Süd und Lidl, euren Bewertungen, Regeln, Wünschen der Kinder, Gästen, Urlaub, Resten und euren Preisen von den Kassenzetteln. Ihr bekommt eine Push-Nachricht, prüft den Entwurf, tauscht einzelne Tage und gebt ihn frei. Regeln und Modell stellt ihr unter „Gerichte“ ein.'],
-  ['Einkaufen', 'Die Liste entsteht aus dem Plan, getrennt nach Großeinkauf und Frischeeinkauf und nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen: dann gibt es „Ersatz?“, „Bei Lidl versuchen“ oder den nächsten Einkauf. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was am Ende der Woche nicht abgehakt ist, wandert am Montag automatisch auf die neue Liste („aus KW …“). Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf die nächste Tour. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg. „Bio“ steht nicht in den Namen, gekauft wird Bio, wenn es das gibt. „Bio im Angebot“ heißt: Am Einkaufstag gibt es das als Bio-Angebot, Markt und Preis stehen darunter.'],
+  ['Einkaufen', 'Oben steht immer der nächste Einkauf, egal zu welcher Woche er gehört. Alles, was ihr ergänzt, kommt dorthin, auch „Ist alle“ vom Küchen-Display und Siri. Spätere Einkäufe stehen darunter bei „Danach“, die der letzten Tage bei „Erledigt“, beide zum Aufklappen. Die Liste entsteht aus dem Plan, verteilt auf Großeinkauf und Frischeeinkauf, getrennt nach Aldi und Lidl, in der Reihenfolge, in der ihr durch den Laden lauft (unten bei „Liste“: „Reihenfolge im Laden“). „Ich gehe einkaufen“ sagt den anderen Bescheid, „Tag ändern“ verlegt den Einkauf. Fehlt etwas im Laden, im Einkaufsmodus auf „fehlt“ tippen. Mit „Fertig“ wandert es auf den nächsten Einkauf, mit dem Hinweis „nicht bekommen“. Vorher gibt es noch „Ersatz?“ und „Bei Lidl versuchen“. Ergänzen geht per Tippen, per Foto oder Screenshot („Zutaten aus Foto“), durch Einfügen mehrerer Zeilen oder per Siri („Per Siri ergänzen“). Unter der Liste stehen „Mehr ergänzen“ (Foto, Immer wieder, Siri) und „Liste“ (neu erstellen, Vorrat, Reihenfolge im Laden). Im Laden hält der „Einkaufsmodus“ den Bildschirm an, zeigt große Häkchen und blendet Erledigtes aus. Was nach dem Einkaufstag noch offen ist und noch gebraucht wird, wandert von selbst auf den nächsten Einkauf. Gekauftes also immer abhaken. Was der Plan aus dem Vorrat nimmt, fragt die Liste oben ab: „Ist da“ oder „Fehlt“, dann kommt es mit Menge auf den nächsten Einkauf. Was nicht gebraucht wird, nimmt das Kreuz rechts von der Liste, ohne Haken. „Rückgängig“ im Hinweis holt es zurück, und beim Neuberechnen bleibt es weg. „Bio“ steht nicht in den Namen, gekauft wird Bio, wenn es das gibt. „Bio im Angebot“ heißt: Am Einkaufstag gibt es das als Bio-Angebot, Markt und Preis stehen darunter.'],
   ['Gerichte und Rezepte', 'Unter „Gerichte“ steht die Sammlung mit Bewertungen, Nährwerten und Ampel. Neue Rezepte kommen per Foto („Rezept aus Foto“, auch aus Cookidoo), von Hand oder über Claude. Im Kochmodus gibt es einen Schritt pro Seite, Timer und einen Bildschirm, der an bleibt. Unter jedem Schritt steht „Dafür brauchst du“ mit den Mengen für diesen Schritt (bei Gästen schon hochgerechnet), darunter lassen sich alle Zutaten aufklappen. Unten zeigt „Was mögen wir?“ die Lieblinge und Flops des Jahres. Die Sortierung „Günstig“ zeigt die geschätzten Kosten pro Portion.'],
   ['Aufgaben der Kinder', 'Unter „Aufgaben“ bestätigt ihr gemeldete Aufgaben (auch Grundaufgaben, abschaltbar), seht die Minutenkonten und löst Bildschirmzeit ein. „Aufgaben verwalten“ legt Aufgaben, Minuten und Zuständigkeit fest, dort schaltet ihr auch „Grundaufgaben bestätigen“ und „Minuten erst nach den Grundaufgaben“. Abends kommt eine Nachricht, wenn bei den Kindern noch etwas offen ist. Die Uhrzeiten der Erinnerungen stellt ihr dort ebenfalls ein.'],
   ['Spülmaschine', 'Unter „Aufgaben“ im Abschnitt „Spülmaschine“: Grün heißt wird eingeräumt, Gelb läuft, Rot fertig zum Ausräumen. Nur bei Rot können die Kinder „Ausgeräumt“ melden. Bei Gelb wählst du „Fertig in 1 bis 4 Std.“ oder eine Uhrzeit, dann springt die Ampel zu dieser Zeit von selbst auf Rot und die Kinder bekommen eine Nachricht (zwischen 7 und 20:30 Uhr, sonst am nächsten Morgen). Mit deiner Bestätigung springt sie auf Grün.'],
@@ -4925,7 +4987,7 @@ function rateLunch(day, n) {
 
 // Tauscht die Zutaten eines Tages auf der Einkaufsliste: Was nur für das alte Gericht war und noch nicht gekauft ist,
 // fällt weg, bei Posten für mehrere Gerichte nur dieser Zweck. Die Zutaten des neuen Gerichts kommen auf die nächste
-// Tour, die noch kommt (Frisches auf die letzte vor dem Kochtag), sonst auf den Nachkauf. Gekauftes bleibt stehen.
+// Tour, die noch kommt (Frisches auf die letzte vor dem Kochtag), sonst auf den aktuellen Einkauf. Gekauftes bleibt stehen.
 function swapShopping(day, oldDish, newDish) {
   const week = L.mondayOf(day);
   const today = L.todayISO();
@@ -4970,7 +5032,7 @@ function swapShopping(day, oldDish, newDish) {
       // Schon für das alte Gericht gekauft: Das neue nimmt es, nichts doppelt kaufen.
       const b = boughtKeys.get(L.itemKey(it.label));
       if (b) { change.push({ ...b.i, purpose: [...b.left, newUse].join(', ') }); boughtKeys.delete(L.itemKey(it.label)); continue; }
-      const t = upcoming.length ? L.tripFor(it, upcoming, week) : { trip: 'Nachkauf', due: null };
+      const t = upcoming.length ? L.tripFor(it, upcoming, week) : currentTrip();
       sort += 1;
       add.push({ ...it, trip: t.trip, due: t.due, sort });
     }
@@ -5138,8 +5200,7 @@ function fillWeek() {
   toast(rows.length === 1 ? '1 Tag geplant.' : `${rows.length} Tage geplant${hadList ? '' : ', Einkaufsliste erstellt'}.`);
 }
 
-async function rebuildShopping(silent) {
-  const week = state.week;
+async function rebuildShopping(silent, week = state.week) {
   const old = state.data.shopping.filter((i) => i.week_start === week && !i.manual);
   if (!silent && old.length && !(await ask('Die Liste wird aus dem Wochenplan neu berechnet. Häkchen gehen dabei verloren. Eigene Einträge und Posten für die Brotboxen bleiben, von Hand entfernte Posten kommen nicht wieder.', 'Neu erstellen'))) return;
   const factors = T.portionFactors(state.data.persons, allEvents(), state.data.attendance, L.weekDays(week), state.data.plan);
@@ -5157,8 +5218,11 @@ async function rebuildShopping(silent) {
   const removed = new Set(removedKeys(week));
   // Touren: die der alten Liste, sonst Großeinkauf am Samstag davor und Frischeeinkauf am Mittwoch wie in Claudes Plan.
   // Frisches kommt auf die letzte Tour bis zum ersten Gebrauch, der Rest auf den Großeinkauf.
+  // Nur Touren, die noch kommen. Sind beide vorbei, kommt alles auf den aktuellen Einkauf.
   const oldTrips = L.tripsOf(old);
-  const trips = oldTrips.length > 1 ? oldTrips : KI.shopTrips(week);
+  const coming = (oldTrips.length > 1 ? oldTrips : KI.shopTrips(week)).filter((t) => t.due && t.due >= L.todayISO());
+  const now = currentTrip();
+  const trips = coming.length ? coming : [{ trip: now.trip, due: now.due }];
   const items = built2.filter((it) => !removed.has(L.itemKey(it.label))).map((it) => ({ ...it, ...L.tripFor(it, trips, week) }));
   const keepIds = new Set(keep.map((k) => k.id));
   const gone = old.filter((i) => !keepIds.has(i.id));
@@ -5614,11 +5678,14 @@ const actions = {
     render();
   },
   einkaufsmodus: () => {
+    // Beim Beenden kommt, was nicht zu bekommen war, auf den nächsten Einkauf.
+    const moved = state.shopMode ? moveMissing(currentTrip().due) : null;
     state.shopMode = !state.shopMode;
     document.documentElement.classList.toggle('einkaufsmodus', state.shopMode);
     keepAwake(state.shopMode || (state.sheet && state.sheet.type === 'kochen'));
     render();
     window.scrollTo(0, 0);
+    if (moved) toast(`${moved.n === 1 ? '1 Posten, der gefehlt hat, steht' : `${moved.n} Posten, die gefehlt haben, stehen`} jetzt auf dem ${tripLabel(moved.target)}`);
   },
   'app-wuensche': () => openSheet({ type: 'app-wuensche' }),
   'neu-zeigen': () => openSheet({ type: 'neu' }),
@@ -5911,7 +5978,7 @@ const actions = {
     commit(() => { state.data.plan = state.data.plan.map((x) => (x === p ? next : x)); }, () => store.savePlan([next]));
   },
   'woche-fuellen': () => fillWeek(),
-  'liste-bauen': () => rebuildShopping(false),
+  'liste-bauen': ({ week }) => rebuildShopping(false, /^\d{4}-\d{2}-\d{2}$/.test(week || '') ? week : state.week),
   haken: ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
     if (item && !item.checked) {
@@ -5969,12 +6036,8 @@ const actions = {
     closeSheet();
     toast(`${v.name} steht jetzt statt ${item.label} auf der Liste.`);
   },
-  'fehlt-markt': ({ trip }) => {
-    // Wie bei „Nachkauf“: auch Posten anderer Wochen, die am selben Tag mit eingekauft werden.
-    const own = state.data.shopping.filter((i) => i.week_start === state.week && (i.trip || 'Einkauf') === trip);
-    const due = own.map((i) => i.due).filter(Boolean).sort()[0];
-    const guests = due ? state.data.shopping.filter((i) => i.week_start !== state.week && i.due === due && Math.abs(Date.parse(i.week_start) - Date.parse(state.week)) <= 14 * 86400000) : [];
-    const miss = [...own, ...guests].filter((i) => i.missing && !i.checked);
+  'fehlt-markt': ({ due }) => {
+    const miss = shopPool().filter((i) => i.due === due && i.missing && !i.checked);
     if (!miss.length) { toast('Hier ist gerade nichts als „nicht bekommen“ markiert.'); return; }
     const to = miss.every((i) => KI.shopOf(i) === 'lidl') ? '' : 'lidl';
     const day = L.fmtShort(L.todayISO());
@@ -5984,29 +6047,10 @@ const actions = {
     commit(() => { state.data.shopping = state.data.shopping.map((i) => moved.find((m) => m.id === i.id) || i); }, () => store.saveItems(moved));
     toast(`${moved.length === 1 ? '1 Posten steht' : `${moved.length} Posten stehen`} jetzt bei ${KI.SHOPS[to]}.`);
   },
-  'fehlt-verschieben': ({ trip, target: shown }) => {
-    const inWeek = state.data.shopping.filter((i) => i.week_start === state.week);
-    // Reihenfolge der Touren wie in der Liste: nach Einkaufstag, ohne Tag zum Schluss.
-    const tripDue = (t) => inWeek.filter((i) => (i.trip || 'Einkauf') === t && i.due).map((i) => i.due).sort()[0] || '9999';
-    const trips = [...new Set(inWeek.map((i) => i.trip || 'Einkauf'))].sort((a, b) => tripDue(a).localeCompare(tripDue(b)));
-    const target = shown || nextTrip(trip, trips);
-    const sample = inWeek.find((i) => (i.trip || 'Einkauf') === target);
-    const maxSort = inWeek.reduce((m, i) => Math.max(m, i.sort || 0), 0);
-    const day = L.fmtShort(L.todayISO());
-    // Dazu die Posten anderer Wochen, die am selben Tag mit eingekauft werden (eine Liste, siehe viewEinkauf).
-    const due = tripDue(trip);
-    const guests = due === '9999' ? [] : state.data.shopping.filter((i) => i.week_start !== state.week && i.due === due && Math.abs(Date.parse(i.week_start) - Date.parse(state.week)) <= 14 * 86400000);
-    const list = [...inWeek.filter((i) => (i.trip || 'Einkauf') === trip), ...guests].filter((i) => i.missing && !i.checked);
-    const moved = list.map((i, n) => ({
-      // Alles kommt auf die Tour dieser Woche, auch was aus der Liste der anderen Woche stammt.
-      ...i, week_start: state.week, trip: target, missing: false, due: sample ? sample.due || null : null, buyer: sample ? sample.buyer || null : null,
-      // Ohne Zieltour entsteht „Nachkauf“ am Ende der Liste.
-      sort: sample ? i.sort : maxSort + 1 + n,
-      qty: [i.qty, `am ${day} nicht bekommen`].filter(Boolean).join(', '),
-    }));
-    if (!moved.length) { toast('Hier ist gerade nichts als „nicht bekommen“ markiert.'); return; }
-    commit(() => { state.data.shopping = state.data.shopping.map((i) => moved.find((m) => m.id === i.id) || i); }, () => store.saveItems(moved));
-    toast(`${moved.length === 1 ? '1 Posten steht' : `${moved.length} Posten stehen`} jetzt bei „${target}“.`);
+  // Ältere Knöpfe: Nicht Bekommenes sofort auf den nächsten Einkauf.
+  'fehlt-verschieben': ({ due }) => {
+    const r = moveMissing(due || currentTrip().due);
+    toast(r ? `${r.n === 1 ? '1 Posten steht' : `${r.n} Posten stehen`} jetzt auf dem ${tripLabel(r.target)}` : 'Hier ist gerade nichts als „nicht bekommen“ markiert.');
   },
   'posten-weg': ({ id }) => {
     const item = state.data.shopping.find((i) => i.id === id);
@@ -6050,7 +6094,7 @@ const actions = {
   },
   erledigte: (_, el) => { state.hideDone = el.checked; render(); },
   'erledigte-loeschen': async () => {
-    const gone = state.data.shopping.filter((i) => i.week_start === state.week && i.checked);
+    const gone = shopPool().filter((i) => i.checked);
     if (!gone.length || !(await ask(`${gone.length} erledigte Einträge werden endgültig von der Liste gelöscht.`, 'Löschen'))) return;
     commit(() => { state.data.shopping = state.data.shopping.filter((i) => !gone.includes(i)); }, () => store.deleteItems(gone.map((i) => i.id)));
   },
@@ -6125,19 +6169,20 @@ const actions = {
     commit(() => { state.data.pantry = rows; }, () => store.savePantry(rows));
     renderSheet();
   },
-  'vorrat-da': ({ id }) => pantryConfirm([id]),
-  'entwurf-ergaenzen': () => {
-    const moved = splitApply(state.week);
-    const added = draftAdd(state.week);
+  'vorrat-da': (d) => pantryConfirm([d.id], /^\d{4}-\d{2}-\d{2}$/.test(d.week || '') ? d.week : state.week),
+  'entwurf-ergaenzen': (d) => {
+    const week = /^\d{4}-\d{2}-\d{2}$/.test(d.week || '') ? d.week : state.week;
+    const moved = splitApply(week);
+    const added = draftAdd(week);
     toast([moved ? `${moved === 1 ? '1 frischer Posten liegt' : `${moved} frische Posten liegen`} jetzt auf dem Frischeeinkauf.` : '',
       added ? `${added === 1 ? '1 Posten steht' : `${added} Posten stehen`} wieder auf der Liste.` : ''].filter(Boolean).join(' '));
   },
-  'entwurf-nicht': () => {
-    try { const v = (localStorage.getItem(DRAFT_SEEN) || '').split(',').filter((w) => w && w >= L.addDays(L.mondayOf(L.todayISO()), -14)); localStorage.setItem(DRAFT_SEEN, [...v, state.week].join(',')); } catch (e) { /* egal */ }
+  'entwurf-nicht': (d) => {
+    try { const v = (localStorage.getItem(DRAFT_SEEN) || '').split(',').filter((w) => w && w >= L.addDays(L.mondayOf(L.todayISO()), -14)); localStorage.setItem(DRAFT_SEEN, [...v, /^\d{4}-\d{2}-\d{2}$/.test(d.week || '') ? d.week : state.week].join(',')); } catch (e) { /* egal */ }
     render();
   },
-  'vorrat-alle-da': () => { const keys = pantryAsk(state.week).map((x) => x.key); pantryConfirm(keys); toast(keys.length === 1 ? 'Danke, ist vermerkt.' : `Danke, alle ${keys.length} sind vermerkt.`); },
-  'vorrat-fehlt': ({ id }) => pantryMissing(id),
+  'vorrat-alle-da': (d) => { const week = /^\d{4}-\d{2}-\d{2}$/.test(d.week || '') ? d.week : state.week; const keys = pantryAsk(week).map((x) => x.key); pantryConfirm(keys, week); toast(keys.length === 1 ? 'Danke, ist vermerkt.' : `Danke, alle ${keys.length} sind vermerkt.`); },
+  'vorrat-fehlt': (d) => pantryMissing(d.id, /^\d{4}-\d{2}-\d{2}$/.test(d.week || '') ? d.week : state.week),
   'vorrat-ja': ({ id }) => {
     const x = state.data.pantry.find((v) => v.id === id);
     if (!x) return;
@@ -6150,11 +6195,9 @@ const actions = {
     const x = state.data.pantry.find((v) => v.id === id);
     if (!x) return;
     const next = { ...x, have: !x.have, ...(!x.have ? { seen_at: L.todayISO() } : {}) };
-    const week = state.week;
-    const onList = state.data.shopping.some((i) => i.week_start === week && !i.checked && i.label.toLowerCase() === x.label.toLowerCase());
-    const add = !next.have && !onList ? [{
-      id: L.uid(), week_start: week, trip: (state.data.shopping.find((i) => i.week_start === week) || {}).trip || 'Einkauf',
-      category: 'vorrat', label: x.label, qty: 'aus dem Vorrat', sort: 999, checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(),
+    const add = !next.have && !openOnList(x.label) ? [{
+      id: L.uid(), ...tripFields(currentTrip()),
+      category: 'vorrat', label: x.label, qty: 'aus dem Vorrat', checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(),
     }] : [];
     commit(() => {
       state.data.pantry = state.data.pantry.map((v) => (v.id === id ? next : v));
@@ -6190,8 +6233,7 @@ const actions = {
   'immer-umschalten': ({ id }) => {
     const x = state.data.staples.find((v) => v.id === id);
     if (!x) return;
-    const week = state.week;
-    const on = stapleOnList(x, week);
+    const on = stapleOnList(x);
     if (on) {
       // Nur herunternehmen, was über „Immer wieder“ oder von Hand dazugekommen ist. Posten aus Rezepten bleiben.
       if (!on.manual) { toast(`${x.label} steht wegen eines Rezepts auf der Liste und bleibt dort.`); return; }
@@ -6199,11 +6241,8 @@ const actions = {
       renderSheet();
       return;
     }
-    const t = targetTrip(week);
-    const maxSort = state.data.shopping.filter((i) => i.week_start === week).reduce((m, i) => Math.max(m, i.sort || 0), 0);
     const item = {
-      id: L.uid(), week_start: week, trip: t.trip, due: t.due, buyer: t.buyer, category: x.category || 'sonst', label: x.label, qty: x.qty || '',
-      sort: maxSort + 1, checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(), staple_id: x.id, purpose: '', missing: false,
+      id: L.uid(), ...tripFields(currentTrip()), category: x.category || 'sonst', label: x.label, qty: x.qty || '', checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(), staple_id: x.id, purpose: '', missing: false,
     };
     const next = { ...x, last_added: L.todayISO() };
     commit(() => {
@@ -6647,12 +6686,11 @@ const actions = {
     commit(() => { state.data.persons = state.data.persons.map((p) => (p.id === me.id ? next : p)); }, () => store.savePersons([next]));
     toast(next.notify_cook ? 'Kocherinnerung ist eingeschaltet.' : 'Kocherinnerung ist ausgeschaltet.');
   },
-  'einkauf-uebernehmen': (d, el) => {
-    if (!canPlan()) return;
-    const trip = d.trip || 'Einkauf';
-    const current = state.data.shopping.find((i) => i.week_start === state.week && (i.trip || 'Einkauf') === trip && i.buyer);
+  'einkauf-uebernehmen': (d) => {
+    if (!canPlan() || !d.due) return;
+    const current = shopPool().find((i) => i.due === d.due && i.buyer);
     const take = !(current && current.buyer === state.me);
-    setBuyer(state.week, trip, take ? state.me : null);
+    setBuyer(d.due, take ? state.me : null);
     toast(take ? 'Eingetragen: Du gehst einkaufen.' : 'Du bist ausgetragen.');
   },
   'zur-woche': (d) => { state.week = d.week; render(); window.scrollTo(0, 0); },
@@ -6697,39 +6735,42 @@ const forms = {
     }
   },
   einkaufstag: (fd) => {
-    const trip = String(fd.get('trip') || 'Einkauf');
+    const from = String(fd.get('von') || '');
     const raw = String(fd.get('due') || '');
     const due = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
-    const changed = state.data.shopping.filter((i) => i.week_start === state.week && (i.trip || 'Einkauf') === trip).map((i) => ({ ...i, due }));
-    if (!changed.length) return;
-    const warn = due && KI.shopClosed(due) ? ` Achtung: An dem Tag sind die Märkte zu (${KI.shopHoliday(due) || 'Sonntag'}).` : due && KI.shortDay(due) ? ' An dem Tag schließen die Märkte mittags.' : '';
-    // Liegt an dem Tag schon eine andere Tour, werden beide eine Liste, und doppelte Posten werden zusammengefasst.
+    if (!due || due === from) return;
+    const pool = shopPool();
+    const moving = pool.filter((i) => i.due === from);
+    if (!moving.length) return;
+    const warn = KI.shopClosed(due) ? ` Achtung: An dem Tag sind die Märkte zu (${KI.shopHoliday(due) || 'Sonntag'}).` : KI.shortDay(due) ? ' An dem Tag schließen die Märkte mittags.' : '';
+    // Liegt an dem Tag schon ein Einkauf, werden beide einer, gleiche Posten einer Woche eine Zeile.
     // Alles in einem Schritt, damit keine Speicherung eine andere überholt.
-    const other = due ? [...new Set(state.data.shopping.filter((i) => i.week_start === state.week && i.due === due && (i.trip || 'Einkauf') !== trip).map((i) => i.trip || 'Einkauf'))] : [];
-    if (other.length) {
-      const week = state.data.shopping.filter((i) => i.week_start === state.week).map((i) => changed.find((c) => c.id === i.id) || i);
-      const moved = L.sameDayTrips(week);
-      const after = week.map((i) => moved.find((m) => m.id === i.id) || i);
-      const { changed: merged, removed } = L.mergeDuplicates(after, (i) => !i.manual && !i.checked && !i.missing);
-      const gone = new Set(removed);
-      const save = after.filter((i) => !gone.has(i.id)).map((i) => merged.find((m) => m.id === i.id) || i)
-        .filter((i) => changed.some((c) => c.id === i.id) || moved.some((m) => m.id === i.id) || merged.some((m) => m.id === i.id));
-      commit(() => {
-        state.data.shopping = state.data.shopping.filter((i) => !gone.has(i.id)).map((i) => save.find((c) => c.id === i.id) || i);
-      }, async () => {
-        await store.saveItems(save);
-        if (removed.length) await store.deleteItems(removed);
-      });
-      const name = (save.find((i) => i.due === due) || {}).trip || trip;
-      toast(`${[trip, ...other].map((t) => t.replace(/ am .*$/, '')).join(' und ')} sind jetzt eine Liste: ${name.replace(/\.$/, '')}.${removed.length ? ` ${removed.length === 1 ? 'Ein doppelter Posten ist' : `${removed.length} doppelte Posten sind`} zusammengefasst.` : ''}${warn}`);
-      return;
+    const there = pool.filter((i) => i.due === due);
+    const name = there.length ? (there.find((i) => !i.manual && i.trip) || there[0]).trip : null;
+    const buyer = there.map((i) => i.buyer).find(Boolean);
+    const changed = moving.map((i) => ({ ...i, due, ...(name ? { trip: name } : {}), ...(buyer ? { buyer } : {}) }));
+    const after = state.data.shopping.map((i) => changed.find((c) => c.id === i.id) || i);
+    const merged = [];
+    const removed = [];
+    if (there.length) {
+      for (const w of new Set(changed.map((i) => i.week_start))) {
+        const r = L.mergeDuplicates(after.filter((i) => i.week_start === w && i.due === due), (i) => !i.manual && !i.checked && !i.missing);
+        merged.push(...r.changed);
+        removed.push(...r.removed);
+      }
     }
+    const gone = new Set(removed);
+    const save = [...changed.filter((i) => !gone.has(i.id) && !merged.some((m) => m.id === i.id)), ...merged];
     commit(() => {
-      state.data.shopping = state.data.shopping.map((i) => changed.find((c) => c.id === i.id) || i);
-    }, () => store.saveItems(changed));
-    const otherWeek = due && state.data.shopping.find((i) => i.week_start !== state.week && i.due === due && Math.abs(Date.parse(i.week_start) - Date.parse(state.week)) <= 14 * 86400000);
-    if (otherWeek) { toast(`Einkaufstag gespeichert: ${L.fmtShort(due)} ${otherWeek.trip || 'Der Einkauf'} aus der Liste der KW ${L.isoWeek(otherWeek.week_start)} ist am selben Tag, beide stehen jetzt in einer Liste.${warn}`); return; }
-    toast(due ? `Einkaufstag gespeichert: ${L.fmtShort(due)}${warn}` : 'Einkaufstag entfernt.');
+      state.data.shopping = state.data.shopping.filter((i) => !gone.has(i.id)).map((i) => save.find((c) => c.id === i.id) || i);
+    }, async () => {
+      await store.saveItems(save);
+      if (removed.length) await store.deleteItems(removed);
+    });
+    const t = { trip: name || moving[0].trip, due };
+    toast(there.length
+      ? `Jetzt ein Einkauf: ${tripLabel(t)}${removed.length ? ` ${removed.length === 1 ? 'Ein doppelter Posten ist' : `${removed.length} doppelte Posten sind`} zusammengefasst.` : ''}${warn}`
+      : `Einkaufstag gespeichert: ${L.WEEKDAYS[L.wdIndex(due)]} ${L.fmtShort(due)}${warn}`);
   },
   notiz: (fd) => {
     const id = String(fd.get('dish') || '');
@@ -6922,32 +6963,29 @@ const forms = {
     if (!d) return;
     const pick = fd.getAll('nimm').map(Number).map((n) => d.posten[n]).filter(Boolean);
     if (!pick.length) { toast('Nichts ausgewählt.'); return; }
-    const trip = String(fd.get('trip') || targetTrip(state.week).trip);
-    const weekItems = state.data.shopping.filter((i) => i.week_start === state.week);
-    const sample = weekItems.find((i) => (i.trip || 'Einkauf') === trip) || {};
-    const maxSort = Math.max(0, ...weekItems.map((i) => i.sort || 0));
+    const chosen = String(fd.get('trip') || '');
+    const t = shopTripsAll().find((x) => x.due === chosen && x.due >= L.todayISO()) || currentTrip();
+    const f = tripFields(t);
     const purpose = String(fd.get('purpose') || '').trim();
     const shop = fd.get('shop') === 'lidl' ? { shop: 'lidl' } : {};
     const now = nowStamp();
     const rows = pick.map((p, n) => ({
-      id: L.uid(), week_start: state.week, trip, due: sample.due || null, category: p.abteilung === 'basis' ? 'vorrat' : (L.SHOP_CATS[p.abteilung] ? p.abteilung : 'sonst'),
-      label: p.name, qty: p.menge || '', sort: maxSort + 1 + n, checked: false, checked_by: null, checked_at: null, manual: true,
+      id: L.uid(), ...f, category: p.abteilung === 'basis' ? 'vorrat' : (L.SHOP_CATS[p.abteilung] ? p.abteilung : 'sonst'),
+      label: p.name, qty: p.menge || '', sort: f.sort + n, checked: false, checked_by: null, checked_at: null, manual: true,
       added_by: state.me, created_at: now, purpose, missing: false, ...shop,
     }));
     commit(() => { state.data.shopping = [...state.data.shopping, ...rows]; }, () => store.saveItems(rows));
     state.ingredientDraft = null;
     state.draft = '';
     closeSheet();
-    toast(`${rows.length === 1 ? '1 Posten' : `${rows.length} Posten`} auf „${trip}“ gesetzt.`);
+    toast(`${rows.length === 1 ? '1 Posten steht' : `${rows.length} Posten stehen`} jetzt auf dem ${tripLabel(t)}`);
   },
   posten: (fd) => {
     const label = String(fd.get('label') || '').trim();
     if (!label) return;
-    const weekItems = state.data.shopping.filter((i) => i.week_start === state.week);
-    const last = weekItems.sort((a, b) => a.sort - b.sort)[weekItems.length - 1];
+    // Alles, was jemand ergänzt, kommt auf den aktuellen Einkauf.
     const item = {
-      id: L.uid(), week_start: state.week, trip: last ? last.trip : 'Einkauf', due: last ? last.due || null : null, category: 'sonst', label, qty: '',
-      sort: last ? last.sort + 1 : 0, checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(),
+      id: L.uid(), ...tripFields(currentTrip()), category: L.guessCat(label), label, qty: '', checked: false, checked_by: null, checked_at: null, manual: true, added_by: state.me, created_at: nowStamp(),
       ...(fd.get('shop') === 'lidl' ? { shop: 'lidl' } : {}),
     };
     state.draft = '';

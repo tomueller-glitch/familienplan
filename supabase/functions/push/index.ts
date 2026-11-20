@@ -3273,6 +3273,26 @@ async function splitWithClaude(text: string): Promise<string[] | null> {
   }
 }
 
+// Der aktuelle Einkauf wie in der App (currentTrip in js/app.js): der erste Einkaufstag ab heute, auf dem noch etwas
+// offen ist, sonst der erste ab heute. Gibt es keinen, der nächste Samstag (Großeinkauf für die Woche danach).
+export function currentTripOf(items: Row[], day: string) {
+  const byDue = new Map<string, Row[]>();
+  for (const i of items) { const d = i.due ? String(i.due).slice(0, 10) : ''; if (d && d >= day) { if (!byDue.has(d)) byDue.set(d, []); byDue.get(d)!.push(i); } }
+  const dues = [...byDue.keys()].sort();
+  const due = dues.find((d) => byDue.get(d)!.some((i) => !i.checked)) || dues[0];
+  if (due) {
+    const list = byDue.get(due)!;
+    const gen = list.filter((i) => !i.manual);
+    const count = new Map<string, number>();
+    for (const i of gen.length ? gen : list) count.set(String(i.week_start), (count.get(String(i.week_start)) || 0) + 1);
+    const week = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+    const named = list.find((i) => !i.manual && i.trip) || list.find((i) => i.trip) || {};
+    return { due, week, trip: String(named.trip || 'Einkauf'), buyer: (list.find((i) => i.buyer) || {}).buyer || null };
+  }
+  const sat = addDays(day, (5 - wdOf(day) + 7) % 7);
+  return { due: sat, week: addDays(sat, 2), trip: `Großeinkauf am Sa ${Number(sat.slice(8, 10))}.${Number(sat.slice(5, 7))}.`, buyer: null };
+}
+
 export async function addFromShortcut(store: Store, key: string, body: Row, nowMs = Date.now()) {
   const settings = await store.get('ep_settings?select=value&key=eq.kurzbefehl');
   const saved = String(((settings[0] || {}).value || {}).schluessel || '');
@@ -3287,20 +3307,16 @@ export async function addFromShortcut(store: Store, key: string, body: Row, nowM
   const persons = await store.get('ep_persons?select=id,name');
   const person = persons.find((p) => p.id === body.person);
   const { day } = berlin(nowMs);
-  const week = mondayOf(day);
-  const items = await store.get(`ep_shopping?select=label,trip,due,sort,checked&week_start=eq.${week}`);
-  // Gleiche Regel wie in der App: der erste Einkauf, der noch offen ist und nicht in der Vergangenheit liegt.
-  const sorted = items.slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
-  const trips = [...new Set(sorted.map((i) => i.trip || 'Einkauf'))];
-  const open = trips.find((t) => sorted.some((i) => (i.trip || 'Einkauf') === t && !i.checked && (!i.due || String(i.due).slice(0, 10) >= day)));
-  const trip = open || trips[trips.length - 1] || 'Einkauf';
-  const sample = sorted.find((i) => (i.trip || 'Einkauf') === trip) || {};
+  const from = addDays(mondayOf(day), -7);
+  const items = await store.get(`ep_shopping?select=label,trip,due,sort,checked,week_start,manual,buyer&or=(week_start.gte.${from},due.gte.${day})`);
+  // Gleiche Regel wie in der App: auf den aktuellen Einkauf.
+  const t = currentTripOf(items, day);
   const have = new Set(items.filter((i) => !i.checked).map((i) => String(i.label).toLowerCase()));
   const fresh = labels.filter((l) => !have.has(l.toLowerCase()));
-  const maxSort = Math.max(0, ...items.map((i) => Number(i.sort) || 0));
+  const maxSort = Math.max(0, ...items.filter((i) => i.week_start === t.week).map((i) => Number(i.sort) || 0));
   const now = new Date(nowMs).toISOString();
   const rows = fresh.map((label, n) => ({
-    id: `s${nowMs.toString(36)}${n}${Math.random().toString(36).slice(2, 6)}`, week_start: week, trip, due: sample.due || null, category: 'sonst',
+    id: `s${nowMs.toString(36)}${n}${Math.random().toString(36).slice(2, 6)}`, week_start: t.week, trip: t.trip, due: t.due, buyer: t.buyer, category: 'sonst',
     label, qty: '', sort: maxSort + 1 + n, checked: false, manual: true, purpose: '', missing: false,
     added_by: person ? person.id : null, created_at: now,
   }));

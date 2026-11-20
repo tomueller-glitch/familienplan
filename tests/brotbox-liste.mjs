@@ -88,7 +88,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)]; db.ep_ai_runs = [run('r1', 'freigegeben')];
   db.ep_shopping = draftShop.map((s, n) => ({ id: 'claude-' + n, week_start: W, ...s, shop: s.shop || null, sort: n, missing: false, checked: n === 0, checked_by: n === 0 ? 'p1' : null, checked_at: null, manual: false }));
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
+  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   console.log('B Frage:', (await page.locator('#sheet-root, .dialog, [role=dialog]').first().innerText().catch(() => '-')).replace(/\n+/g, ' | ').slice(0, 200));
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(800);
   const rows = await listOf(page);
@@ -128,7 +128,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   console.log('D verschoben:', JSON.stringify(Object.values(byId).filter((r) => /^k/.test(r.id)).map((r) => `${r.label} -> ${r.trip.slice(0, 16)} ${r.due}`)));
   console.log('D ergänzt:', JSON.stringify(show(Object.values(byId).filter((r) => !/^k/.test(r.id)))));
   console.log('D Toast:', await toastText(page), '| Kasten danach:', await page.locator('.vorrat-frage', { hasText: 'passt nicht' }).count());
-  console.log('D Touren auf der Seite:', JSON.stringify(await page.locator('h2.tour').allInnerTexts()));
+  console.log('D Touren auf der Seite:', JSON.stringify([...await page.locator('h2.tour').allInnerTexts(), ...await page.locator('.ek-tour .ek-name').allInnerTexts()]));
   console.log('D Fehler:', errs); await ctx.close();
 }
 // E: Liste mit nur einer Tour neu berechnen: danach Groß- und Frischeeinkauf.
@@ -136,8 +136,9 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   const db = base(); db.ep_plan = [...db.ep_plan.filter((p) => p.day < W), ...planRows(SEED)];
   db.ep_shopping = [{ id: 'e1', week_start: W, trip: 'Einkauf', due: null, category: 'obst', label: 'Feldsalat', qty: '150 g', purpose: 'Pizza (Fr)', sort: 1, missing: false, checked: false, manual: false }];
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
-  await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(800);
+  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
+  if (await page.locator('#sheet-root [data-action="ja"]').count()) await page.locator('#sheet-root [data-action="ja"]').click();
+  await page.waitForTimeout(800);
   const rows = (await listOf(page)).filter((r) => r.week_start === W);
   const tr = {}; for (const r of rows) (tr[r.trip] ||= []).push(r.label);
   for (const [t, l] of Object.entries(tr)) console.log('E', t, l.length, JSON.stringify(l.slice(0, 14)));
@@ -156,13 +157,13 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   ];
   db.ep_shopping = short.map((x, n) => ({ id: 'kurz-' + n, week_start: W, ...x, shop: null, sort: n, missing: false, checked: false, checked_by: null, checked_at: null, manual: false }));
   const { page, ctx, errs } = await openAt(db, `?woche=${W}#einkauf`);
-  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
+  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1200);
   // Was auf der Seite steht, nach Touren
-  const rows = await page.evaluate(() => [...document.querySelectorAll('h2.tour')].flatMap((h) => {
-    const out = []; let el = h.nextElementSibling;
-    while (el && !(el.matches && el.matches('h2.tour'))) { for (const li of el.querySelectorAll ? el.querySelectorAll('.posten li') : []) { const n = li.querySelector('.p-name'); if (n) out.push({ trip: h.innerText, label: n.innerText.split('\n')[0].replace(/Saison$/, '').trim(), qty: (li.querySelector('.p-menge') || {}).innerText || '', purpose: (li.querySelector('.p-wofuer') || {}).innerText || '' }); } el = el.nextElementSibling; }
-    return out;
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.ek-jetzt, .ek-tour:not(.ek-vorbei)')].flatMap((sec) => {
+    const trip = ((sec.querySelector('h2.tour, .ek-name') || {}).textContent || '').trim();
+    const t = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
+    return [...sec.querySelectorAll('.posten li')].map((li) => li.querySelector('.p-name') && ({ trip, label: t(li.querySelector('.p-name')).replace(/ ?(Saison|Bio im Angebot|nicht bekommen)/g, '').trim(), qty: t(li.querySelector('.p-menge')), purpose: t(li.querySelector('.p-wofuer')) })).filter(Boolean);
   }));
   const keys = {}; for (const r of rows) { const k = r.trip + '|' + r.label.toLowerCase().replace(/^bio[- ]/, '').replace(/n$/, ''); (keys[k] ||= []).push(`${r.label} [${r.qty}] ${r.purpose} {${r.trip.slice(0, 5)}}`); }
   console.log('F doppelt:', JSON.stringify(Object.values(keys).filter((x) => x.length > 1)));
@@ -185,7 +186,7 @@ const show = (rows) => rows.map((r) => `${r.label} [${r.qty}] ${r.purpose} {${St
   await row('Vollkornbrot').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
   await row('Snackmöhren').locator('[data-action="posten-weg"]').click(); await page.waitForTimeout(300);
   console.log('G Kasten Claude-Plan:', await page.locator('.vorrat-frage', { hasText: 'passt nicht' }).count());
-  await page.locator('[data-action="liste-bauen"]').first().click(); await page.waitForTimeout(400);
+  await page.locator(`[data-action="liste-bauen"][data-week="${W}"]`).first().click(); await page.waitForTimeout(400);
   await page.locator('#sheet-root [data-action="ja"]').click(); await page.waitForTimeout(1000);
   console.log('G nach Neuberechnen da:', await row('Vollkornbrot').count(), await row('Snackmöhren').count(), '| Äpfel:', await row('Äpfel').count());
   await page.locator('[data-action="einkaufen"], [data-action="einkaufsmodus"]').first().click().catch(() => {}); await page.waitForTimeout(300);
