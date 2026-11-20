@@ -1121,3 +1121,16 @@ html.anzeige-modus body::before { display: none; }
 .anz-wer-person { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; border-radius: 14px; border: 1px solid var(--linie, #d5dfe2); background: var(--blatt, #fff); font: 600 17px/1.2 var(--text, inherit); color: inherit; cursor: pointer; }
 .anz-wer-person[disabled] { opacity: .5; cursor: default; }
 .anz-wer-person small { font-weight: 400; font-size: 12px; }
+/* Küchen-Display hell (tagsüber oder fest eingestellt) */
+html.anzeige-modus.anzeige-hell, html.anzeige-modus.anzeige-hell body { background: #E9EFF1; }
+.anzeige.hell { --a-blatt: #FFFFFF; --a-tinte: #14323C; --a-leise: #587078; --a-linie: #D3DDE0; }
+.anzeige.hell .anz-feld { box-shadow: 0 1px 2px rgba(20, 50, 60, .08); }
+.anzeige.hell .anz-blatt { box-shadow: 0 6px 0 -3px #c9d5d9, 0 10px 0 -5px #9fb1b6, 0 2px 6px rgba(20, 50, 60, .12); }
+.anzeige.hell .anz-tonne .anz-zeit, .anzeige.hell .anz-wie-frage { color: #9A6200; }
+.anzeige.hell .anz-wie-person.hat span { color: #B07400; }
+.anzeige.hell .anz-ampeln li.s-rot .anz-a-text { color: #C0362F; }
+.anzeige.hell .anz-ia, .anzeige.hell .anz-wie-person { background: #F3F7F8; }
+.anzeige.hell .anz-ia.drauf { color: #23704A; border-color: #9CCFB0; background: #E4F4EA; }
+.anzeige.hell .anz-k-knopf:focus-visible, .anzeige.hell .anz-ia:focus-visible, .anzeige.hell .anz-wie-person:focus-visible { outline-color: #14323C; }
+.anz-farbwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.anz-farbwahl .knopf.aktiv { background: var(--tinte, #14323C); color: #fff; border-color: var(--tinte, #14323C); }

@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-20b', datum: '20. November, morgens', titel: 'Küchen-Display auch hell',
+    punkte: [
+      { text: 'Das Küchen-Display ist tagsüber jetzt hell und ab 18 Uhr dunkel.' },
+      { text: 'Im Familie-Fenster beim Küchen-Display lässt sich die Farbe einstellen: Automatisch, Hell oder Dunkel.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20a', datum: '20. November', titel: 'Küchen-Display: morgens anders als abends',
     punkte: [
       { text: 'Morgens zeigt das Küchen-Display, was ihr anziehen sollt, das Wetter, die Brotbox und wem man Glück wünscht. Nachmittags kommen Abendessen, Vorbereitung für morgen und die Brotbox für morgen.' },

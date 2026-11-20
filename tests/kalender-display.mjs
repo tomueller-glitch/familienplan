@@ -172,6 +172,16 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
   await ph.page.locator('#sheet-root form[data-form=pin] button').click(); await ph.page.waitForTimeout(500);
   const saved = (await calls(ph.page, 'ep_persons')).flat().filter((r) => r.id === 'p3').pop();
   console.log('F PIN gespeichert:', !!saved && saved.pin_hash === h('p3', '1357'), '| Fehler:', ph.errs); await ph.ctx.close();
+  // Farbwahl im Familie-Fenster
+  {
+    const ph2 = await open(base(), 0);
+    await ph2.page.locator('[data-action="familie"]').first().click(); await ph2.page.waitForTimeout(300);
+    await ph2.page.evaluate(() => document.querySelectorAll('#sheet-root details').forEach((d) => { d.open = true; }));
+    await ph2.page.locator('[data-action="anzeige-farbe"][data-v="hell"]').click(); await ph2.page.waitForTimeout(300);
+    const st = (await calls(ph2.page, 'ep_settings')).flat().filter((r) => r.key === 'anzeige').pop();
+    console.log('F Farbe gespeichert:', JSON.stringify(st && st.value), '| gedrückt:', await ph2.page.locator('[data-action="anzeige-farbe"][aria-pressed="true"]').textContent(), '| Fehler:', ph2.errs);
+    await ph2.ctx.close();
+  }
   // Am Display
   const db = base(); db.ep_persons = db.ep_persons.map((p) => (p.id === 'p3' ? { ...p, pin_hash: h('p3', '1357') } : p.id === 'p1' ? { ...p, pin_hash: h('p1', '2468') } : p));
   const { page, ctx, errs } = await openDisplay(db, 1024, 768);
@@ -240,6 +250,19 @@ const DIENST = { id: 'e1', title: 'Dienst', who: ['p1'], weekdays: [2], start_ti
       await page.screenshot({ path: `/tmp/vorschau_${name}_${lage}.png` });
       await ctx.close();
     }
+  }
+  // Farbe: automatisch, fest hell, fest dunkel
+  for (const [farbe, hh] of [['auto', 7], ['auto', 19], ['hell', 20], ['dunkel', 9]]) {
+    const db = mk(); if (farbe !== 'auto') db.ep_settings.push({ key: 'anzeige', value: { farbe } });
+    const { page, ctx, errs } = await openDisplay(db, 1133, 744, KAL4, { stunde: hh, minute: 5, tag: '2026-11-19' });
+    const r = await page.evaluate(() => [document.querySelector('.anzeige').className, document.documentElement.className, getComputedStyle(document.body).backgroundColor]);
+    console.log(`G Farbe ${farbe} ${hh} Uhr:`, r.join(' | '), errs.length ? errs : '');
+    if (farbe === 'auto' && hh === 7) await page.screenshot({ path: '/tmp/vorschau_hell_quer.png' });
+    await ctx.close();
+  }
+  {
+    const { page, ctx, errs } = await openDisplay(mk(), 744, 1133, KAL4, { stunde: 16, minute: 45, tag: '2026-11-19' });
+    await page.screenshot({ path: '/tmp/vorschau_hell_hoch.png' }); await ctx.close();
   }
   // Ist alle und Wie war's
   const { page, ctx, errs } = await openDisplay(mk(), 1133, 744, KAL4, { stunde: 19, minute: 40, tag: '2026-11-19' });
