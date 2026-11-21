@@ -748,6 +748,20 @@ function homeGeo() {
   const w = KI.settingOf(state.data.settings, 'wege');
   return w && w.heim && Array.isArray(w.heim.geo) ? w.heim.geo : W.HOME_DEFAULT;
 }
+// Kopf des Küchen-Displays: Temperatur jetzt, Wetterwort, Regen der nächsten zwölf Stunden als Satz und Balken.
+function weatherHead() {
+  const data = state.wetter && state.wetter.data;
+  if (!data) return '';
+  const now = new Date(nowMs());
+  const w = W.nowWeather(data, now);
+  const r = W.rainOutlook(data, now, 12);
+  if (!w) return '';
+  const bars = r ? r.list.map((x, i) => `<rect x="${i * 12 + 1}" y="${(30 - Math.max(2, x.prob * 0.3)).toFixed(1)}" width="10" height="${Math.max(2, x.prob * 0.3).toFixed(1)}" rx="1.5" class="${x.nass ? 'nass' : 'trocken'}"/>${i % 3 === 0 ? `<text x="${i * 12 + 6}" y="42" text-anchor="middle">${x.h}</text>` : ''}`).join('') : '';
+  return `<div class="anz-wetter" role="img" aria-label="Jetzt ${w.temp} Grad, ${esc(w.wort)}${r ? `, ${esc(r.text)}` : ''}">
+    <span class="anz-w-temp">${w.temp}°</span>
+    <span class="anz-w-text"><b>${esc(w.wort)}</b>${r ? `<span>${esc(r.text)}</span>` : ''}</span>
+    ${bars ? `<svg class="anz-w-regen" viewBox="0 0 ${r.list.length * 12} 44" aria-hidden="true">${bars}</svg>` : ''}</div>`;
+}
 async function loadWeather() {
   if (state.wetterBusy || store.offline) return;
   if (state.wetter === undefined) {
@@ -1052,21 +1066,19 @@ function viewDisplay() {
   if (awayNow) {
     dinner = `<p class="anz-gericht">${esc(away.name || 'Urlaub')}</p><p class="anz-meta">Bis ${esc(L.fmtLong(away.bis))}</p>`;
   } else if (morning) {
-    // Morgens: Wetter mit Kleidungstipp, Brotbox, was mitmuss, wem man Glück wünscht. Das Abendessen nur kurz.
-    dinnerHead = 'Heute Morgen';
-    const sum = state.wetter && state.wetter.data ? W.daySummary(state.wetter.data, today, 7, 18) : null;
+    // Morgens: das Abendessen, dazu Brotbox und wem man Glück wünscht. Das Wetter steht oben neben der Uhr.
+    dinnerHead = 'Heute';
     // Mitnehmen und Glückwünsche nur für die Kinder.
     const notes = W.morningNotes(dayItems(today).map((x) => ({ ...x, people: x.people.filter((q) => !isAdult(q)) })).filter((x) => x.people.length));
     const lunch = L.isSchoolDay(today) ? lunchOf(today) : '';
     const who = (list) => (list.length ? `${list.join(' und ')}: ` : '');
     const rows = [
-      sum ? ['Wetter', W.weatherLine(sum)] : null,
       lunch ? ['Brotbox', lunch] : null,
       ...notes.exams.map((e) => ['Viel Glück', `${who(e.who)}${e.titel}`]),
-      dish ? ['Abends', `${dish.name}, ${info.time} Uhr`] : p && p.skipped ? ['Abends', 'kein Abendessen geplant'] : null,
     ].filter(Boolean);
-    dinner = `<p class="anz-gericht anz-tipp">${esc(sum ? W.clothesTip(sum) : 'Guten Morgen')}</p>
-      <dl class="anz-zeilen">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+    dinner = `<p class="anz-gericht">${esc(dish ? dish.name : p && p.skipped ? 'Kein Abendessen geplant' : 'Guten Morgen')}</p>
+      ${dish ? `<p class="anz-meta">Abendessen um ${esc(info.time)} Uhr</p>` : ''}
+      ${rows.length ? `<dl class="anz-zeilen">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}`;
   } else {
     // Vorbereitung und Brotbox für morgen stehen jetzt bei „Morgen“ in der Terminspalte.
     const extra = [];
@@ -1116,7 +1128,7 @@ function viewDisplay() {
   return `<div class="anzeige${night ? ' nacht' : ''}${light ? ' hell' : ''}">
     <header class="anz-kopf"><div class="anz-blatt" data-action="anz-blatt" aria-label="${esc(L.fmtLong(today))}"><span class="anz-wt">${esc(L.fmtLong(today).split(',')[0])}</span><b>${L.parseISO(today).getDate()}</b><span class="anz-mon">${esc(L.MONTHS[L.parseISO(today).getMonth()])}</span></div>
       <span class="anz-uhr">${Number.isInteger(globalThis.ESSENSPLAN_STUNDE) ? `${String(hour).padStart(2, '0')}:${String(dispMinute()).padStart(2, '0')}` : hm(now)}</span>
-      ${notesBoard()}</header>
+      ${weatherHead()}${notesBoard()}</header>
     <div class="anz-raster${lamps.length ? '' : ' ohne-ampeln'}">
       <section class="anz-feld anz-essen${morning && !awayNow ? ' morgens' : ''}"><h2>${dinnerHead}</h2>${dinner}</section>
       ${ampeln}

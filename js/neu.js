@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-21r', datum: '21. November', titel: 'Küchen-Display: Wetter neben der Uhr',
+    punkte: [
+      { text: 'Neben Datum und Uhr stehen jetzt die Temperatur, das Wetter und der Regen der nächsten zwölf Stunden, als Satz („Regen ab 14 Uhr“) und als kleine Balken. Das gilt den ganzen Tag.' },
+      { text: 'Der Kleidungstipp am Morgen ist weg. Morgens steht oben das Abendessen, darunter Brotbox und wem man Glück wünscht.' },
+    ],
+  },
+  {
     id: '2026-11-21w', datum: '21. November', titel: 'Waschmaschinen-Ampel über Home Connect',
     punkte: [
       { text: 'Die Waschmaschine hat jetzt eine eigene Ampel am Küchen-Display: grün bereit, gelb läuft (mit Uhrzeit, wann sie fertig ist), rot fertig. Rot bleibt, bis jemand die Tür geöffnet hat.' },

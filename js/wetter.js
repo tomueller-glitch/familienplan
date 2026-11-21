@@ -7,6 +7,7 @@ export const HOME_DEFAULT = [50.258, 10.964];
 export function weatherUrl([lat, lon]) {
   const q = new URLSearchParams({
     latitude: lat.toFixed(3), longitude: lon.toFixed(3), timezone: 'Europe/Berlin', forecast_days: '2',
+    current: 'temperature_2m,weather_code,precipitation',
     hourly: 'temperature_2m,precipitation_probability,precipitation,weather_code',
     daily: 'temperature_2m_min,temperature_2m_max,precipitation_probability_max,weather_code',
   });
@@ -46,6 +47,42 @@ export function daySummary(data, day, from = 7, to = 18) {
     regen: Math.max(...prob), ab: wet.length ? Number(h.time[wet[0]].slice(11, 13)) : null,
     schnee: codes.some(snowy), wort: codeWord(main),
   };
+}
+
+// Wetter jetzt: Temperatur und Wort. now: Date (Ortszeit des Geräts, also Berlin).
+const hourKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:00`;
+export function nowWeather(data, now = new Date()) {
+  const c = data && data.current;
+  if (c && typeof c.temperature_2m === 'number') return { temp: Math.round(c.temperature_2m), code: c.weather_code, wort: codeWord(c.weather_code) || 'bewölkt' };
+  const h = data && data.hourly;
+  const i = h && Array.isArray(h.time) ? h.time.indexOf(hourKey(now)) : -1;
+  if (i < 0) return null;
+  return { temp: Math.round(h.temperature_2m[i]), code: (h.weather_code || [])[i], wort: codeWord((h.weather_code || [])[i]) || 'bewölkt' };
+}
+// Regen der nächsten Stunden ab der laufenden: [{ h, prob, nass }] und ein kurzer Satz.
+export function rainOutlook(data, now = new Date(), hours = 12) {
+  const h = data && data.hourly;
+  if (!h || !Array.isArray(h.time)) return null;
+  const start = h.time.indexOf(hourKey(now));
+  if (start < 0) return null;
+  const list = [];
+  for (let i = start; i < Math.min(h.time.length, start + hours); i += 1) {
+    const code = (h.weather_code || [])[i];
+    const prob = (h.precipitation_probability || [])[i] ?? 0;
+    list.push({ h: Number(h.time[i].slice(11, 13)), prob, nass: prob >= 50 || rainy(code) || snowy(code), schnee: snowy(code) });
+  }
+  if (!list.length) return null;
+  const word = list.some((x) => x.nass && x.schnee) ? 'Schnee' : 'Regen';
+  let text;
+  if (list[0].nass) {
+    const dry = list.findIndex((x) => !x.nass && x.prob < 30);
+    text = dry > 0 ? `${word} bis etwa ${list[dry].h} Uhr` : `${word} bis heute Abend`;
+  } else {
+    const wet = list.find((x) => x.nass);
+    const maybe = list.reduce((m, x) => Math.max(m, x.prob), 0);
+    text = wet ? `${word} ab ${wet.h} Uhr (${wet.prob} %)` : maybe >= 30 ? `vielleicht ${word} (${maybe} %)` : `kein ${word} bis ${list[list.length - 1].h} Uhr`;
+  }
+  return { list, text };
 }
 
 // Was die Kinder anziehen sollen, kurz und konkret.

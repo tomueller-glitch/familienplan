@@ -155,4 +155,14 @@ const db = () => { const d = base(); d.ep_settings = [{ key: 'kalender', value: 
   console.log('W ohne Secrets:', (await p2.page.locator('.km-karte:has([data-action="hc-verbinden"]), .km-karte:has-text("Supabase")').first().innerText().catch(() => '-')).replace(/\n+/g, ' | ').slice(0, 200), '| Fehler:', p2.errs);
   await p2.ctx.close();
 }
+{
+  // Wetter im Kopf statt Kleidungstipp.
+  for (const [w, h, st] of [[1133, 744, 8], [744, 1133, 8], [1133, 744, 17]]) {
+    const d = db(); d.ep_settings = [...d.ep_settings, { key: 'zettel', value: [{ id: 'z1', text: 'Paket ist beim Nachbarn', by: 'p2', at: '2026-11-18T08:00:00Z', bis: '2026-11-19' }, { id: 'z2', text: 'Julia heute bei Oma', by: 'p1', at: '2026-11-18T07:00:00Z', bis: '2026-11-18' }] }];
+    const o = await openDisplay(d, w, h, KALA, { stunde: st, minute: 10 });
+    const fit = await o.page.evaluate(() => [document.documentElement.scrollHeight, innerHeight, document.querySelector('.anz-kopf').scrollWidth, document.querySelector('.anz-kopf').clientWidth]);
+    console.log(`R ${w} ${st} Uhr:`, (await o.page.locator('.anz-wetter').innerText().catch(() => '-')).replace(/\n+/g, ' | '), '| Karte:', (await o.page.locator('.anz-essen').innerText()).replace(/\n+/g, ' | ').slice(0, 120), '| passt:', fit.join(' / '), '| Fehler:', o.errs);
+    await o.page.screenshot({ path: `wetter_${w}_${st}.png` }); await o.ctx.close();
+  }
+}
 await b.close(); srv.close();
