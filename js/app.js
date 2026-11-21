@@ -913,6 +913,70 @@ function sheetWhy({ day, id }) {
 // Große Ansicht für ein Tablet in der Küche, nur zum Anschauen: Uhr, Abendessen, Ampeln, Termine, Kinder, Einkauf.
 // Ohne Personenwahl. Aktualisiert sich über die Live-Verbindung, zur Sicherheit alle zehn Minuten komplett,
 // und hält den Bildschirm wach. Nachts (22 bis 6 Uhr) wird es dunkler.
+/* ---------- Strompreis (Tibber) am Küchen-Display ---------- */
+// Die Funktion push holt die Preise mit dem Secret TIBBER_TOKEN und legt sie in ep_settings "strompreis" ab.
+// Das Display fragt alle 15 Minuten nach; ohne Schlüssel kommt { aus: true } und es zeigt nichts.
+function powerFetch() {
+  if (state.phase !== 'anzeige' || store.offline || state.stromAus || Date.now() - (state.stromAt || 0) < 15 * 60000) return;
+  state.stromAt = Date.now();
+  store.powerPrices().then((v) => {
+    if (!v || v.aus) { state.stromAus = true; return; }
+    if (!Array.isArray(v.preise)) return;
+    const row = { key: 'strompreis', value: v, updated_at: new Date().toISOString() };
+    state.data.settings = [...state.data.settings.filter((x) => x.key !== 'strompreis'), row];
+    if (!state.sheet) render();
+  }).catch(() => {});
+}
+// Stundenmittel der nächsten 24 Stunden ab der laufenden Stunde: [{ ms, h, ct }].
+function powerHours(v, now = nowMs()) {
+  const start = new Date(now); start.setMinutes(0, 0, 0);
+  const from = start.getTime();
+  const by = new Map();
+  for (const x of v.preise || []) {
+    const ms = Date.parse(x.t);
+    if (ms < from || ms >= from + 24 * 3600000) continue;
+    const d = new Date(ms); d.setMinutes(0, 0, 0);
+    const k = d.getTime();
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(x.p * 100);
+  }
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([ms, l]) => ({ ms, h: new Date(ms).getHours(), ct: l.reduce((a, b) => a + b, 0) / l.length }));
+}
+const ctText = (ct) => `${String(Math.round(ct * 10) / 10).replace('.', ',')} ct`;
+function powerBox() {
+  const v = KI.settingOf(state.data.settings, 'strompreis');
+  if (state.stromAus || !v || !Array.isArray(v.preise)) return '';
+  const hours = powerHours(v);
+  if (hours.length < 3) return '';
+  const now = nowMs();
+  const q = (v.preise || []).filter((x) => Date.parse(x.t) <= now).sort((a, b) => Date.parse(b.t) - Date.parse(a.t))[0];
+  const nowCt = q ? q.p * 100 : hours[0].ct;
+  const cts = hours.map((x) => x.ct);
+  const lo = Math.min(...cts);
+  const hi = Math.max(...cts);
+  // Günstigste zwei Stunden am Stück (ab der nächsten vollen Stunde, sonst ab jetzt).
+  let best = null;
+  for (let i = 0; i + 1 < hours.length; i += 1) {
+    const avg = (hours[i].ct + hours[i + 1].ct) / 2;
+    if (!best || avg < best.avg) best = { i, avg };
+  }
+  const sorted = [...cts].sort((a, b) => a - b);
+  const cheap = sorted[Math.floor(sorted.length / 3)];
+  const dear = sorted[Math.floor((sorted.length * 2) / 3)];
+  const W = 240; const H = 56; const bw = W / hours.length;
+  const base = Math.max(0, lo - (hi - lo) * 0.4);
+  const y = (ct) => H - Math.max(3, ((ct - base) / Math.max(0.01, hi - base)) * H);
+  const bars = hours.map((x, i) => `<rect x="${(i * bw + 0.6).toFixed(1)}" y="${y(x.ct).toFixed(1)}" width="${Math.max(1, bw - 1.2).toFixed(1)}" height="${(H - y(x.ct)).toFixed(1)}" rx="1.5" class="${i === 0 ? 'jetzt' : x.ct <= cheap ? 'billig' : x.ct >= dear ? 'teuer' : 'mittel'}"/>`).join('');
+  const ticks = hours.map((x, i) => (x.h % 6 === 0 ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="${H + 13}" text-anchor="middle">${x.h}</text>` : '')).join('');
+  const b0 = hours[best.i];
+  const b1 = new Date(hours[best.i + 1].ms + 3600000).getHours();
+  const when = new Date(b0.ms).toDateString() === new Date(now).toDateString() ? '' : 'morgen ';
+  const bestText = best.i === 0 ? `jetzt am günstigsten (${ctText(best.avg)})` : `günstig ${when}${b0.h} bis ${b1} Uhr (${ctText(best.avg)})`;
+  return `<div class="anz-strom" role="img" aria-label="Strompreis jetzt ${ctText(nowCt)} pro Kilowattstunde, ${bestText}">
+    <div class="anz-strom-text"><span class="anz-strom-jetzt">Strom ${ctText(nowCt)}</span><span class="anz-strom-tipp">${esc(bestText)}</span></div>
+    <svg class="anz-strom-kurve" viewBox="0 0 ${W} ${H + 16}" preserveAspectRatio="none" aria-hidden="true">${bars}${ticks}</svg></div>`;
+}
+
 // Nachtruhe am Küchen-Display: von 0 bis 6 Uhr schwarz und ohne Wachhalten, damit die automatische Sperre des
 // iPads (im geführten Zugriff „Display-Sperre“) den Bildschirm ausschaltet. Ein Tipp zeigt alles für zwei Minuten.
 const NIGHT = { from: 0, to: 6 };
@@ -1001,7 +1065,8 @@ function viewDisplay() {
   const ampeln = lamps.length ? `<section class="anz-feld anz-ampeln"><h2>Ampeln</h2><ul>${lamps.map((x) => `<li class="s-${x.stufe}"><span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'rot' ? 'Rot' : x.stufe === 'gelb' ? 'Gelb' : 'Grün'}">${kmLamps(x.stufe)}</span><span class="anz-a-name">${esc(x.name)}</span><span class="anz-a-text">${esc(x.text)}</span></li>`).join('')}</ul></section>` : '';
 
   // Termine heute und morgen: aus dem Familienplan und aus den abonnierten Kalendern, dazu die Tonne.
-  const termine = `<section class="anz-feld anz-heute">${[today, L.addDays(today, 1)].map((d, n) => displayDay(d, n === 0)).join('')}</section>`;
+  powerFetch();
+  const termine = `<section class="anz-feld anz-heute">${[today, L.addDays(today, 1)].map((d, n) => displayDay(d, n === 0)).join('')}${powerBox()}</section>`;
 
   // Kinder
   const kids = kidsList();

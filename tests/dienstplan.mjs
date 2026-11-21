@@ -115,4 +115,22 @@ const db = () => { const d = base(); d.ep_settings = [{ key: 'kalender', value: 
   const m = await openDisplay(db(), 1133, 744, KALA, { stunde: 6, minute: 0 });
   console.log('N 6 Uhr:', await m.page.locator('.anz-nacht').count(), await m.page.locator('.anz-blatt').count()); await m.ctx.close();
 }
+{
+  // Strompreis: Viertelstunden für heute und morgen, Kurve unten in der Terminspalte.
+  const preise = [];
+  for (let i = 0; i < 192; i += 1) {
+    const ms = Date.parse('2026-11-17T23:00:00Z') + i * 900000; const h = new Date(ms).getUTCHours() + 1;
+    const ct = 22 + 8 * Math.sin(((h % 24) - 13) / 24 * 2 * Math.PI + Math.PI) + (h % 24 >= 17 && h % 24 <= 20 ? 6 : 0);
+    preise.push({ t: new Date(ms).toISOString(), p: Math.round(ct * 100) / 10000 });
+  }
+  const d = db(); d.ep_settings = [...d.ep_settings, { key: 'strompreis', value: { tag: '2026-11-18', stand: '2026-11-18T12:00:00Z', morgen: true, preise } }];
+  for (const [w, h] of [[1133, 744], [744, 1133]]) {
+    const o = await openDisplay(d, w, h, KALA, { stunde: 17, minute: 40 });
+    const box = await o.page.locator('.anz-strom').innerText().catch(() => '-');
+    const fit = await o.page.evaluate(() => [document.documentElement.scrollHeight, innerHeight]);
+    console.log(`S ${w}x${h}:`, box.replace(/\n+/g, ' | '), '| Balken:', await o.page.locator('.anz-strom rect').count(), '| passt:', fit.join(' von '), '| Abruf:', await o.page.evaluate(() => window.calls.filter((c) => c[0] === 'invoke' && c[2].action === 'strompreis').length));
+    await o.page.screenshot({ path: `strom_${w}.png` });
+    console.log('S Fehler:', o.errs); await o.ctx.close();
+  }
+}
 await b.close(); srv.close();

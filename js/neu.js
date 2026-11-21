@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-21s', datum: '21. November', titel: 'Strompreis von Tibber am Küchen-Display',
+    punkte: [
+      { text: 'Unten in der Terminspalte stehen der Strompreis jetzt, die günstigsten zwei Stunden am Stück und Balken für die nächsten 24 Stunden: grün günstig, orange teuer, dunkel die laufende Stunde. Die Preise für morgen kommen ab etwa 13 Uhr dazu.' },
+      { text: 'Der Tibber-Schlüssel liegt nur bei Supabase als Secret TIBBER_TOKEN, nicht in der App. Ohne Schlüssel bleibt die Kurve weg.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-20n', datum: '20. November, nachts', titel: 'Nachtruhe am Küchen-Display',
     punkte: [
       { text: 'Von 0 bis 6 Uhr ist das Küchen-Display schwarz und hält den Bildschirm nicht mehr wach. Ist im geführten Zugriff eine Display-Sperre eingestellt, geht der Bildschirm dann ganz aus. Ein Tipp zeigt alles für zwei Minuten.', fuer: 'eltern' },

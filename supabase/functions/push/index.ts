@@ -2535,6 +2535,52 @@ async function callDinner(store: ReturnType<typeof db>, body: Row, nowMs: number
   return { sent: r.sent, to, doppelt: !r.fresh };
 }
 
+/* ---------- Strompreis von Tibber ---------- */
+// Der Zugangsschlüssel liegt nur als Secret TIBBER_TOKEN bei Supabase, nie in der App. Die Preise (Viertelstunden,
+// heute und ab etwa 13 Uhr auch morgen) liegen in ep_settings "strompreis", damit alle Geräte sie sehen.
+// Neu abgefragt wird nur, wenn der Tag wechselt oder die Preise für morgen noch fehlen (höchstens alle 30 Minuten).
+const TIBBER = 'https://api.tibber.com/v1-beta/gql';
+export function tibberRows(json: Row): { t: string; p: number }[] {
+  const homes = (json && json.data && json.data.viewer && json.data.viewer.homes) || [];
+  const home = homes.find((h: Row) => h && h.currentSubscription && h.currentSubscription.priceInfo) || null;
+  if (!home) return [];
+  const info = home.currentSubscription.priceInfo;
+  return [...(info.today || []), ...(info.tomorrow || [])]
+    .filter((x: Row) => x && typeof x.total === 'number' && x.startsAt)
+    .map((x: Row) => ({ t: new Date(x.startsAt).toISOString(), p: Math.round(x.total * 10000) / 10000 }));
+}
+export function pricesFresh(cur: Row | null, day: string, nowMs: number) {
+  if (!cur || cur.tag !== day || !Array.isArray(cur.preise)) return false;
+  return !!cur.morgen || nowMs - Date.parse(cur.stand || 0) < 30 * 60000;
+}
+async function loadPrices(store: ReturnType<typeof db>, nowMs: number) {
+  const token = env('TIBBER_TOKEN');
+  if (!token) return { aus: true };
+  const { day } = berlin(nowMs);
+  const rows = await store.get('ep_settings?select=value&key=eq.strompreis');
+  const cur = rows[0] ? rows[0].value : null;
+  if (pricesFresh(cur, day, nowMs)) return cur;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const res = await fetch(TIBBER, {
+      method: 'POST', signal: ctl.signal,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: '{ viewer { homes { currentSubscription { priceInfo(resolution: QUARTER_HOURLY) { today { total startsAt } tomorrow { total startsAt } } } } } }' }),
+    });
+    if (res.status === 401 || res.status === 403) return { ...(cur || {}), fehler: 'Der Tibber-Schlüssel stimmt nicht.' };
+    if (!res.ok) return cur || { fehler: 'Tibber ist gerade nicht erreichbar.' };
+    const preise = tibberRows(await res.json() as Row);
+    if (!preise.length) return cur || { fehler: 'Tibber liefert keine Preise.' };
+    const tomorrow = addDays(day, 1);
+    const value = { tag: day, stand: new Date(nowMs).toISOString(), preise, morgen: preise.some((x) => berlin(Date.parse(x.t)).day === tomorrow) };
+    await store.upsert('ep_settings', [{ key: 'strompreis', value, updated_at: nowIso() }]);
+    return value;
+  } catch (e) {
+    return cur || { fehler: 'Tibber ist gerade nicht erreichbar.' };
+  } finally { clearTimeout(timer); }
+}
+
 // Live-Einkauf: Wer den Einkaufsmodus startet, sagt den anderen Bescheid. Höchstens einmal pro Stunde und Person.
 export function liveCall(name: string, trip: string, by: string, nowMs: number) {
   const { day } = berlin(nowMs);
@@ -3216,6 +3262,9 @@ async function runTest(req: Request) {
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'strompreis') {
+    try { return { status: 200, body: await loadPrices(db(), Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
   if (body.action === 'einkauf-live') {
     try { return { status: 200, body: await callLive(db(), body, Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
