@@ -1272,3 +1272,10 @@ html.anzeige-nacht .toast, html.anzeige-nacht #toast { display: none; }
 .anz-strom-kurve rect.teuer { fill: #D4683A; }
 .anz-strom-kurve rect.jetzt { fill: currentColor; }
 .anz-strom-kurve text { font-size: 10px; fill: var(--a-leise); }
+
+/* PV-Anlage über der Preiskurve: eine Zeile Werte, darunter höchstens ein grüner Hinweis. */
+.anz-pv { margin-top: auto; padding-top: .8em; border-top: 1px solid var(--a-linie); display: flex; flex-wrap: wrap; gap: .2em 1.2em; align-items: baseline; }
+.anz-pv-wert { font-size: .95em; color: var(--a-leise); }
+.anz-pv-wert b { font: 700 1.15em/1 var(--anzeige); color: var(--a-tinte); font-variant-numeric: tabular-nums; }
+.anz-pv-tipp { flex-basis: 100%; font-size: .85em; color: #2E9E66; font-weight: 600; }
+.anz-pv + .anz-strom { margin-top: .6em; border-top: 0; padding-top: 0; }

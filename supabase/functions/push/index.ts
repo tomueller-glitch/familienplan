@@ -2581,6 +2581,44 @@ async function loadPrices(store: ReturnType<typeof db>, nowMs: number) {
   } finally { clearTimeout(timer); }
 }
 
+/* ---------- PV-Anlage von AlphaESS ---------- */
+// Open API (open.alphaess.com). Secrets bei Supabase: ALPHA_APP_ID, ALPHA_APP_SECRET, optional ALPHA_SN (sonst die
+// erste Anlage des Kontos). Signatur: SHA-512 aus AppID, Secret und Zeitstempel in Sekunden.
+const ALPHA = 'https://openapi.alphaess.com/api';
+let alphaSn = '';
+async function alphaGet(path: string, nowMs: number) {
+  const id = env('ALPHA_APP_ID'); const secret = env('ALPHA_APP_SECRET');
+  const ts = String(Math.floor(nowMs / 1000));
+  const hash = await crypto.subtle.digest('SHA-512', new TextEncoder().encode(id + secret + ts));
+  const sign = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const res = await fetch(`${ALPHA}/${path}`, { headers: { appId: id, timeStamp: ts, sign }, signal: ctl.signal });
+    if (!res.ok) return null;
+    const j = await res.json() as Row;
+    return j && (j.code === 200 || j.msg === 'Success') ? j.data : null;
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+// Leistungen in kW, Speicher in Prozent. Netz positiv: Bezug, negativ: Einspeisung.
+export function pvValues(d: Row | null) {
+  if (!d || typeof d !== 'object') return null;
+  const kw = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x / 100) / 10 : null);
+  const soc = typeof d.soc === 'number' ? Math.round(d.soc) : null;
+  return { sonne: kw(d.ppv) ?? 0, haus: kw(d.pload), netz: kw(d.pgrid), speicher: soc };
+}
+async function loadPv(nowMs: number) {
+  if (!env('ALPHA_APP_ID') || !env('ALPHA_APP_SECRET')) return { aus: true };
+  if (!alphaSn) alphaSn = env('ALPHA_SN');
+  if (!alphaSn) {
+    const list = await alphaGet('getEssList', nowMs);
+    alphaSn = Array.isArray(list) && list[0] && list[0].sysSn ? String(list[0].sysSn) : '';
+    if (!alphaSn) return { fehler: 'AlphaESS: keine Anlage im Konto gefunden.' };
+  }
+  const v = pvValues(await alphaGet(`getLastPowerData?sysSn=${encodeURIComponent(alphaSn)}`, nowMs));
+  return v ? { ...v, stand: new Date(nowMs).toISOString() } : { fehler: 'AlphaESS ist gerade nicht erreichbar.' };
+}
+
 // Live-Einkauf: Wer den Einkaufsmodus startet, sagt den anderen Bescheid. Höchstens einmal pro Stunde und Person.
 export function liveCall(name: string, trip: string, by: string, nowMs: number) {
   const { day } = berlin(nowMs);
@@ -3262,6 +3300,9 @@ async function runTest(req: Request) {
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'pv') {
+    try { return { status: 200, body: await loadPv(Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
   if (body.action === 'strompreis') {
     try { return { status: 200, body: await loadPrices(db(), Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }

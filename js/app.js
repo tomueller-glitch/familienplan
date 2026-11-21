@@ -927,6 +927,31 @@ function powerFetch() {
     if (!state.sheet) render();
   }).catch(() => {});
 }
+// PV-Anlage (AlphaESS): alle zwei Minuten, nur am Display und nur im Speicher des Geräts.
+function pvFetch() {
+  if (state.phase !== 'anzeige' || store.offline || state.pvAus || Date.now() - (state.pvAt || 0) < 2 * 60000) return;
+  state.pvAt = Date.now();
+  store.pvNow().then((v) => {
+    if (!v || v.aus) { state.pvAus = true; return; }
+    if (typeof v.sonne !== 'number') return;
+    state.pv = v;
+    if (!state.sheet) render();
+  }).catch(() => {});
+}
+// Lohnt sich ein großer Verbraucher gerade? Sonne übrig, voller Speicher bei Sonne, oder Strom im günstigsten Drittel.
+function pvTip(pv, cheapNow) {
+  if (pv && pv.haus != null && pv.sonne - pv.haus >= 1.5) return 'Sonne übrig, guter Moment für die Spülmaschine';
+  if (pv && pv.speicher >= 90 && pv.haus != null && pv.sonne > pv.haus) return 'Speicher fast voll, guter Moment für die Spülmaschine';
+  if (cheapNow) return 'Strom gerade günstig, guter Moment für die Spülmaschine';
+  return '';
+}
+const kwText = (x) => `${String(x).replace('.', ',')} kW`;
+function pvLine(pv, cheapNow) {
+  if (!pv || state.pvAus || Date.now() - Date.parse(pv.stand || 0) > 15 * 60000) return '';
+  const tip = pvTip(pv, cheapNow);
+  return `<div class="anz-pv"><span class="anz-pv-wert"><b>☀ ${kwText(pv.sonne)}</b> Sonne</span>${pv.speicher != null ? `<span class="anz-pv-wert"><b>${pv.speicher} %</b> Speicher</span>` : ''}${pv.haus != null ? `<span class="anz-pv-wert"><b>${kwText(pv.haus)}</b> Haus</span>` : ''}${tip ? `<span class="anz-pv-tipp">${esc(tip)}</span>` : ''}</div>`;
+}
+
 // Stundenmittel der nächsten 24 Stunden ab der laufenden Stunde: [{ ms, h, ct }].
 function powerHours(v, now = nowMs()) {
   const start = new Date(now); start.setMinutes(0, 0, 0);
@@ -945,9 +970,9 @@ function powerHours(v, now = nowMs()) {
 const ctText = (ct) => `${String(Math.round(ct * 10) / 10).replace('.', ',')} ct`;
 function powerBox() {
   const v = KI.settingOf(state.data.settings, 'strompreis');
-  if (state.stromAus || !v || !Array.isArray(v.preise)) return '';
+  if (state.stromAus || !v || !Array.isArray(v.preise)) return pvLine(state.pv, false);
   const hours = powerHours(v);
-  if (hours.length < 3) return '';
+  if (hours.length < 3) return pvLine(state.pv, false);
   const now = nowMs();
   const q = (v.preise || []).filter((x) => Date.parse(x.t) <= now).sort((a, b) => Date.parse(b.t) - Date.parse(a.t))[0];
   const nowCt = q ? q.p * 100 : hours[0].ct;
@@ -972,7 +997,7 @@ function powerBox() {
   const b1 = new Date(hours[best.i + 1].ms + 3600000).getHours();
   const when = new Date(b0.ms).toDateString() === new Date(now).toDateString() ? '' : 'morgen ';
   const bestText = best.i === 0 ? `jetzt am günstigsten (${ctText(best.avg)})` : `günstig ${when}${b0.h} bis ${b1} Uhr (${ctText(best.avg)})`;
-  return `<div class="anz-strom" role="img" aria-label="Strompreis jetzt ${ctText(nowCt)} pro Kilowattstunde, ${bestText}">
+  return `${pvLine(state.pv, nowCt <= cheap)}<div class="anz-strom" role="img" aria-label="Strompreis jetzt ${ctText(nowCt)} pro Kilowattstunde, ${bestText}">
     <div class="anz-strom-text"><span class="anz-strom-jetzt">Strom ${ctText(nowCt)}</span><span class="anz-strom-tipp">${esc(bestText)}</span></div>
     <svg class="anz-strom-kurve" viewBox="0 0 ${W} ${H + 16}" preserveAspectRatio="none" aria-hidden="true">${bars}${ticks}</svg></div>`;
 }
@@ -1066,6 +1091,7 @@ function viewDisplay() {
 
   // Termine heute und morgen: aus dem Familienplan und aus den abonnierten Kalendern, dazu die Tonne.
   powerFetch();
+  pvFetch();
   const termine = `<section class="anz-feld anz-heute">${[today, L.addDays(today, 1)].map((d, n) => displayDay(d, n === 0)).join('')}${powerBox()}</section>`;
 
   // Kinder

@@ -4,3 +4,6 @@ const json = { data: { viewer: { homes: [{ currentSubscription: null }, { curren
 console.log('Zeilen:', JSON.stringify(tibberRows(json)), '| leer:', tibberRows({}).length);
 const now = Date.parse('2026-11-21T10:00:00Z');
 console.log('frisch:', pricesFresh({ tag: '2026-11-21', stand: '2026-11-21T09:45:00Z', preise: [] }, '2026-11-21', now), pricesFresh({ tag: '2026-11-21', stand: '2026-11-21T09:00:00Z', preise: [] }, '2026-11-21', now), pricesFresh({ tag: '2026-11-21', stand: '2026-11-21T05:00:00Z', preise: [], morgen: true }, '2026-11-21', now), pricesFresh({ tag: '2026-11-20', stand: '2026-11-20T15:00:00Z', preise: [], morgen: true }, '2026-11-21', now));
+// PV-Anlage (AlphaESS): Watt in kW, Speicher in Prozent.
+import { pvValues } from '../supabase/functions/push/index.ts';
+console.log('PV:', JSON.stringify(pvValues({ ppv: 3214, pload: 912, pgrid: -1402, soc: 85.4 })), JSON.stringify(pvValues({ ppv: 0, soc: 31 })), pvValues(null));

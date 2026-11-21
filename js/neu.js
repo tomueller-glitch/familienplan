@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-21p', datum: '21. November', titel: 'PV-Anlage am Küchen-Display',
+    punkte: [
+      { text: 'Über der Strompreis-Kurve steht jetzt, wie viel Sonne gerade kommt, wie voll der Speicher ist und was das Haus verbraucht. Lohnt sich ein großer Verbraucher, steht darunter grün „guter Moment für die Spülmaschine“.' },
+      { text: 'Die Zugangsdaten von AlphaESS liegen nur bei Supabase (ALPHA_APP_ID, ALPHA_APP_SECRET, optional ALPHA_SN). Ohne sie bleibt die Zeile weg.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-21s', datum: '21. November', titel: 'Strompreis von Tibber am Küchen-Display',
     punkte: [
       { text: 'Unten in der Terminspalte stehen der Strompreis jetzt, die günstigsten zwei Stunden am Stück und Balken für die nächsten 24 Stunden: grün günstig, orange teuer, dunkel die laufende Stunde. Die Preise für morgen kommen ab etwa 13 Uhr dazu.' },
