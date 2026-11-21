@@ -99,7 +99,7 @@ const isAdult = (p) => !!(p && p.adult);
 const canPlan = () => !state.data.persons.some(isAdult) || isAdult(personById(state.me));
 // Reiter, die eine Push-Nachricht über die Adresse direkt öffnen kann.
 const HASH_TABS = ['woche', 'aufgaben', 'einkauf', 'gerichte', 'ausgaben'];
-const ADULT_ACTIONS = new Set(['vorabend-weg', 'reste-nichts', 'frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
+const ADULT_ACTIONS = new Set(['hc-verbinden', 'hc-trennen', 'vorabend-weg', 'reste-nichts', 'frueher-weg', 'anzeige-farbe', 'kalender-abos', 'kalender-weg-art', 'heimweg-aus', 'kalender-essen', 'kalender-weg', 'kalender-pruefen', 'neu-gericht', 'neu-gericht-ok', 'entwurf-ergaenzen', 'anzeige-an', 'st-heute', 'st-aus', 'shop-verwalten', 'sm-stufe', 'sm-bis', 'rueckblick', 'rueckblick-woche', 'rueckblick-push', 'foto-ok', 'foto-nein', 'km-stufe', 'kinder-sperre', 'sicherung-zurueck', 'vorschau-ok', 'vorschau-zurueck', 'fest-wieder', 'abfuhr', 'kosten-schaetzen', 'app-wunsch-erledigt', 'feste', 'fest', 'fest-bearbeiten', 'fest-liste', 'fest-plan', 'fest-loeschen', 'ersatz', 'ersatz-nehmen', 'sicherungen', 'sicherung-jetzt', 'sicherung-laden', 'siri', 'siri-schluessel', 'rezept-speichern', 'rezept-verwerfen', 'beleg-neu', 'beleg-posten-neu', 'beleg-posten-weg', 'beleg-loeschen', 'haushalt-einstellungen', 'haushalt-standard', 'haushalt-vergessen', 'grund-zuerst', 'grund-bestaetigen', 'fehlt-markt', 'urlaub-weg', 'planer-regeln', 'planer-start', 'entwurf', 'entwurf-verwerfen', 'vorrat-start', 'aufgaben-start', 'log-ok', 'log-nein', 'log-alle', 'einloesen', 'aufgaben-liste', 'aufgabe-neu', 'aufgabe-bearbeiten', 'tauschen', 'tag-tausch', 'tag-tausch-mit', 'waehlen', 'woche-fuellen', 'import', 'gericht-neu', 'gericht-bearbeiten', 'aussortieren', 'aufnehmen', 'ausfall', 'liste-bauen']);
 const ADULT_FORMS = new Set(['reste-frage', 'schule', 'frueher', 'kalender', 'heimweg', 'neu-gericht', 'stall', 'shop', 'erinnerungen', 'packung-wahl', 'wochenbonus', 'zurueckholen', 'fest', 'beleg', 'haushalt', 'urlaub', 'gericht', 'import', 'einloesen', 'aufgabe', 'einkaufstag', 'vorabend', 'regeln', 'entwurf', 'entwurf-neu']);
 const ONLY_ADULTS = 'Das können nur Mama und Papa.';
 
@@ -1086,6 +1086,8 @@ function viewDisplay() {
   const lamps = [];
   if (A.kmTask(state.data.tasks)) for (const x of A.kmView(kmValue(), state.data.taskLog)) lamps.push({ name: x.name, stufe: x.stufe, text: x.pending ? 'gemeldet' : KM_WORT[x.stufe] });
   if (A.smTask(state.data.tasks)) { const v = smNow(); lamps.push({ name: 'Spülmaschine', stufe: v.stufe, text: v.pending ? 'gemeldet' : v.stufe === 'gelb' && v.bis ? `läuft bis ${clockOf(v.bis)}` : SM_WORT[v.stufe] }); }
+  const wm = wmNow();
+  if (wm) lamps.push({ name: 'Waschmaschine', stufe: wm.stufe, text: wm.text });
   if (stOn()) { const v = stNow(); lamps.push({ name: 'Stall', stufe: v.stufe, text: v.pending ? 'gemeldet' : v.stufe === 'gruen' ? `wieder am ${L.WD_SHORT[L.wdIndex(v.due)]}` : v.left < 0 ? `${stLate(v)} dran` : ST_WORT[v.stufe] }); }
   const ampeln = lamps.length ? `<section class="anz-feld anz-ampeln"><h2>Ampeln</h2><ul>${lamps.map((x) => `<li class="s-${x.stufe}"><span class="km-ampel" role="img" aria-label="${esc(x.name)}: ${x.stufe === 'rot' ? 'Rot' : x.stufe === 'gelb' ? 'Gelb' : 'Grün'}">${kmLamps(x.stufe)}</span><span class="anz-a-name">${esc(x.name)}</span><span class="anz-a-text">${esc(x.text)}</span></li>`).join('')}</ul></section>` : '';
 
@@ -3625,7 +3627,7 @@ function parentTasks() {
     return `${accountCard(k, true).replace(/<\/div>\s*$/, '')}
       <p class="meta">${line}</p></div>`;
   }).join('');
-  const kmBox = kmParent() + smParent() + stParent();
+  const kmBox = kmParent() + smParent() + wmParent() + stParent();
   return `${queue}${kmBox ? `<div${pending.length ? ' class="km-abstand"' : ''}>${kmBox}</div>` : ''}<h2 class="abschnitt mit-info${pending.length || kmBox ? ' abstand' : ''}">Minutenkonten ${infoBtn('konten', 'Wie die Minuten verfallen')}</h2>${infoText('konten', `Verdiente Minuten verfallen ${A.EXPIRY_HOURS} Stunden nach der Bestätigung. Beim Einlösen gehen die ältesten zuerst weg.`)}<div class="konten">${cards}</div>
     <div class="knopfreihe"><button class="knopf zweit" data-action="aufgaben-liste">Aufgaben verwalten</button><button class="knopf zweit" data-action="shop-verwalten">Minuten-Shop</button></div>
     ${reminderBox()}${abfuhrBox(false)}`;
@@ -4008,6 +4010,65 @@ function smParent() {
         <label class="sm-zeit-l">oder um <input type="time" class="sm-zeit" value="${bisWert}" aria-label="Endzeit der Spülmaschine"></label></div>` : ''}
       ${v.pending ? `<p class="km-text">${esc((personById(v.pending.person_id) || {}).name || 'Jemand')} hat sie ausgeräumt. Oben bestätigen.</p>` : ''}
     </div></div>`;
+}
+
+/* ---------- Waschmaschine (Home Connect) ---------- */
+// Der Server fragt alle fünf Minuten den Zustand ab und legt ihn in ep_settings "waschmaschine" ab.
+const wmValue = () => { const v = KI.settingOf(state.data.settings, 'waschmaschine'); return v && v.verbunden ? v : null; };
+function wmNow() {
+  const v = wmValue();
+  if (!v) return null;
+  const old = !v.stand || nowMs() - Date.parse(v.stand) > 30 * 60000;
+  const text = v.fehler ? 'Verbindung abgelaufen'
+    : old || v.offline ? 'keine Verbindung'
+      : v.stufe === 'rot' ? `fertig seit ${clockOf(v.fertig_seit)}`
+        : v.op === 'DelayedStart' ? (v.start ? `startet um ${clockOf(v.start)}` : 'startet später')
+          : v.op === 'Pause' ? 'Pause'
+            : v.op === 'ActionRequired' ? 'bitte nachsehen'
+              : v.stufe === 'gelb' ? (v.bis ? `läuft bis ${clockOf(v.bis)}` : 'läuft')
+                : v.tuer === 'Open' ? 'Tür offen' : 'bereit';
+  return { stufe: old || v.fehler ? 'gruen' : v.stufe || 'gruen', text, v };
+}
+function wmParent() {
+  const w = wmNow();
+  const c = state.hcConnect;
+  const head = `<h2 class="abschnitt mit-info abstand">Waschmaschine ${infoBtn('waschmaschine', 'Wie die Waschmaschinen-Ampel funktioniert')}</h2>
+    ${infoText('waschmaschine', 'Die Ampel kommt direkt von der Waschmaschine über Home Connect. Grün: bereit. Gelb: läuft, mit Uhrzeit, wann sie fertig ist. Rot: fertig, die Tür war seitdem noch nicht offen. Sobald jemand die Tür öffnet, springt sie auf Grün. Bei Rot bekommen die Eltern eine Nachricht (7 bis 21:30 Uhr). Der Server fragt alle fünf Minuten nach.')}`;
+  if (w) {
+    return `${head}<div class="km-karte eltern"><div class="km-eimer s-${w.stufe}">
+      <span class="km-ampel" role="img" aria-label="Waschmaschine: ${w.stufe}">${kmLamps(w.stufe)}</span>
+      <p class="km-text"><b>${esc(w.v.name || 'Waschmaschine')}</b>, ${esc(w.text)}</p>
+      ${w.v.fehler ? `<p class="km-text">${esc(w.v.fehler)}</p><div class="knopfreihe"><button class="knopf zweit klein" data-action="hc-verbinden">Neu verbinden</button></div>` : ''}
+      <details class="w-mehr"><summary>Verbindung</summary><div class="knopfreihe"><button class="knopf zweit klein" data-action="hc-trennen">Verbindung trennen</button></div></details>
+    </div></div>`;
+  }
+  if (state.hcAus) return '';
+  return `${head}<div class="km-karte eltern">
+    ${c && c.code ? `<p class="km-text">Öffne <a href="${esc(c.link)}" target="_blank" rel="noopener">die Seite von Home Connect</a> und bestätige mit deinem Home-Connect-Konto. Falls nach einem Code gefragt wird: <b>${esc(c.code)}</b></p><p class="km-text">${esc(c.status || 'Warte auf die Bestätigung …')}</p>`
+      : `<p class="km-text">Verbinde die Waschmaschine einmal mit Home Connect, dann steht ihr Zustand als Ampel hier und am Küchen-Display.</p>${c && c.fehler ? `<p class="km-text">${esc(c.fehler)}</p>` : ''}
+        <div class="knopfreihe"><button class="knopf" data-action="hc-verbinden">Mit Home Connect verbinden</button></div>`}
+  </div>`;
+}
+async function hcWait() {
+  const until = Date.now() + 5 * 60000;
+  while (state.hcConnect && state.hcConnect.code && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, Math.max(5, state.hcConnect.abstand || 5) * 1000));
+    let r;
+    try { r = await store.homeConnect('hc-check'); } catch (e) { continue; }
+    if (r.warten) continue;
+    if (r.verbunden) {
+      state.hcConnect = null;
+      const d = await store.loadAll().catch(() => null);
+      if (d) { state.data = normalize(d); refresh(); }
+      toast(`Verbunden: ${r.name || 'Waschmaschine'}.`);
+      render();
+      return;
+    }
+    state.hcConnect = { fehler: r.fehler || 'Das hat nicht geklappt.' };
+    render();
+    return;
+  }
+  if (state.hcConnect && state.hcConnect.code) { state.hcConnect = { fehler: 'Die Anmeldung ist abgelaufen. Bitte noch einmal verbinden.' }; render(); }
 }
 
 // Schalter für die Eltern: drei Lampen pro Eimer zum Antippen.
@@ -6062,6 +6123,24 @@ const actions = {
   reste: () => openSheet({ type: 'reste' }),
   zettel: () => openSheet({ type: 'zettel' }),
   'anz-zettel': ({ id }) => openSheet({ type: 'anz-zettel', id }),
+  'hc-verbinden': async () => {
+    state.hcConnect = { status: 'Verbinde …' }; render();
+    let r;
+    try { r = await store.homeConnect('hc-start'); } catch (e) { state.hcConnect = { fehler: e.message }; render(); return; }
+    if (r.aus) { state.hcConnect = { fehler: 'Bei Supabase fehlen noch HC_CLIENT_ID und HC_CLIENT_SECRET.' }; render(); return; }
+    if (!r.code) { state.hcConnect = { fehler: r.fehler || 'Das hat nicht geklappt.' }; render(); return; }
+    state.hcConnect = { code: r.code, link: r.link, abstand: r.abstand };
+    render();
+    try { window.open(r.link, '_blank', 'noopener'); } catch (e) { /* Link steht in der Karte */ }
+    hcWait();
+  },
+  'hc-trennen': async () => {
+    if (!(await ask('Verbindung zu Home Connect trennen? Die Ampel für die Waschmaschine verschwindet. Verbinden lässt sie sich jederzeit neu.', 'Trennen'))) return;
+    try { await store.homeConnect('hc-trennen'); } catch (e) { toast(e.message); return; }
+    const row = { key: 'waschmaschine', value: { verbunden: false }, updated_at: new Date().toISOString() };
+    state.data.settings = [...state.data.settings.filter((x) => x.key !== 'waschmaschine'), row];
+    render();
+  },
   'anz-wach': () => { state.nightWake = Date.now() + 2 * 60000; render(); },
   'zettel-weg': ({ id }) => {
     const z = notesAll().find((x) => x.id === id);

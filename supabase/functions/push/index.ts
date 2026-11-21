@@ -2581,6 +2581,127 @@ async function loadPrices(store: ReturnType<typeof db>, nowMs: number) {
   } finally { clearTimeout(timer); }
 }
 
+/* ---------- Waschmaschine über Home Connect ---------- */
+// Secrets bei Supabase: HC_CLIENT_ID, HC_CLIENT_SECRET (Anwendung auf developer.home-connect.com, OAuth Device Flow).
+// Die Verbindung (Tokens, Gerät) liegt in ep_settings "homeconnect"; die App lädt diesen Eintrag nicht.
+// Der Zustand für Ampel und Display liegt in ep_settings "waschmaschine". Abgefragt wird nur im Zeitplan (alle fünf
+// Minuten, beim Waschen zusätzlich die Restzeit), weit unter dem Limit von 1000 Abfragen am Tag.
+const HC = 'https://api.home-connect.com';
+const HC_JSON = 'application/vnd.bsh.sdk.v1+json';
+async function hcForm(path: string, form: Record<string, string>) {
+  const res = await fetch(`${HC}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form) });
+  let j: Row = {};
+  try { j = await res.json() as Row; } catch (e) { j = {}; }
+  return { ok: res.ok, status: res.status, j };
+}
+async function hcGet(token: string, path: string) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const res = await fetch(`${HC}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: HC_JSON }, signal: ctl.signal });
+    let j: Row = {};
+    try { j = await res.json() as Row; } catch (e) { j = {}; }
+    return { ok: res.ok, status: res.status, j };
+  } catch (e) { return { ok: false, status: 0, j: {} as Row }; } finally { clearTimeout(timer); }
+}
+const hcSetting = async (store: ReturnType<typeof db>, key: string) => ((await store.get(`ep_settings?select=value&key=eq.${key}`))[0] || {}).value || null;
+const hcSave = (store: ReturnType<typeof db>, key: string, value: Row) => store.upsert('ep_settings', [{ key, value, updated_at: nowIso() }]);
+// Gültiger Zugangsschlüssel, bei Bedarf erneuert (gilt 24 Stunden).
+async function hcToken(store: ReturnType<typeof db>, conn: Row, nowMs: number): Promise<string> {
+  if (conn.access && conn.ablauf && conn.ablauf - 5 * 60000 > nowMs) return String(conn.access);
+  const r = await hcForm('/security/oauth/token', { grant_type: 'refresh_token', refresh_token: String(conn.refresh || ''), client_id: env('HC_CLIENT_ID'), client_secret: env('HC_CLIENT_SECRET') });
+  if (!r.ok || !r.j.access_token) return '';
+  const next = { ...conn, access: r.j.access_token, refresh: r.j.refresh_token || conn.refresh, ablauf: nowMs + (Number(r.j.expires_in) || 86400) * 1000 };
+  await hcSave(store, 'homeconnect', next);
+  Object.assign(conn, next);
+  return String(next.access);
+}
+async function homeConnectAction(store: ReturnType<typeof db>, action: string, nowMs: number) {
+  if (!env('HC_CLIENT_ID') || !env('HC_CLIENT_SECRET')) return { aus: true };
+  const conn = (await hcSetting(store, 'homeconnect')) || {};
+  if (action === 'hc-trennen') {
+    await hcSave(store, 'homeconnect', {});
+    await hcSave(store, 'waschmaschine', { verbunden: false });
+    return { getrennt: true };
+  }
+  if (action === 'hc-start') {
+    const r = await hcForm('/security/oauth/device_authorization', { client_id: env('HC_CLIENT_ID'), scope: 'IdentifyAppliance Monitor' });
+    if (!r.ok || !r.j.device_code) return { fehler: `Home Connect hat die Anmeldung abgelehnt${r.j.error_description ? `: ${String(r.j.error_description).slice(0, 120)}` : '.'}` };
+    await hcSave(store, 'homeconnect', { ...conn, geraet_code: r.j.device_code, code_ablauf: nowMs + (Number(r.j.expires_in) || 300) * 1000 });
+    return { code: r.j.user_code, link: r.j.verification_uri_complete || r.j.verification_uri, adresse: r.j.verification_uri, abstand: Number(r.j.interval) || 5 };
+  }
+  // hc-check: Anmeldung abschließen und die Waschmaschine suchen.
+  if (!conn.refresh) {
+    if (!conn.geraet_code || nowMs > Number(conn.code_ablauf || 0)) return { fehler: 'Die Anmeldung ist abgelaufen. Bitte noch einmal verbinden.' };
+    const r = await hcForm('/security/oauth/token', { grant_type: 'device_code', device_code: String(conn.geraet_code), client_id: env('HC_CLIENT_ID'), client_secret: env('HC_CLIENT_SECRET') });
+    if (!r.ok) return r.j.error === 'authorization_pending' || r.j.error === 'slow_down' ? { warten: true } : { fehler: 'Home Connect hat die Anmeldung nicht bestätigt.' };
+    Object.assign(conn, { access: r.j.access_token, refresh: r.j.refresh_token, ablauf: nowMs + (Number(r.j.expires_in) || 86400) * 1000, geraet_code: null });
+  }
+  const token = await hcToken(store, conn, nowMs);
+  if (!token) return { fehler: 'Die Verbindung zu Home Connect ist abgelaufen. Bitte neu verbinden.' };
+  const list = await hcGet(token, '/api/homeappliances');
+  const all = (list.j.data && list.j.data.homeappliances) || [];
+  const wm = all.find((a: Row) => /^Washer/.test(String(a.type)));
+  if (!wm) { await hcSave(store, 'homeconnect', conn); return { fehler: 'In deinem Home-Connect-Konto ist keine Waschmaschine.' }; }
+  await hcSave(store, 'homeconnect', { ...conn, ha: wm.haId, name: `${wm.brand || ''} ${wm.name || 'Waschmaschine'}`.trim() });
+  const v = await pollWasher(store, nowMs, true);
+  return { verbunden: true, name: wm.name, zustand: v };
+}
+// Ampel aus Betriebszustand und Tür. Rot bleibt, bis nach dem Ende einmal die Tür offen war.
+export function washerState(prev: Row | null, op: string, door: string, restSek: number | null, startSek: number | null, nowMs: number) {
+  const p = prev || {};
+  const finished = op === 'Finished';
+  const RUN = ['Run', 'Pause', 'DelayedStart', 'ActionRequired', 'Aborting'];
+  const running = RUN.includes(op);
+  let fertig = p.fertig_seit || null;
+  // Rot nur direkt nach einem Waschgang (oder beim ersten Abruf), nicht wieder nach dem Ausräumen.
+  if (finished && !p.fertig_seit && (!p.op || RUN.includes(p.op))) fertig = new Date(nowMs).toISOString();
+  if (running || door === 'Open') fertig = null;
+  const stufe = running ? 'gelb' : fertig ? 'rot' : 'gruen';
+  const bis = op === 'Run' && restSek != null ? new Date(nowMs + restSek * 1000).toISOString() : null;
+  const start = op === 'DelayedStart' && startSek != null ? new Date(nowMs + startSek * 1000).toISOString() : null;
+  return { verbunden: true, op, tuer: door, stufe, fertig_seit: fertig, bis, start, stand: new Date(nowMs).toISOString() };
+}
+const enumTail = (v: unknown) => String(v || '').split('.').pop() || '';
+async function pollWasher(store: ReturnType<typeof db>, nowMs: number, force = false) {
+  if (!env('HC_CLIENT_ID') || !env('HC_CLIENT_SECRET')) return null;
+  const conn = await hcSetting(store, 'homeconnect');
+  if (!conn || !conn.refresh || !conn.ha) return null;
+  const prev = await hcSetting(store, 'waschmaschine');
+  if (!force && prev && prev.stand && nowMs - Date.parse(prev.stand) < 4 * 60000) return prev;
+  const token = await hcToken(store, conn, nowMs);
+  if (!token) { await hcSave(store, 'waschmaschine', { ...(prev || {}), verbunden: true, fehler: 'Verbindung abgelaufen, bitte neu verbinden.' }); return null; }
+  const st = await hcGet(token, `/api/homeappliances/${encodeURIComponent(conn.ha)}/status`);
+  if (!st.ok) { await hcSave(store, 'waschmaschine', { ...(prev || {}), verbunden: true, offline: true, stand: new Date(nowMs).toISOString() }); return prev; }
+  const list = (st.j.data && st.j.data.status) || [];
+  const val = (k: string) => enumTail((list.find((x: Row) => x.key === k) || {}).value);
+  const op = val('BSH.Common.Status.OperationState');
+  const door = val('BSH.Common.Status.DoorState');
+  let rest: number | null = null; let start: number | null = null;
+  if (['Run', 'DelayedStart'].includes(op)) {
+    const ap = await hcGet(token, `/api/homeappliances/${encodeURIComponent(conn.ha)}/programs/active`);
+    const opts = (ap.j.data && ap.j.data.options) || [];
+    const num = (k: string) => { const o = opts.find((x: Row) => x.key === k); return o && typeof o.value === 'number' ? o.value : null; };
+    rest = num('BSH.Common.Option.RemainingProgramTime');
+    start = num('BSH.Common.Option.StartInRelative');
+  }
+  const v = { ...washerState(prev, op, door, rest, start, nowMs), name: conn.name || 'Waschmaschine' };
+  await hcSave(store, 'waschmaschine', v);
+  return v;
+}
+// Nachricht „Wäsche ist fertig“ an die Eltern, einmal je Waschgang, zwischen 7 und 21:30 Uhr.
+export function washMessages(value: Row | null, persons: Row[], nowMs: number, urlaub: Row[] = []): Due[] {
+  const { day, min } = berlin(nowMs);
+  if (!value || value.stufe !== 'rot' || !value.fertig_seit) return [];
+  if (min < 7 * 60 || min >= 21 * 60 + 30) return [];
+  const h = holidayOn(urlaub, day);
+  if (h && h.weg !== false) return [];
+  if (Date.parse(value.fertig_seit) < nowMs - 12 * 3600000) return [];
+  const to = persons.filter((p) => p.adult).map((p) => p.id);
+  if (!to.length) return [];
+  return [{ key: `wasch:${value.fertig_seit}`, to, ttl: 3 * 3600, msg: { title: 'Die Wäsche ist fertig', body: 'Die Waschmaschine ist durch. Bitte ausräumen und aufhängen.', tag: 'waschmaschine', url: './#aufgaben' } }];
+}
+
 /* ---------- PV-Anlage von AlphaESS ---------- */
 // Open API (open.alphaess.com). Secrets bei Supabase: ALPHA_APP_ID, ALPHA_APP_SECRET, optional ALPHA_SN (sonst die
 // erste Anlage des Kontos). Signatur: SHA-512 aus AppID, Secret und Zeitstempel in Sekunden.
@@ -3229,6 +3350,8 @@ async function runSchedule(nowMs = Date.now()) {
   due.push(...stallMessages(setting('stall'), tasks, log, persons, nowMs, urlaub, erinnerung));
   due.push(...reviewMessages(setting('rueckblick'), persons, nowMs, urlaub));
   due.push(...restMessages(setting('reste_erwartet'), plan, dishes, persons, nowMs, urlaub));
+  // Waschmaschine (Home Connect): eigener Fehlerbereich, ohne Verbindung passiert nichts.
+  try { due.push(...washMessages(await pollWasher(store, nowMs), persons, nowMs, urlaub)); } catch (e) { console.warn('Home Connect', String(e)); }
   // Lernplaner: eigener Fehlerbereich. Fehlt die Tabelle lp_data, laufen die übrigen Nachrichten normal weiter.
   try { due.push(...lernMessages(await loadLern(store, today), persons, nowMs, urlaub)); } catch (e) { console.warn('Lernplaner', String(e)); }
   // Erinnerungen zuerst verschicken, damit sie nicht auf Sicherung oder Wochenplan warten müssen.
@@ -3300,6 +3423,9 @@ async function runTest(req: Request) {
     try { return { status: 200, body: { fest: await planFeast(db(), body.fest || {}) } }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }
   // Termine aus den abonnierten Kalendern fürs Küchen-Display, heute und morgen.
+  if (body.action === 'hc-start' || body.action === 'hc-check' || body.action === 'hc-trennen') {
+    try { return { status: 200, body: await homeConnectAction(db(), String(body.action), Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
+  }
   if (body.action === 'pv') {
     try { return { status: 200, body: await loadPv(Date.now()) }; } catch (e) { return { status: 502, body: { error: String((e as Error).message || e) } }; }
   }

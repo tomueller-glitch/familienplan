@@ -134,4 +134,25 @@ const db = () => { const d = base(); d.ep_settings = [{ key: 'kalender', value: 
     console.log('S Fehler:', o.errs); await o.ctx.close();
   }
 }
+{
+  // Waschmaschine als Ampel am Display und bei den Eltern.
+  const d = db(); const jetzt = new Date(Date.now() - 60000).toISOString();
+  d.ep_settings = [...d.ep_settings, { key: 'waschmaschine', value: { verbunden: true, name: 'Siemens iQ500', op: 'Run', tuer: 'Locked', stufe: 'gelb', bis: new Date(Date.now() + 45 * 60000).toISOString(), stand: jetzt } }];
+  for (const [w, h] of [[1133, 744], [744, 1133]]) {
+    const o = await openDisplay(d, w, h, KALA, { stunde: 10, minute: 30 });
+    const fit = await o.page.evaluate(() => [document.documentElement.scrollHeight, innerHeight]);
+    console.log(`W ${w}:`, (await o.page.locator('.anz-ampeln').innerText().catch(() => '-')).replace(/\n+/g, ' | '), '| passt:', fit.join(' von '), '| Fehler:', o.errs);
+    if (w === 1133) await o.page.screenshot({ path: 'wasch_1133.png' });
+    await o.ctx.close();
+  }
+  const p = await open(d, 0, KALA);
+  await p.page.evaluate(() => { location.hash = '#aufgaben'; }); await p.page.waitForTimeout(600);
+  console.log('W Eltern:', (await p.page.locator('h2:has-text("Waschmaschine") + * , .km-karte:has-text("Siemens")').first().innerText().catch(() => '-')).replace(/\n+/g, ' | ').slice(0, 160), '| Fehler:', p.errs);
+  await p.ctx.close();
+  const d2 = db(); const p2 = await open(d2, 0, KALA);
+  await p2.page.evaluate(() => { location.hash = '#aufgaben'; }); await p2.page.waitForTimeout(600);
+  await p2.page.locator('[data-action="hc-verbinden"]').click().catch((e) => console.log('kein Knopf', e.message.slice(0, 60))); await p2.page.waitForTimeout(800);
+  console.log('W ohne Secrets:', (await p2.page.locator('.km-karte:has([data-action="hc-verbinden"]), .km-karte:has-text("Supabase")').first().innerText().catch(() => '-')).replace(/\n+/g, ' | ').slice(0, 200), '| Fehler:', p2.errs);
+  await p2.ctx.close();
+}
 await b.close(); srv.close();

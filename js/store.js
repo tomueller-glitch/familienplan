@@ -175,7 +175,8 @@ class SupabaseStore {
       const { data, error } = await q.range(from, from + size - 1);
       if (error && def[3] && !isNetError(error)) return [];
       if (error) throw new Error(error.message);
-      rows.push(...data);
+      // Die Verbindungsdaten von Home Connect bleiben auf dem Server.
+      rows.push(...(table === 'ep_settings' ? data.filter((r) => r.key !== 'homeconnect') : data));
       if (data.length < size) break;
     }
     return rows;
@@ -284,6 +285,11 @@ class SupabaseStore {
     throw new Error(msg || 'Die Funktion bei Supabase antwortet nicht. Ist sie auf dem neuesten Stand?');
   }
   // „Essen ist fertig“ vom Küchen-Display an die Handys.
+  async homeConnect(action) {
+    const { data, error } = await this.sb.functions.invoke('push', { body: { action } });
+    if (error) throw new Error('Home Connect gerade nicht erreichbar.');
+    return data || {};
+  }
   async pvNow() {
     const { data, error } = await this.sb.functions.invoke('push', { body: { action: 'pv' } });
     if (error) throw new Error('PV-Daten gerade nicht abrufbar.');
@@ -510,6 +516,7 @@ class LocalStore {
   async shoppingLive() { return { sent: 0 }; }
   async powerPrices() { return { aus: true }; }
   async pvNow() { return { aus: true }; }
+  async homeConnect() { return { aus: true }; }
   async calendars() {
     await new Promise((ok) => setTimeout(ok, 500));
     const v = ((this.get() || {}).settings || []).find((x) => x.key === 'kalender');

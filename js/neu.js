@@ -3,6 +3,13 @@
 // fuer: 'eltern' zeigt den Punkt nur Erwachsenen, 'kinder' nur den Kindern, ohne Angabe sehen ihn alle.
 export const NEUES = [
   {
+    id: '2026-11-21w', datum: '21. November', titel: 'Waschmaschinen-Ampel über Home Connect',
+    punkte: [
+      { text: 'Die Waschmaschine hat jetzt eine eigene Ampel am Küchen-Display: grün bereit, gelb läuft (mit Uhrzeit, wann sie fertig ist), rot fertig. Rot bleibt, bis jemand die Tür geöffnet hat.' },
+      { text: 'Ist die Wäsche fertig, bekommen die Eltern eine Nachricht (7 bis 21:30 Uhr). Verbinden unter Aufgaben bei „Waschmaschine“ mit „Mit Home Connect verbinden“.', fuer: 'eltern' },
+    ],
+  },
+  {
     id: '2026-11-21p', datum: '21. November', titel: 'PV-Anlage am Küchen-Display',
     punkte: [
       { text: 'Über der Strompreis-Kurve steht jetzt, wie viel Sonne gerade kommt, wie voll der Speicher ist und was das Haus verbraucht. Lohnt sich ein großer Verbraucher, steht darunter grün „guter Moment für die Spülmaschine“.' },
