@@ -165,4 +165,12 @@ const db = () => { const d = base(); d.ep_settings = [{ key: 'kalender', value: 
     await o.page.screenshot({ path: `wetter_${w}_${st}.png` }); await o.ctx.close();
   }
 }
+{
+  // Wachhalten: stummes Video tagsüber an, nachts aus.
+  for (const st of [10, 2]) {
+    const o = await openDisplay(db(), 1133, 744, KALA, { stunde: st, minute: 0 });
+    const v = await o.page.evaluate(() => { const x = document.querySelector('video'); return x ? { da: true, pausiert: x.paused, stumm: x.muted, inline: x.playsInline } : { da: false }; });
+    console.log(`V ${st} Uhr:`, JSON.stringify(v), '| Fehler:', o.errs); await o.ctx.close();
+  }
+}
 await b.close(); srv.close();
